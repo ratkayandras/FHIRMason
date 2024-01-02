@@ -1,0 +1,14 @@
+/*eu.ratkay.operation.SurtrTest.get resource when initial resource is OperationOutcome but not FATAL or ERROR*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {}
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+/*eu.ratkay.operation.SurtrTest.operate on Resource when initial resource is OperationOutcome but ERROR*/
+{
+  "issue": [
+    {
+      "disallowExtensions": false,
+      "severity": {
+        "disallowExtensions": false,
+        "myCoercedValue": "ERROR",
+        "myEnumFactory": {},
+        "myStringValue": "error"
+      }
+    }
+  ]
+}

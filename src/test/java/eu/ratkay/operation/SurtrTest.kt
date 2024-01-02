@@ -1,7 +1,6 @@
 package eu.ratkay.operation
 
 import com.github.karsaig.approvalcrest.jupiter.MatcherAssert.assertThat
-import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameBeanAs
 import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsApproved
 import org.hl7.fhir.r4.model.Appointment
 import org.hl7.fhir.r4.model.HumanName
@@ -16,6 +15,9 @@ import org.junit.jupiter.api.Test
 
 class SurtrTest {
 
+    /*
+        Hash: 5c96b9
+     */
     @Test
     fun `get resource when initial resource is not OperationOutcome`() {
         // GIVEN
@@ -25,11 +27,12 @@ class SurtrTest {
         val surtr = Surtr.of(patient)
 
         // THEN
-        val expected = getParameters("resource", patient)
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: a4f839
+     */
     @Test
     fun `get resource when initial resource is not OperationOutcome with named Resource`() {
         // GIVEN
@@ -39,11 +42,12 @@ class SurtrTest {
         val surtr = Surtr.of(patient, "patient")
 
         // THEN
-        val expected = getParameters("patient", patient)
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: 3876de
+     */
     @Test
     fun `get resource when initial resource is OperationOutcome but not FATAL or ERROR`() {
         // GIVEN
@@ -53,11 +57,12 @@ class SurtrTest {
         val surtr = Surtr.of(operationOutcome)
 
         // THEN
-        val expected = getParameters("resource", operationOutcome)
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: 36cb0a
+     */
     @Test
     fun `get resource when initial resource is OperationOutcome with FATAL issue`() {
         // GIVEN
@@ -67,9 +72,12 @@ class SurtrTest {
         val surtr = Surtr.of(operationOutcome)
 
         // THEN
-        assertThat(surtr.resource, sameBeanAs(operationOutcome))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: 2a55bf
+     */
     @Test
     fun `get resource when initial resource is OperationOutcome with ERROR issue`() {
         // GIVEN
@@ -79,9 +87,12 @@ class SurtrTest {
         val surtr = Surtr.of(operationOutcome)
 
         // THEN
-        assertThat(surtr.resource, sameBeanAs(operationOutcome))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: a7344d
+     */
     @Test
     fun `operate when initial resource is not OperationOutcome`() {
         // GIVEN
@@ -94,13 +105,14 @@ class SurtrTest {
             }
 
         // THEN
-        val expected = getParameters("resource", getAppointment())
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: 63d1fb
+     */
     @Test
-    fun `operate when initial resource is not OperationOutcome but ERROR`() {
+    fun `operate when initial resource is OperationOutcome but ERROR`() {
         // GIVEN
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
@@ -111,7 +123,7 @@ class SurtrTest {
             }
 
         // THEN
-        assertThat(surtr.resource, sameBeanAs(operationOutcome))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
     /*
@@ -132,6 +144,27 @@ class SurtrTest {
         assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: ddbdc4
+     */
+    @Test
+    fun `operate combined when initial resource is OperationOutcome but ERROR`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
+
+        // WHEN
+        val surtr = Surtr.of(operationOutcome)
+            .operateCombined {
+                getAppointment()
+            }
+
+        // THEN
+        assertThat(surtr.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: bc2232
+     */
     @Test
     fun `operate on Resource when initial resource is not OperationOutcome`() {
         // GIVEN
@@ -144,13 +177,14 @@ class SurtrTest {
             }
 
         // THEN
-        val expected = getParameters("resource", getAppointment(patient))
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: b697f6
+     */
     @Test
-    fun `operate on Resource when initial resource is not OperationOutcome but ERROR`() {
+    fun `operate on Resource when initial resource is OperationOutcome but ERROR`() {
         // GIVEN
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
@@ -161,9 +195,12 @@ class SurtrTest {
             }
 
         // THEN
-        assertThat(surtr.resource, sameBeanAs(operationOutcome))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: dfb4e6
+     */
     @Test
     fun `operate on Parameters when initial resource is not OperationOutcome`() {
         // GIVEN
@@ -176,13 +213,14 @@ class SurtrTest {
             }
 
         // THEN
-        val expected = getParameters("resource", getAppointment(patient))
-
-        assertThat(surtr.resource, sameBeanAs(expected))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
+    /*
+        Hash: ec3b62
+     */
     @Test
-    fun `operate on Parameters when initial resource is not OperationOutcome but ERROR`() {
+    fun `operate on Parameters when initial resource is OperationOutcome but ERROR`() {
         // GIVEN
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
@@ -193,7 +231,7 @@ class SurtrTest {
             }
 
         // THEN
-        assertThat(surtr.resource, sameBeanAs(operationOutcome))
+        assertThat(surtr.resource, sameJsonAsApproved())
     }
 
     private fun getPatient(): Patient {

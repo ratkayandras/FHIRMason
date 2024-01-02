@@ -1,0 +1,34 @@
+/*eu.ratkay.operation.SurtrTest.operate on Resource when initial resource is not OperationOutcome*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {
+        "participant": [
+          {
+            "actor": {
+              "disallowExtensions": false,
+              "display": {
+                "disallowExtensions": false,
+                "myCoercedValue": "Patient",
+                "myStringValue": "Patient"
+              }
+            },
+            "disallowExtensions": false
+          }
+        ],
+        "status": {
+          "disallowExtensions": false,
+          "myCoercedValue": "BOOKED",
+          "myEnumFactory": {},
+          "myStringValue": "booked"
+        }
+      }
+    }
+  ]
+}

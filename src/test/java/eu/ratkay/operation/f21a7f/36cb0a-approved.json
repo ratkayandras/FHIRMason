@@ -1,0 +1,14 @@
+/*eu.ratkay.operation.SurtrTest.get resource when initial resource is OperationOutcome with FATAL issue*/
+{
+  "issue": [
+    {
+      "disallowExtensions": false,
+      "severity": {
+        "disallowExtensions": false,
+        "myCoercedValue": "FATAL",
+        "myEnumFactory": {},
+        "myStringValue": "fatal"
+      }
+    }
+  ]
+}
