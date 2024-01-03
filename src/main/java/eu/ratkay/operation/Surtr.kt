@@ -27,34 +27,34 @@ sealed class Surtr {
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
-                Source(name!!, resource)
+                SuccessResource(name!!, resource)
             }
         }
     }
 
     val resource: IBaseResource?
         get() = when (this) {
-            is Source -> this.parameters
+            is SuccessResource -> this.parameters
             is Error -> this.fatalError
         }
 
-    private data class Source(val name: String, val source: Resource): Surtr(source.toParameters(name))
+    private data class SuccessResource(val name: String, val source: Resource): Surtr(source.toParameters(name))
     private data class Error(val operationOutcome: OperationOutcome): Surtr(operationOutcome)
 
     fun operate(lambda: () -> Resource): Surtr {
-        return if (this is Source) of(lambda.invoke()) else this
+        return if (this is SuccessResource) of(lambda.invoke()) else this
     }
 
     fun operateCombined(lambda: () -> Resource): Surtr {
-        return if (this is Source) of(lambda.invoke()) combine this.parameters!! else this
+        return if (this is SuccessResource) of(lambda.invoke()) combine this.parameters!! else this
     }
 
     fun operateResource(lambda: (Resource) -> Resource): Surtr {
-        return if (this is Source) of(lambda.invoke(this.source)) else this
+        return if (this is SuccessResource) of(lambda.invoke(this.source)) else this
     }
 
     fun operateParameters(lambda: (Parameters) -> Resource): Surtr {
-        return if (this is Source) of(lambda.invoke(this.resource as Parameters)) else this
+        return if (this is SuccessResource) of(lambda.invoke(this.resource as Parameters)) else this
     }
 
     /**
@@ -62,7 +62,7 @@ sealed class Surtr {
      * If the Surtr is Error then the method just returns
      */
     private infix fun combine(parameters: Parameters): Surtr {
-        return if (this is Source) {
+        return if (this is SuccessResource) {
             val newParams = parameters.parameter + this.parameters!!.parameter
             of(Parameters().apply {
                 parameter = newParams

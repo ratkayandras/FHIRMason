@@ -1,7 +1,6 @@
 package eu.ratkay.operation
 
 import com.github.karsaig.approvalcrest.jupiter.MatcherAssert.assertThat
-import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameBeanAs
 import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsApproved
 import org.hl7.fhir.r4.model.Appointment
 import org.hl7.fhir.r4.model.HumanName
