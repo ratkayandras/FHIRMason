@@ -1,0 +1,61 @@
+/*eu.ratkay.operation.OperationResultTest.operate and combined both named when initial resource is not OperationOutcome*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "My Custom Patient",
+        "myStringValue": "My Custom Patient"
+      },
+      "resource": {
+        "name": [
+          {
+            "disallowExtensions": false,
+            "family": {
+              "disallowExtensions": false,
+              "myCoercedValue": "Doe",
+              "myStringValue": "Doe"
+            },
+            "given": [
+              {
+                "disallowExtensions": false,
+                "myCoercedValue": "John",
+                "myStringValue": "John"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "My Custom Appointment",
+        "myStringValue": "My Custom Appointment"
+      },
+      "resource": {
+        "participant": [
+          {
+            "actor": {
+              "disallowExtensions": false,
+              "display": {
+                "disallowExtensions": false,
+                "myCoercedValue": "OperationOutcome",
+                "myStringValue": "OperationOutcome"
+              }
+            },
+            "disallowExtensions": false
+          }
+        ],
+        "status": {
+          "disallowExtensions": false,
+          "myCoercedValue": "BOOKED",
+          "myEnumFactory": {},
+          "myStringValue": "booked"
+        }
+      }
+    }
+  ]
+}

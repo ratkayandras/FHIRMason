@@ -181,6 +181,42 @@ class OperationResultTest {
     }
 
     /*
+        Hash: 245f27
+     */
+    @Test
+    fun `operate named combined when initial resource is not OperationOutcome`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateCombined("My Custom Appointment") {
+                getAppointment()
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: 532b73
+     */
+    @Test
+    fun `operate and combined both named when initial resource is not OperationOutcome`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient, "My Custom Patient")
+            .operateCombined("My Custom Appointment") {
+                getAppointment()
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: 830218
      */
     @Test
@@ -193,6 +229,24 @@ class OperationResultTest {
             .operateCombined { getAppointment() }
             .operateCombined { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined { getParameters("theName", Patient()) }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: eb7dca
+     */
+    @Test
+    fun `operate named combined when initial resource is not OperationOutcome and add multiple`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateCombined("My Custom Appointment") { getAppointment() }
+            .operateCombined("My Custom OperationOutcome") { getOperationOutcome(IssueSeverity.INFORMATION) }
+            .operateCombined("Won't show") { getParameters("theName", Patient()) }
 
         // THEN
         assertThat(operationResult.resource, sameJsonAsApproved())
