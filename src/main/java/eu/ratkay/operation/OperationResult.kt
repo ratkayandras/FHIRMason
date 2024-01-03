@@ -65,6 +65,13 @@ sealed class OperationResult<out T: Resource> private constructor(private var pa
         }
     }
 
+    fun <R: Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
+        return when (this) {
+            is SuccessResource -> of(lambda.invoke(this.source), name)
+            is Error -> this
+        }
+    }
+
     fun <R: Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
             is SuccessResource -> of(lambda.invoke(this.source)) combine this.parameters

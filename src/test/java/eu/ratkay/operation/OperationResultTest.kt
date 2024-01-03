@@ -355,6 +355,24 @@ class OperationResultTest {
     }
 
     /*
+        Hash: e229e3
+     */
+    @Test
+    fun `operate on Resource named when initial resource is not OperationOutcome`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateResource("MyPatient") { resource ->
+                getAppointment(resource)
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: b697f6
      */
     @Test
@@ -365,6 +383,24 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
             .operateResource { resource ->
+                getAppointment(resource)
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: d9ca8a
+     */
+    @Test
+    fun `operate on Resource named when initial resource is OperationOutcome but ERROR`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
+
+        // WHEN
+        val operationResult = OperationResult.of(operationOutcome)
+            .operateResource("Won't show") { resource ->
                 getAppointment(resource)
             }
 
