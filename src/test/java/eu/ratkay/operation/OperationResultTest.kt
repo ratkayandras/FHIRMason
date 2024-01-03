@@ -181,6 +181,54 @@ class OperationResultTest {
     }
 
     /*
+        Hash: c762d8
+     */
+    @Test
+    fun `operate resource combined when initial resource is not OperationOutcome`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateResourceCombined { patientResource -> getAppointment(patientResource) }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: b768cc
+     */
+    @Test
+    fun `operate resource combined when initial resource is OperationOutcome but ERROR`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.ERROR) }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: 7192d9
+     */
+    @Test
+    fun `operate resource combined when initial resource is OperationOutcome but INFORMATION`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient)
+            .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.INFORMATION) }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: ddbdc4
      */
     @Test
