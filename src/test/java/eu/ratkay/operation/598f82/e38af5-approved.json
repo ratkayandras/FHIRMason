@@ -1,0 +1,53 @@
+/*eu.ratkay.operation.OperationResultTest.operate named resource combined when initial resource is OperationOutcome but INFORMATION*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "patient",
+        "myStringValue": "patient"
+      },
+      "resource": {
+        "name": [
+          {
+            "disallowExtensions": false,
+            "family": {
+              "disallowExtensions": false,
+              "myCoercedValue": "Doe",
+              "myStringValue": "Doe"
+            },
+            "given": [
+              {
+                "disallowExtensions": false,
+                "myCoercedValue": "John",
+                "myStringValue": "John"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "MyOperationOutcome",
+        "myStringValue": "MyOperationOutcome"
+      },
+      "resource": {
+        "issue": [
+          {
+            "disallowExtensions": false,
+            "severity": {
+              "disallowExtensions": false,
+              "myCoercedValue": "INFORMATION",
+              "myEnumFactory": {},
+              "myStringValue": "information"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
