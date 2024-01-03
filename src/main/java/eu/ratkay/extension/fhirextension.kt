@@ -20,3 +20,7 @@ fun OperationOutcome.hasError(): Boolean {
         operationOutcomeIssueComponent.severity == OperationOutcome.IssueSeverity.FATAL || operationOutcomeIssueComponent.severity == OperationOutcome.IssueSeverity.ERROR
     }
 }
+
+fun Resource.getParameterName(): String {
+    return this.resourceType.toString().lowercase()
+}

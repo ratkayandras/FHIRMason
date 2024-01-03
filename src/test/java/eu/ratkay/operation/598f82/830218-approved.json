@@ -5,8 +5,8 @@
       "disallowExtensions": false,
       "name": {
         "disallowExtensions": false,
-        "myCoercedValue": "resource",
-        "myStringValue": "resource"
+        "myCoercedValue": "patient",
+        "myStringValue": "patient"
       },
       "resource": {
         "name": [
@@ -32,8 +32,8 @@
       "disallowExtensions": false,
       "name": {
         "disallowExtensions": false,
-        "myCoercedValue": "resource",
-        "myStringValue": "resource"
+        "myCoercedValue": "appointment",
+        "myStringValue": "appointment"
       },
       "resource": {
         "participant": [
@@ -61,8 +61,8 @@
       "disallowExtensions": false,
       "name": {
         "disallowExtensions": false,
-        "myCoercedValue": "resource",
-        "myStringValue": "resource"
+        "myCoercedValue": "operationoutcome",
+        "myStringValue": "operationoutcome"
       },
       "resource": {
         "issue": [

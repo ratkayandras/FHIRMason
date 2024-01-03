@@ -1,5 +1,6 @@
 package eu.ratkay.operation
 
+import eu.ratkay.extension.getParameterName
 import eu.ratkay.extension.hasError
 import eu.ratkay.extension.toParameters
 import org.hl7.fhir.instance.model.api.IBaseResource
@@ -10,11 +11,12 @@ import org.hl7.fhir.r4.model.Resource
 sealed class OperationResult<out T: Resource> private constructor(private var parameters: Parameters) {
 
     companion object {
-        fun <T: Resource> of(resource: T, name: String = "resource"): OperationResult<T> {
+        fun <T: Resource> of(resource: T, name: String? = null): OperationResult<T> {
+            val paramName = name ?: resource.getParameterName()
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
-                SuccessResource(name, resource)
+                SuccessResource(paramName, resource)
             }
         }
     }
