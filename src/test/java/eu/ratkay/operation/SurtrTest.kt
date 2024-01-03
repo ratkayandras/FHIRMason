@@ -1,6 +1,7 @@
 package eu.ratkay.operation
 
 import com.github.karsaig.approvalcrest.jupiter.MatcherAssert.assertThat
+import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameBeanAs
 import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsApproved
 import org.hl7.fhir.r4.model.Appointment
 import org.hl7.fhir.r4.model.HumanName
@@ -127,7 +128,7 @@ class SurtrTest {
     }
 
     /*
-        Hash: d5a7f
+        Hash: d5a1c0
      */
     @Test
     fun `operate combined when initial resource is not OperationOutcome`() {

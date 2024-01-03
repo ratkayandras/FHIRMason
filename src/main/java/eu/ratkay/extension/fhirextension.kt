@@ -6,6 +6,7 @@ import org.hl7.fhir.r4.model.Resource
 import org.hl7.fhir.r4.model.StringType
 
 fun Resource.toParameters(name: String): Parameters {
+    if (this is Parameters) return this
     return Parameters()
         .setParameter(
             listOf(

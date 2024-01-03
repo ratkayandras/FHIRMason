@@ -9,64 +9,52 @@
         "myStringValue": "resource"
       },
       "resource": {
-        "parameter": [
+        "name": [
           {
             "disallowExtensions": false,
-            "name": {
+            "family": {
               "disallowExtensions": false,
-              "myCoercedValue": "resource",
-              "myStringValue": "resource"
+              "myCoercedValue": "Doe",
+              "myStringValue": "Doe"
             },
-            "resource": {
-              "name": [
-                {
-                  "disallowExtensions": false,
-                  "family": {
-                    "disallowExtensions": false,
-                    "myCoercedValue": "Doe",
-                    "myStringValue": "Doe"
-                  },
-                  "given": [
-                    {
-                      "disallowExtensions": false,
-                      "myCoercedValue": "John",
-                      "myStringValue": "John"
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            "disallowExtensions": false,
-            "name": {
-              "disallowExtensions": false,
-              "myCoercedValue": "resource",
-              "myStringValue": "resource"
-            },
-            "resource": {
-              "participant": [
-                {
-                  "actor": {
-                    "disallowExtensions": false,
-                    "display": {
-                      "disallowExtensions": false,
-                      "myCoercedValue": "OperationOutcome",
-                      "myStringValue": "OperationOutcome"
-                    }
-                  },
-                  "disallowExtensions": false
-                }
-              ],
-              "status": {
+            "given": [
+              {
                 "disallowExtensions": false,
-                "myCoercedValue": "BOOKED",
-                "myEnumFactory": {},
-                "myStringValue": "booked"
+                "myCoercedValue": "John",
+                "myStringValue": "John"
               }
-            }
+            ]
           }
         ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {
+        "participant": [
+          {
+            "actor": {
+              "disallowExtensions": false,
+              "display": {
+                "disallowExtensions": false,
+                "myCoercedValue": "OperationOutcome",
+                "myStringValue": "OperationOutcome"
+              }
+            },
+            "disallowExtensions": false
+          }
+        ],
+        "status": {
+          "disallowExtensions": false,
+          "myCoercedValue": "BOOKED",
+          "myEnumFactory": {},
+          "myStringValue": "booked"
+        }
       }
     }
   ]

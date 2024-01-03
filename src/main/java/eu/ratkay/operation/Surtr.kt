@@ -46,7 +46,7 @@ sealed class Surtr {
     }
 
     fun operateCombined(lambda: () -> Resource): Surtr {
-        return if (this is Source) of(lambda.invoke()) combine this.resource as Parameters else this
+        return if (this is Source) of(lambda.invoke()) combine this.parameters!! else this
     }
 
     fun operateResource(lambda: (Resource) -> Resource): Surtr {
