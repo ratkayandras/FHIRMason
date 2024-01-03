@@ -1,0 +1,91 @@
+/*eu.ratkay.operation.SurtrTest.operate combined when initial resource is not OperationOutcome and add multiple*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {
+        "name": [
+          {
+            "disallowExtensions": false,
+            "family": {
+              "disallowExtensions": false,
+              "myCoercedValue": "Doe",
+              "myStringValue": "Doe"
+            },
+            "given": [
+              {
+                "disallowExtensions": false,
+                "myCoercedValue": "John",
+                "myStringValue": "John"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {
+        "participant": [
+          {
+            "actor": {
+              "disallowExtensions": false,
+              "display": {
+                "disallowExtensions": false,
+                "myCoercedValue": "OperationOutcome",
+                "myStringValue": "OperationOutcome"
+              }
+            },
+            "disallowExtensions": false
+          }
+        ],
+        "status": {
+          "disallowExtensions": false,
+          "myCoercedValue": "BOOKED",
+          "myEnumFactory": {},
+          "myStringValue": "booked"
+        }
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
+      },
+      "resource": {
+        "issue": [
+          {
+            "disallowExtensions": false,
+            "severity": {
+              "disallowExtensions": false,
+              "myCoercedValue": "INFORMATION",
+              "myEnumFactory": {},
+              "myStringValue": "information"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "theName",
+        "myStringValue": "theName"
+      },
+      "resource": {}
+    }
+  ]
+}

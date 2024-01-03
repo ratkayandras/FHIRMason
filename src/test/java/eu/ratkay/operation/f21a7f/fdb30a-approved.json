@@ -1,0 +1,14 @@
+/*eu.ratkay.operation.SurtrTest.operate combined when initial resource is not OperationOutcome and add multiple ERROR created during operation chain*/
+{
+  "issue": [
+    {
+      "disallowExtensions": false,
+      "severity": {
+        "disallowExtensions": false,
+        "myCoercedValue": "ERROR",
+        "myEnumFactory": {},
+        "myStringValue": "error"
+      }
+    }
+  ]
+}

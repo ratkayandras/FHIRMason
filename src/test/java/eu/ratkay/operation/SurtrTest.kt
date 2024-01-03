@@ -145,6 +145,42 @@ class SurtrTest {
     }
 
     /*
+        Hash: 830218
+     */
+    @Test
+    fun `operate combined when initial resource is not OperationOutcome and add multiple`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val surtr = Surtr.of(patient)
+            .operateCombined { getAppointment() }
+            .operateCombined { getOperationOutcome(IssueSeverity.INFORMATION) }
+            .operateCombined { getParameters("theName", Patient()) }
+
+        // THEN
+        assertThat(surtr.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: fdb30a
+     */
+    @Test
+    fun `operate combined when initial resource is not OperationOutcome and add multiple ERROR created during operation chain`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val surtr = Surtr.of(patient)
+            .operateCombined { getAppointment() }
+            .operateCombined { getOperationOutcome(IssueSeverity.ERROR) }
+            .operateCombined { getParameters("theName", Patient()) }
+
+        // THEN
+        assertThat(surtr.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: ddbdc4
      */
     @Test
