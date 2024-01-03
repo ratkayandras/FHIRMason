@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.operate on Parameters when initial resource is not OperationOutcome*/
+/*eu.ratkay.operation.OperationResultTest.operate on Parameters when initial resource is not OperationOutcome*/
 {
   "parameter": [
     {

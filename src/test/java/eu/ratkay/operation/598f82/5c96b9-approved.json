@@ -1,12 +1,12 @@
-/*eu.ratkay.operation.SurtrTest.get resource when initial resource is not OperationOutcome with named Resource*/
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is not OperationOutcome*/
 {
   "parameter": [
     {
       "disallowExtensions": false,
       "name": {
         "disallowExtensions": false,
-        "myCoercedValue": "patient",
-        "myStringValue": "patient"
+        "myCoercedValue": "resource",
+        "myStringValue": "resource"
       },
       "resource": {
         "name": [

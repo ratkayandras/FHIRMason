@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.operate on Parameters when initial resource is OperationOutcome but ERROR*/
+/*eu.ratkay.operation.OperationResultTest.operate combined when initial resource is OperationOutcome but ERROR*/
 {
   "issue": [
     {

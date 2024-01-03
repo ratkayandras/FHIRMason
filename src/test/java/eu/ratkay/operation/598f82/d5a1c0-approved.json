@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.operate combined when initial resource is not OperationOutcome and add multiple*/
+/*eu.ratkay.operation.OperationResultTest.operate combined when initial resource is not OperationOutcome*/
 {
   "parameter": [
     {
@@ -56,36 +56,6 @@
           "myStringValue": "booked"
         }
       }
-    },
-    {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "resource",
-        "myStringValue": "resource"
-      },
-      "resource": {
-        "issue": [
-          {
-            "disallowExtensions": false,
-            "severity": {
-              "disallowExtensions": false,
-              "myCoercedValue": "INFORMATION",
-              "myEnumFactory": {},
-              "myStringValue": "information"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "theName",
-        "myStringValue": "theName"
-      },
-      "resource": {}
     }
   ]
 }

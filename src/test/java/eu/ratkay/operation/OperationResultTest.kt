@@ -13,7 +13,7 @@ import org.hl7.fhir.r4.model.Resource
 import org.hl7.fhir.r4.model.StringType
 import org.junit.jupiter.api.Test
 
-class SurtrTest {
+class OperationResultTest {
 
     /*
         Hash: 5c96b9
@@ -24,10 +24,10 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -39,10 +39,10 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient, "patient")
+        val operationResult = OperationResult.of(patient, "patient")
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -54,10 +54,10 @@ class SurtrTest {
         val operationOutcome = OperationOutcome()
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -69,10 +69,10 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.FATAL)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -84,10 +84,10 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -99,13 +99,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
             .operate {
                 getAppointment()
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -117,13 +117,13 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
             .operate {
                 getAppointment()
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -135,13 +135,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
             .operateCombined {
                 getAppointment()
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -153,13 +153,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
             .operateCombined { getAppointment() }
             .operateCombined { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined { getParameters("theName", Patient()) }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -171,13 +171,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
             .operateCombined { getAppointment() }
             .operateCombined { getOperationOutcome(IssueSeverity.ERROR) }
             .operateCombined { getParameters("theName", Patient()) }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -189,13 +189,13 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
             .operateCombined {
                 getAppointment()
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -207,13 +207,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient)
+        val operationResult = OperationResult.of(patient)
             .operateResource { resource ->
                 getAppointment(resource)
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -225,13 +225,13 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
             .operateResource { resource ->
                 getAppointment(resource)
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -243,13 +243,13 @@ class SurtrTest {
         val patient = getPatient()
 
         // WHEN
-        val surtr = Surtr.of(patient, "patient")
+        val operationResult = OperationResult.of(patient, "patient")
             .operateParameters { params ->
                 getAppointment(params.getParameter("patient").resource)
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     /*
@@ -261,13 +261,13 @@ class SurtrTest {
         val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
 
         // WHEN
-        val surtr = Surtr.of(operationOutcome)
+        val operationResult = OperationResult.of(operationOutcome)
             .operateParameters { resource ->
                 getAppointment(resource)
             }
 
         // THEN
-        assertThat(surtr.resource, sameJsonAsApproved())
+        assertThat(operationResult.resource, sameJsonAsApproved())
     }
 
     private fun getPatient(): Patient {

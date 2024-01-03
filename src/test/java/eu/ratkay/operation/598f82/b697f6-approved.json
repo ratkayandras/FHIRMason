@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.get resource when initial resource is OperationOutcome with ERROR issue*/
+/*eu.ratkay.operation.OperationResultTest.operate on Resource when initial resource is OperationOutcome but ERROR*/
 {
   "issue": [
     {

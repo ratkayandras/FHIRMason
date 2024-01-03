@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.operate combined when initial resource is not OperationOutcome and add multiple ERROR created during operation chain*/
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is OperationOutcome with ERROR issue*/
 {
   "issue": [
     {

@@ -1,4 +1,4 @@
-/*eu.ratkay.operation.SurtrTest.get resource when initial resource is OperationOutcome with FATAL issue*/
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is OperationOutcome with FATAL issue*/
 {
   "issue": [
     {
