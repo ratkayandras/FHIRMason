@@ -511,6 +511,24 @@ class OperationResultTest {
     }
 
     /*
+        Hash: 11cb5c
+     */
+    @Test
+    fun `operate on Parameters named combined when initial resource is not OperationOutcome`() {
+        // GIVEN
+        val patient = getPatient()
+
+        // WHEN
+        val operationResult = OperationResult.of(patient, "patient")
+            .operateParametersCombined("MyAppointment") { params ->
+                getAppointment(params.getParameter("patient").resource)
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: ec3b62
      */
     @Test
@@ -565,6 +583,24 @@ class OperationResultTest {
     }
 
     /*
+        Hash: cb75e9
+     */
+    @Test
+    fun `operate on Parameters named combined when initial resource is OperationOutcome but ERROR`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.ERROR)
+
+        // WHEN
+        val operationResult = OperationResult.of(operationOutcome)
+            .operateParametersCombined("Won't show") { resource ->
+                getAppointment(resource)
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
         Hash: 9e64e7
      */
     @Test
@@ -575,6 +611,24 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
             .operateParametersCombined { resource ->
+                getAppointment(resource)
+            }
+
+        // THEN
+        assertThat(operationResult.resource, sameJsonAsApproved())
+    }
+
+    /*
+        Hash: e21612
+     */
+    @Test
+    fun `operate on Parameters named combined when initial resource is OperationOutcome but INFORMATION`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.INFORMATION)
+
+        // WHEN
+        val operationResult = OperationResult.of(operationOutcome)
+            .operateParametersCombined("MyAppointment") { resource ->
                 getAppointment(resource)
             }
 

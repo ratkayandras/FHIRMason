@@ -1,0 +1,55 @@
+/*eu.ratkay.operation.OperationResultTest.operate on Parameters named combined when initial resource is OperationOutcome but INFORMATION*/
+{
+  "parameter": [
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "operationoutcome",
+        "myStringValue": "operationoutcome"
+      },
+      "resource": {
+        "issue": [
+          {
+            "disallowExtensions": false,
+            "severity": {
+              "disallowExtensions": false,
+              "myCoercedValue": "INFORMATION",
+              "myEnumFactory": {},
+              "myStringValue": "information"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "disallowExtensions": false,
+      "name": {
+        "disallowExtensions": false,
+        "myCoercedValue": "MyAppointment",
+        "myStringValue": "MyAppointment"
+      },
+      "resource": {
+        "participant": [
+          {
+            "actor": {
+              "disallowExtensions": false,
+              "display": {
+                "disallowExtensions": false,
+                "myCoercedValue": "Parameters",
+                "myStringValue": "Parameters"
+              }
+            },
+            "disallowExtensions": false
+          }
+        ],
+        "status": {
+          "disallowExtensions": false,
+          "myCoercedValue": "BOOKED",
+          "myEnumFactory": {},
+          "myStringValue": "booked"
+        }
+      }
+    }
+  ]
+}
