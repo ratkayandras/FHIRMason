@@ -2,6 +2,17 @@
 {
   "parameter": [
     {
+      "name": "MyOperationOutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    },
+    {
       "name": "patient",
       "resource": {
         "name": [
@@ -13,17 +24,6 @@
           }
         ],
         "resourceType": "Patient"
-      }
-    },
-    {
-      "name": "MyOperationOutcome",
-      "resource": {
-        "issue": [
-          {
-            "severity": "information"
-          }
-        ],
-        "resourceType": "OperationOutcome"
       }
     }
   ],

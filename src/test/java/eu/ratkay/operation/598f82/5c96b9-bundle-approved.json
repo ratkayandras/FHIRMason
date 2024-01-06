@@ -1,0 +1,19 @@
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is not OperationOutcome*/
+{
+  "entry": [
+    {
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}

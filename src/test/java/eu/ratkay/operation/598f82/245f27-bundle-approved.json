@@ -1,0 +1,39 @@
+/*eu.ratkay.operation.OperationResultTest.operate named combined when initial resource is not OperationOutcome*/
+{
+  "entry": [
+    {
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "resourceType": "OperationOutcome"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "OperationOutcome",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    },
+    {
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}

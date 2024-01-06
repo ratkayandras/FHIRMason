@@ -1,0 +1,51 @@
+/*eu.ratkay.operation.OperationResultTest.operate on Parameters combined when initial resource is OperationOutcome but INFORMATION*/
+{
+  "parameter": [
+    {
+      "name": "appointment",
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "parameter": [
+              {
+                "name": "operationoutcome",
+                "resource": {
+                  "issue": [
+                    {
+                      "severity": "information"
+                    }
+                  ],
+                  "resourceType": "OperationOutcome"
+                }
+              }
+            ],
+            "resourceType": "Parameters"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "Parameters",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    },
+    {
+      "name": "operationoutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    }
+  ],
+  "resourceType": "Parameters"
+}

@@ -1,22 +1,27 @@
 /*eu.ratkay.operation.OperationResultTest.operate named combined when initial resource is not OperationOutcome and add multiple*/
 {
-  "parameter": [
+  "entry": [
     {
-      "name": "patient",
       "resource": {
-        "name": [
+        "parameter": [
           {
-            "family": "Doe",
-            "given": [
-              "John"
-            ]
+            "name": "theName"
           }
         ],
-        "resourceType": "Patient"
+        "resourceType": "Parameters"
       }
     },
     {
-      "name": "My Custom Appointment",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    },
+    {
       "resource": {
         "contained": [
           {
@@ -37,19 +42,18 @@
       }
     },
     {
-      "name": "My Custom OperationOutcome",
       "resource": {
-        "issue": [
+        "name": [
           {
-            "severity": "information"
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
           }
         ],
-        "resourceType": "OperationOutcome"
+        "resourceType": "Patient"
       }
-    },
-    {
-      "name": "theName"
     }
   ],
-  "resourceType": "Parameters"
+  "resourceType": "Bundle"
 }

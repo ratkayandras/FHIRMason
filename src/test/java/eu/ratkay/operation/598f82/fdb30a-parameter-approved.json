@@ -1,0 +1,9 @@
+/*eu.ratkay.operation.OperationResultTest.operate combined when initial resource is not OperationOutcome and add multiple ERROR created during operation chain*/
+{
+  "issue": [
+    {
+      "severity": "error"
+    }
+  ],
+  "resourceType": "OperationOutcome"
+}

@@ -1,0 +1,63 @@
+/*eu.ratkay.operation.OperationResultTest.operate named combined when initial resource is not OperationOutcome and add multiple*/
+{
+  "parameter": [
+    {
+      "name": "Won\u0027t show",
+      "resource": {
+        "parameter": [
+          {
+            "name": "theName"
+          }
+        ],
+        "resourceType": "Parameters"
+      }
+    },
+    {
+      "name": "My Custom OperationOutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    },
+    {
+      "name": "My Custom Appointment",
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "resourceType": "OperationOutcome"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "OperationOutcome",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    },
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    }
+  ],
+  "resourceType": "Parameters"
+}

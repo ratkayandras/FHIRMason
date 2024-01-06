@@ -1,0 +1,4 @@
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is OperationOutcome but not FATAL or ERROR*/
+{
+  "resourceType": "Bundle"
+}

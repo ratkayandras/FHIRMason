@@ -1,0 +1,26 @@
+/*eu.ratkay.operation.OperationResultTest.operate named when initial resource is not OperationOutcome*/
+{
+  "entry": [
+    {
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "resourceType": "OperationOutcome"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "OperationOutcome",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}

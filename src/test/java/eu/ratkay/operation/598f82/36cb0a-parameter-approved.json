@@ -1,0 +1,9 @@
+/*eu.ratkay.operation.OperationResultTest.get resource when initial resource is OperationOutcome with FATAL issue*/
+{
+  "issue": [
+    {
+      "severity": "fatal"
+    }
+  ],
+  "resourceType": "OperationOutcome"
+}

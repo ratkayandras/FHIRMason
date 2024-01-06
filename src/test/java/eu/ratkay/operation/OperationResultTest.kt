@@ -38,10 +38,12 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(patient)
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -55,10 +57,12 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(patient, "patient")
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -72,10 +76,12 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -89,10 +95,12 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -106,10 +114,12 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -126,10 +136,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -146,10 +158,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -166,10 +180,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -186,10 +202,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -206,10 +224,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -226,10 +246,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -246,10 +268,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -266,10 +290,12 @@ class OperationResultTest {
             .operateCombined { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined { getParameters("theName", Patient()) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -286,10 +312,12 @@ class OperationResultTest {
             .operateCombined("My Custom OperationOutcome") { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined("Won't show") { getParameters("theName", Patient()) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -306,10 +334,12 @@ class OperationResultTest {
             .operateCombined { getOperationOutcome(IssueSeverity.ERROR) }
             .operateCombined { getParameters("theName", Patient()) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -324,10 +354,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { patientResource -> getAppointment(patientResource) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -342,10 +374,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.ERROR) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -360,10 +394,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.INFORMATION) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -380,10 +416,12 @@ class OperationResultTest {
                 getAppointment()
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -398,10 +436,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("MyAppointment") { patientResource -> getAppointment(patientResource) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -416,10 +456,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("Won't show") { _ -> getOperationOutcome(IssueSeverity.ERROR) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -434,10 +476,12 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("MyOperationOutcome") { _ -> getOperationOutcome(IssueSeverity.INFORMATION) }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -454,10 +498,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -474,10 +520,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -494,10 +542,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -514,10 +564,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -534,10 +586,12 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -554,10 +608,12 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -574,10 +630,12 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -594,10 +652,12 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -614,10 +674,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -634,10 +696,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -654,10 +718,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -674,10 +740,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -694,10 +762,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     /*
@@ -714,10 +784,12 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
-        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
 
         // THEN
-        assertThat(actual, sameJsonAsApproved())
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
     private fun getPatient(): Patient {

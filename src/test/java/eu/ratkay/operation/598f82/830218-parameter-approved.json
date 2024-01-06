@@ -2,17 +2,25 @@
 {
   "parameter": [
     {
-      "name": "patient",
+      "name": "parameters",
       "resource": {
-        "name": [
+        "parameter": [
           {
-            "family": "Doe",
-            "given": [
-              "John"
-            ]
+            "name": "theName"
           }
         ],
-        "resourceType": "Patient"
+        "resourceType": "Parameters"
+      }
+    },
+    {
+      "name": "operationoutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
       }
     },
     {
@@ -37,18 +45,18 @@
       }
     },
     {
-      "name": "operationoutcome",
+      "name": "patient",
       "resource": {
-        "issue": [
+        "name": [
           {
-            "severity": "information"
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
           }
         ],
-        "resourceType": "OperationOutcome"
+        "resourceType": "Patient"
       }
-    },
-    {
-      "name": "theName"
     }
   ],
   "resourceType": "Parameters"

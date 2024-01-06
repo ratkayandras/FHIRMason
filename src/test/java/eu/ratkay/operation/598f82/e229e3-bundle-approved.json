@@ -1,22 +1,7 @@
-/*eu.ratkay.operation.OperationResultTest.operate on Parameters combined when initial resource is not OperationOutcome*/
+/*eu.ratkay.operation.OperationResultTest.operate on Resource named when initial resource is not OperationOutcome*/
 {
-  "parameter": [
+  "entry": [
     {
-      "name": "patient",
-      "resource": {
-        "name": [
-          {
-            "family": "Doe",
-            "given": [
-              "John"
-            ]
-          }
-        ],
-        "resourceType": "Patient"
-      }
-    },
-    {
-      "name": "appointment",
       "resource": {
         "contained": [
           {
@@ -45,5 +30,5 @@
       }
     }
   ],
-  "resourceType": "Parameters"
+  "resourceType": "Bundle"
 }

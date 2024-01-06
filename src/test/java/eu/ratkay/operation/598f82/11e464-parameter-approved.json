@@ -1,0 +1,9 @@
+/*eu.ratkay.operation.OperationResultTest.operate on Parameters combined when initial resource is OperationOutcome but ERROR*/
+{
+  "issue": [
+    {
+      "severity": "error"
+    }
+  ],
+  "resourceType": "OperationOutcome"
+}

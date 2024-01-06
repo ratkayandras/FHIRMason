@@ -1,0 +1,29 @@
+/*eu.ratkay.operation.OperationResultTest.operate resource combined when initial resource is OperationOutcome but INFORMATION*/
+{
+  "entry": [
+    {
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    },
+    {
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    }
+  ],
+  "resourceType": "Bundle"
+}

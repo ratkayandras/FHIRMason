@@ -1,22 +1,8 @@
-/*eu.ratkay.operation.OperationResultTest.operate named combined when initial resource is not OperationOutcome*/
+/*eu.ratkay.operation.OperationResultTest.operate combined when initial resource is not OperationOutcome*/
 {
   "parameter": [
     {
-      "name": "patient",
-      "resource": {
-        "name": [
-          {
-            "family": "Doe",
-            "given": [
-              "John"
-            ]
-          }
-        ],
-        "resourceType": "Patient"
-      }
-    },
-    {
-      "name": "My Custom Appointment",
+      "name": "appointment",
       "resource": {
         "contained": [
           {
@@ -34,6 +20,20 @@
         ],
         "resourceType": "Appointment",
         "status": "booked"
+      }
+    },
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
       }
     }
   ],

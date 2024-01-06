@@ -1,17 +1,20 @@
 package eu.ratkay.operation
 
+import eu.ratkay.dto.ResourceHolder
 import eu.ratkay.extension.getParameterName
 import eu.ratkay.extension.hasError
-import eu.ratkay.extension.toParameters
+import eu.ratkay.extension.toBundleEntryComponent
+import eu.ratkay.extension.toParameterComponent
 import org.hl7.fhir.instance.model.api.IBaseResource
+import org.hl7.fhir.r4.model.Bundle
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.hl7.fhir.r4.model.Parameters
 import org.hl7.fhir.r4.model.Resource
 
-sealed class OperationResult<out T: Resource> private constructor(private var parameters: Parameters) {
+sealed class OperationResult<out T : Resource> private constructor(private val resources: MutableList<ResourceHolder>) {
 
     companion object {
-        fun <T: Resource> of(resource: T, name: String? = null): OperationResult<T> {
+        fun <T : Resource> of(resource: T, name: String? = null): OperationResult<T> {
             val paramName = name ?: resource.getParameterName()
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
@@ -21,95 +24,108 @@ sealed class OperationResult<out T: Resource> private constructor(private var pa
         }
     }
 
-    val resource: IBaseResource
-        get() = when (this) {
-            is SuccessResource<*> -> this.parameters
+    fun asParameters(): IBaseResource {
+        return when (this) {
+            is SuccessResource<*> -> this.toParameters()
             is Error -> this.operationOutcome
         }
+    }
 
-    private data class SuccessResource<T: Resource>(val name: String, val source: T): OperationResult<T>(source.toParameters(name))
-    private data class Error(val operationOutcome: OperationOutcome): OperationResult<Nothing>(Parameters())
+    fun asBundle(): IBaseResource {
+        return when (this) {
+            is SuccessResource<*> -> this.toBundle()
+            is Error -> this.operationOutcome
+        }
+    }
 
-    fun <R: Resource> operate(lambda: () -> R): OperationResult<R> {
+    private data class SuccessResource<T : Resource>(val name: String, val source: T) : OperationResult<T>(
+        mutableListOf(
+            ResourceHolder(name, source)
+        )
+    )
+
+    private data class Error(val operationOutcome: OperationOutcome) : OperationResult<Nothing>(mutableListOf())
+
+    fun <R : Resource> operate(lambda: () -> R): OperationResult<R> {
         return when (this) {
             is SuccessResource -> of(lambda())
             is Error -> this
         }
     }
 
-    fun <R: Resource> operate(name: String, lambda: () -> R): OperationResult<R> {
+    fun <R : Resource> operate(name: String, lambda: () -> R): OperationResult<R> {
         return when (this) {
             is SuccessResource -> of(lambda(), name)
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateCombined(lambda: () -> R): OperationResult<R> {
+    fun <R : Resource> operateCombined(lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda()) combine this.parameters
+            is SuccessResource -> of(lambda()) combine this.resources
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateCombined(name: String, lambda: () -> R): OperationResult<R> {
+    fun <R : Resource> operateCombined(name: String, lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(), name) combine this.parameters
+            is SuccessResource -> of(lambda(), name) combine this.resources
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateResource(lambda: (T) -> R): OperationResult<R> {
+    fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
             is SuccessResource -> of(lambda(this.source))
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
+    fun <R : Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
             is SuccessResource -> of(lambda(this.source), name)
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
+    fun <R : Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source)) combine this.parameters
+            is SuccessResource -> of(lambda(this.source)) combine this.resources
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> {
+    fun <R : Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source), name) combine this.parameters
+            is SuccessResource -> of(lambda(this.source), name) combine this.resources
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateParameters(lambda: (Parameters) -> R): OperationResult<R> {
+    fun <R : Resource> operateParameters(lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.parameters))
+            is SuccessResource -> of(lambda(this.toParameters()))
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
+    fun <R : Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.parameters), name)
+            is SuccessResource -> of(lambda(this.toParameters()), name)
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
+    fun <R : Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.parameters)) combine this.parameters
+            is SuccessResource -> of(lambda(this.toParameters())) combine this.resources
             is Error -> this
         }
     }
 
-    fun <R: Resource> operateParametersCombined(name: String, lambda: (Parameters) -> R): OperationResult<R> {
+    fun <R : Resource> operateParametersCombined(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.parameters), name) combine this.parameters
+            is SuccessResource -> of(lambda(this.toParameters()), name) combine this.resources
             is Error -> this
         }
     }
@@ -118,16 +134,27 @@ sealed class OperationResult<out T: Resource> private constructor(private var pa
      * Helper function to combine a given Parameters resource with a OperationResult.Source Parameters resource
      * If the OperationResult is Error then the method just returns
      */
-    private infix fun <R: Resource> combine(parameters: Parameters): OperationResult<R> {
+    private infix fun <R : Resource> combine(resources: List<ResourceHolder>): OperationResult<R> {
         return when (this) {
             is SuccessResource -> {
-                val newParams = parameters.parameter + this.parameters.parameter
-                val combinedParameters = Parameters().apply { parameter = newParams }
-                this.parameters = combinedParameters
+                this.resources.addAll(resources)
                 @Suppress("UNCHECKED_CAST")
                 this as OperationResult<R>
             }
+
             is Error -> this
         }
+    }
+
+    private fun toParameters(): Parameters {
+        return this.resources
+            .map { it.resource.toParameterComponent(it.name) }
+            .let { Parameters().apply { parameter = it } }
+    }
+
+    private fun toBundle(): Bundle {
+        return this.resources
+            .map { it.resource.toBundleEntryComponent() }
+            .let { Bundle().apply { entry = it } }
     }
 }

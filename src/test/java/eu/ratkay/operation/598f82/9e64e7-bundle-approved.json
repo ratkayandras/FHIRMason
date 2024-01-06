@@ -1,19 +1,7 @@
-/*eu.ratkay.operation.OperationResultTest.operate on Parameters named combined when initial resource is OperationOutcome but INFORMATION*/
+/*eu.ratkay.operation.OperationResultTest.operate on Parameters combined when initial resource is OperationOutcome but INFORMATION*/
 {
-  "parameter": [
+  "entry": [
     {
-      "name": "operationoutcome",
-      "resource": {
-        "issue": [
-          {
-            "severity": "information"
-          }
-        ],
-        "resourceType": "OperationOutcome"
-      }
-    },
-    {
-      "name": "MyAppointment",
       "resource": {
         "contained": [
           {
@@ -45,7 +33,17 @@
         "resourceType": "Appointment",
         "status": "booked"
       }
+    },
+    {
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
     }
   ],
-  "resourceType": "Parameters"
+  "resourceType": "Bundle"
 }
