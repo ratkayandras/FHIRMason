@@ -32,84 +32,84 @@ sealed class OperationResult<out T: Resource> private constructor(private var pa
 
     fun <R: Resource> operate(lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke())
+            is SuccessResource -> of(lambda())
             is Error -> this
         }
     }
 
     fun <R: Resource> operate(name: String, lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(), name)
+            is SuccessResource -> of(lambda(), name)
             is Error -> this
         }
     }
 
     fun <R: Resource> operateCombined(lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke()) combine this.parameters
+            is SuccessResource -> of(lambda()) combine this.parameters
             is Error -> this
         }
     }
 
     fun <R: Resource> operateCombined(name: String, lambda: () -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(), name) combine this.parameters
+            is SuccessResource -> of(lambda(), name) combine this.parameters
             is Error -> this
         }
     }
 
     fun <R: Resource> operateResource(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.source))
+            is SuccessResource -> of(lambda(this.source))
             is Error -> this
         }
     }
 
     fun <R: Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.source), name)
+            is SuccessResource -> of(lambda(this.source), name)
             is Error -> this
         }
     }
 
     fun <R: Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.source)) combine this.parameters
+            is SuccessResource -> of(lambda(this.source)) combine this.parameters
             is Error -> this
         }
     }
 
     fun <R: Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.source), name) combine this.parameters
+            is SuccessResource -> of(lambda(this.source), name) combine this.parameters
             is Error -> this
         }
     }
 
     fun <R: Resource> operateParameters(lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.parameters))
+            is SuccessResource -> of(lambda(this.parameters))
             is Error -> this
         }
     }
 
     fun <R: Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.parameters), name)
+            is SuccessResource -> of(lambda(this.parameters), name)
             is Error -> this
         }
     }
 
     fun <R: Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.parameters)) combine this.parameters
+            is SuccessResource -> of(lambda(this.parameters)) combine this.parameters
             is Error -> this
         }
     }
 
     fun <R: Resource> operateParametersCombined(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda.invoke(this.parameters), name) combine this.parameters
+            is SuccessResource -> of(lambda(this.parameters), name) combine this.parameters
             is Error -> this
         }
     }
