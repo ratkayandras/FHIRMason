@@ -2,33 +2,34 @@
 {
   "parameter": [
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "MyAppointment",
-        "myStringValue": "MyAppointment"
-      },
+      "name": "MyAppointment",
       "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "name": [
+              {
+                "family": "Doe",
+                "given": [
+                  "John"
+                ]
+              }
+            ],
+            "resourceType": "Patient"
+          }
+        ],
         "participant": [
           {
             "actor": {
-              "disallowExtensions": false,
-              "display": {
-                "disallowExtensions": false,
-                "myCoercedValue": "Patient",
-                "myStringValue": "Patient"
-              }
-            },
-            "disallowExtensions": false
+              "display": "Patient",
+              "reference": "#1"
+            }
           }
         ],
-        "status": {
-          "disallowExtensions": false,
-          "myCoercedValue": "BOOKED",
-          "myEnumFactory": {},
-          "myStringValue": "booked"
-        }
+        "resourceType": "Appointment",
+        "status": "booked"
       }
     }
-  ]
+  ],
+  "resourceType": "Parameters"
 }

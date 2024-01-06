@@ -2,54 +2,50 @@
 {
   "parameter": [
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "operationoutcome",
-        "myStringValue": "operationoutcome"
-      },
+      "name": "operationoutcome",
       "resource": {
         "issue": [
           {
-            "disallowExtensions": false,
-            "severity": {
-              "disallowExtensions": false,
-              "myCoercedValue": "INFORMATION",
-              "myEnumFactory": {},
-              "myStringValue": "information"
-            }
+            "severity": "information"
           }
-        ]
+        ],
+        "resourceType": "OperationOutcome"
       }
     },
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "appointment",
-        "myStringValue": "appointment"
-      },
+      "name": "appointment",
       "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "parameter": [
+              {
+                "name": "operationoutcome",
+                "resource": {
+                  "issue": [
+                    {
+                      "severity": "information"
+                    }
+                  ],
+                  "resourceType": "OperationOutcome"
+                }
+              }
+            ],
+            "resourceType": "Parameters"
+          }
+        ],
         "participant": [
           {
             "actor": {
-              "disallowExtensions": false,
-              "display": {
-                "disallowExtensions": false,
-                "myCoercedValue": "Parameters",
-                "myStringValue": "Parameters"
-              }
-            },
-            "disallowExtensions": false
+              "display": "Parameters",
+              "reference": "#1"
+            }
           }
         ],
-        "status": {
-          "disallowExtensions": false,
-          "myCoercedValue": "BOOKED",
-          "myEnumFactory": {},
-          "myStringValue": "booked"
-        }
+        "resourceType": "Appointment",
+        "status": "booked"
       }
     }
-  ]
+  ],
+  "resourceType": "Parameters"
 }

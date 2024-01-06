@@ -2,13 +2,8 @@
 {
   "issue": [
     {
-      "disallowExtensions": false,
-      "severity": {
-        "disallowExtensions": false,
-        "myCoercedValue": "ERROR",
-        "myEnumFactory": {},
-        "myStringValue": "error"
-      }
+      "severity": "error"
     }
-  ]
+  ],
+  "resourceType": "OperationOutcome"
 }

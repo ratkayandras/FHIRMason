@@ -1,5 +1,7 @@
 package eu.ratkay.operation
 
+import ca.uhn.fhir.context.FhirContext
+import ca.uhn.fhir.parser.IParser
 import com.github.karsaig.approvalcrest.jupiter.MatcherAssert.assertThat
 import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsApproved
 import org.hl7.fhir.r4.model.Appointment
@@ -11,9 +13,19 @@ import org.hl7.fhir.r4.model.Patient
 import org.hl7.fhir.r4.model.Reference
 import org.hl7.fhir.r4.model.Resource
 import org.hl7.fhir.r4.model.StringType
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
 class OperationResultTest {
+
+    companion object {
+        private lateinit var jsonParser: IParser
+        @JvmStatic
+        @BeforeAll
+        fun setup() {
+            jsonParser = FhirContext.forR4().newJsonParser()
+        }
+    }
 
     /*
         Hash: 5c96b9
@@ -26,8 +38,10 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(patient)
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -41,8 +55,10 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(patient, "patient")
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -56,8 +72,10 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -71,8 +89,10 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -86,8 +106,10 @@ class OperationResultTest {
         // WHEN
         val operationResult = OperationResult.of(operationOutcome)
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -104,8 +126,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -122,8 +146,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -140,8 +166,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -158,8 +186,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -176,8 +206,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -194,8 +226,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -212,8 +246,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -230,8 +266,10 @@ class OperationResultTest {
             .operateCombined { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined { getParameters("theName", Patient()) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -248,8 +286,10 @@ class OperationResultTest {
             .operateCombined("My Custom OperationOutcome") { getOperationOutcome(IssueSeverity.INFORMATION) }
             .operateCombined("Won't show") { getParameters("theName", Patient()) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -266,8 +306,10 @@ class OperationResultTest {
             .operateCombined { getOperationOutcome(IssueSeverity.ERROR) }
             .operateCombined { getParameters("theName", Patient()) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -282,8 +324,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { patientResource -> getAppointment(patientResource) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -298,8 +342,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.ERROR) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -314,8 +360,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined { _ -> getOperationOutcome(IssueSeverity.INFORMATION) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -332,8 +380,10 @@ class OperationResultTest {
                 getAppointment()
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -348,8 +398,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("MyAppointment") { patientResource -> getAppointment(patientResource) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -364,8 +416,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("Won't show") { _ -> getOperationOutcome(IssueSeverity.ERROR) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -380,8 +434,10 @@ class OperationResultTest {
         val operationResult = OperationResult.of(patient)
             .operateResourceCombined("MyOperationOutcome") { _ -> getOperationOutcome(IssueSeverity.INFORMATION) }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -398,8 +454,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -416,8 +474,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -434,8 +494,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -452,8 +514,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -470,8 +534,10 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -488,8 +554,10 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -506,8 +574,10 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -524,8 +594,10 @@ class OperationResultTest {
                 getAppointment(params.getParameter("patient").resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -542,8 +614,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -560,8 +634,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -578,8 +654,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -596,8 +674,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -614,8 +694,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     /*
@@ -632,8 +714,10 @@ class OperationResultTest {
                 getAppointment(resource)
             }
 
+        val actual = jsonParser.encodeResourceToString(operationResult.resource)
+
         // THEN
-        assertThat(operationResult.resource, sameJsonAsApproved())
+        assertThat(actual, sameJsonAsApproved())
     }
 
     private fun getPatient(): Patient {

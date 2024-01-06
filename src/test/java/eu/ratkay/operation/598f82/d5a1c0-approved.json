@@ -2,60 +2,40 @@
 {
   "parameter": [
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "patient",
-        "myStringValue": "patient"
-      },
+      "name": "patient",
       "resource": {
         "name": [
           {
-            "disallowExtensions": false,
-            "family": {
-              "disallowExtensions": false,
-              "myCoercedValue": "Doe",
-              "myStringValue": "Doe"
-            },
+            "family": "Doe",
             "given": [
-              {
-                "disallowExtensions": false,
-                "myCoercedValue": "John",
-                "myStringValue": "John"
-              }
+              "John"
             ]
           }
-        ]
+        ],
+        "resourceType": "Patient"
       }
     },
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "appointment",
-        "myStringValue": "appointment"
-      },
+      "name": "appointment",
       "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "resourceType": "OperationOutcome"
+          }
+        ],
         "participant": [
           {
             "actor": {
-              "disallowExtensions": false,
-              "display": {
-                "disallowExtensions": false,
-                "myCoercedValue": "OperationOutcome",
-                "myStringValue": "OperationOutcome"
-              }
-            },
-            "disallowExtensions": false
+              "display": "OperationOutcome",
+              "reference": "#1"
+            }
           }
         ],
-        "status": {
-          "disallowExtensions": false,
-          "myCoercedValue": "BOOKED",
-          "myEnumFactory": {},
-          "myStringValue": "booked"
-        }
+        "resourceType": "Appointment",
+        "status": "booked"
       }
     }
-  ]
+  ],
+  "resourceType": "Parameters"
 }

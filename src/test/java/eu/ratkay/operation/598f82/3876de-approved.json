@@ -2,13 +2,8 @@
 {
   "parameter": [
     {
-      "disallowExtensions": false,
-      "name": {
-        "disallowExtensions": false,
-        "myCoercedValue": "operationoutcome",
-        "myStringValue": "operationoutcome"
-      },
-      "resource": {}
+      "name": "operationoutcome"
     }
-  ]
+  ],
+  "resourceType": "Parameters"
 }
