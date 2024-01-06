@@ -131,15 +131,14 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
     }
 
     /**
-     * Helper function to combine a given Parameters resource with a OperationResult.Source Parameters resource
+     * Helper function to combine a given List<ResourceHolder> with an OperationResult.SuccessResource's resources
      * If the OperationResult is Error then the method just returns
      */
-    private infix fun <R : Resource> combine(resources: List<ResourceHolder>): OperationResult<R> {
+    private infix fun combine(resources: List<ResourceHolder>): OperationResult<T> {
         return when (this) {
             is SuccessResource -> {
                 this.resources.addAll(resources)
-                @Suppress("UNCHECKED_CAST")
-                this as OperationResult<R>
+                this
             }
 
             is Error -> this
