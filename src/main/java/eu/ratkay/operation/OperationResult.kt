@@ -26,14 +26,14 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
 
     fun asParameters(): IBaseResource {
         return when (this) {
-            is SuccessResource<*> -> this.toParameters()
+            is SuccessResource -> this.toParameters()
             is Error -> this.operationOutcome
         }
     }
 
     fun asBundle(): IBaseResource {
         return when (this) {
-            is SuccessResource<*> -> this.toBundle()
+            is SuccessResource -> this.toBundle()
             is Error -> this.operationOutcome
         }
     }
