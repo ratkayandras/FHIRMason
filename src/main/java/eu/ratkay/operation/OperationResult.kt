@@ -38,9 +38,9 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
         }
     }
 
-    private data class SuccessResource<T : Resource>(val name: String, val source: T) : OperationResult<T>(
+    private data class SuccessResource<T : Resource>(val name: String, val resource: T) : OperationResult<T>(
         mutableListOf(
-            ResourceHolder(name, source)
+            ResourceHolder(name, resource)
         )
     )
 
@@ -76,28 +76,28 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
 
     fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source))
+            is SuccessResource -> of(lambda(this.resource))
             is Error -> this
         }
     }
 
     fun <R : Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source), name)
+            is SuccessResource -> of(lambda(this.resource), name)
             is Error -> this
         }
     }
 
     fun <R : Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source)) combine this.resources
+            is SuccessResource -> of(lambda(this.resource)) combine this.resources
             is Error -> this
         }
     }
 
     fun <R : Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.source), name) combine this.resources
+            is SuccessResource -> of(lambda(this.resource), name) combine this.resources
             is Error -> this
         }
     }
