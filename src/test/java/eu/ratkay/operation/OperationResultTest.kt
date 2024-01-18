@@ -792,6 +792,50 @@ class OperationResultTest {
         assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
     }
 
+    /**
+     * Hash: b32c55
+     */
+    @Test
+    fun `operateResourceList when initial resource is OperationOutcome but INFORMATION`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.INFORMATION)
+
+        // WHEN
+        val operationResult = OperationResult.of(operationOutcome)
+            .operateResourceList { resource ->
+                listOf(resource, getOperationOutcome(IssueSeverity.ERROR))
+            }
+
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
+
+        // THEN
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
+    }
+
+    /**
+     * Hash: 631067
+     */
+    @Test
+    fun `operateList when initial resource is OperationOutcome but INFORMATION`() {
+        // GIVEN
+        val operationOutcome = getOperationOutcome(IssueSeverity.INFORMATION)
+
+        // WHEN
+        val operationResult = OperationResult.of(operationOutcome)
+            .operateList {
+                listOf(getOperationOutcome(IssueSeverity.ERROR))
+            }
+
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
+
+        // THEN
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
+    }
+
     private fun getPatient(): Patient {
         return Patient().apply {
             name = listOf(HumanName().apply {
