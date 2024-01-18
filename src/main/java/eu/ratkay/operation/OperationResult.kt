@@ -5,13 +5,25 @@ import eu.ratkay.extension.getParameterName
 import eu.ratkay.extension.hasError
 import eu.ratkay.extension.toBundleEntryComponent
 import eu.ratkay.extension.toParameterComponent
-import org.hl7.fhir.instance.model.api.IBaseResource
 import org.hl7.fhir.r4.model.Bundle
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.hl7.fhir.r4.model.Parameters
 import org.hl7.fhir.r4.model.Resource
 
-sealed class OperationResult<out T : Resource> private constructor(private val resources: MutableList<ResourceHolder>) {
+sealed class OperationResult<T>(private val resources: MutableList<ResourceHolder>) {
+
+    private data class ResourceSuccess<T : Resource>(val name: String, val resource: T) : OperationResult<T>(
+        mutableListOf(
+            ResourceHolder(name, resource)
+        )
+    )
+
+    private data class CollectionSuccess<C : Collection<T>, T : Resource>(val name: String, val resource: C) :
+        OperationResult<C>(
+            resource.map { ResourceHolder(name, it) }.toMutableList()
+        )
+
+    private data class Error<T>(val operationOutcome: OperationOutcome) : OperationResult<T>(mutableListOf())
 
     companion object {
         fun <T : Resource> of(resource: T, name: String? = null): OperationResult<T> {
@@ -19,114 +31,140 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
-                SuccessResource(paramName, resource)
+                ResourceSuccess(paramName, resource)
+            }
+        }
+
+        fun <C : Collection<R>, R : Resource> ofCollection(resource: C, name: String? = null): OperationResult<C> {
+            val paramName = name ?: resource.firstNotNullOfOrNull { it.getParameterName() } ?: "resource"
+            return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
+                Error(resource)
+            } else {
+                CollectionSuccess(paramName, resource)
             }
         }
     }
 
-    fun asParameters(): IBaseResource {
+    fun asParameters(): Resource {
         return when (this) {
-            is SuccessResource -> this.toParameters()
+            is ResourceSuccess -> this.toParameters()
+            is CollectionSuccess<*, *> -> this.toParameters()
             is Error -> this.operationOutcome
         }
     }
 
-    fun asBundle(): IBaseResource {
+    fun asBundle(): Resource {
         return when (this) {
-            is SuccessResource -> this.toBundle()
+            is ResourceSuccess -> this.toBundle()
+            is CollectionSuccess<*, *> -> this.toBundle()
             is Error -> this.operationOutcome
         }
     }
 
-    private data class SuccessResource<T : Resource>(val name: String, val resource: T) : OperationResult<T>(
-        mutableListOf(
-            ResourceHolder(name, resource)
-        )
-    )
-
-    private data class Error(val operationOutcome: OperationOutcome) : OperationResult<Nothing>(mutableListOf())
-
-    fun <R : Resource> operate(lambda: () -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda())
-            is Error -> this
+    fun <T : Resource> operate(lambda: () -> T): OperationResult<T> =
+        when (this) {
+            is ResourceSuccess -> of(lambda())
+            is CollectionSuccess<*, *> -> of(lambda())
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operate(name: String, lambda: () -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(), name)
-            is Error -> this
+    fun <T : Resource> operate(name: String, lambda: () -> T): OperationResult<T> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(), name)
+            is CollectionSuccess<*, *> -> of(lambda(), name)
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateCombined(lambda: () -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda()) combine this.resources
-            is Error -> this
+    fun <T : Resource> operateCombined(lambda: () -> T): OperationResult<T> =
+        when (this) {
+            is ResourceSuccess -> of(lambda()) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda()) combine this.resources
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateCombined(name: String, lambda: () -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(), name) combine this.resources
-            is Error -> this
+    fun <T : Resource> operateCombined(name: String, lambda: () -> T): OperationResult<T> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(), name) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda(), name) combine this.resources
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(this.resource))
-            is Error -> this
+    fun <C : Collection<R>, R : Resource> operateList(lambda: () -> C): OperationResult<C> =
+        when (this) {
+            is ResourceSuccess -> ofCollection(lambda())
+            is CollectionSuccess<*, *> -> ofCollection(lambda())
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(this.resource), name)
-            is Error -> this
+    @Suppress("UNCHECKED_CAST")
+    fun <C : Collection<R>, R : Resource> operateResourceList(lambda: (T) -> C): OperationResult<C> =
+        when (this) {
+            is ResourceSuccess -> ofCollection(lambda(this.resource))
+            is CollectionSuccess<*, *> -> ofCollection(lambda(this.resource as T))
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(this.resource)) combine this.resources
-            is Error -> this
+    @Suppress("UNCHECKED_CAST")
+    fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(this.resource))
+            is CollectionSuccess<*, *> -> of(lambda(this.resource as T))
+            is Error -> Error(this.operationOutcome)
         }
-    }
 
-    fun <R : Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> {
+    @Suppress("UNCHECKED_CAST")
+    fun <R : Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(this.resource), name)
+            is CollectionSuccess<*, *> -> of(lambda(this.resource as T), name)
+            is Error -> Error(this.operationOutcome)
+        }
+
+    @Suppress("UNCHECKED_CAST")
+    fun <R : Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(this.resource)) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda(this.resource as T)) combine this.resources
+            is Error -> Error(this.operationOutcome)
+        }
+
+    @Suppress("UNCHECKED_CAST")
+    fun <R : Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> =
+        when (this) {
+            is ResourceSuccess -> of(lambda(this.resource), name) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda(this.resource as T), name) combine this.resources
+            is Error -> Error(this.operationOutcome)
+        }
+
+    fun <R : Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.resource), name) combine this.resources
-            is Error -> this
+            is ResourceSuccess -> of(lambda(this.toParameters()), name)
+            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()), name)
+            is Error -> Error(this.operationOutcome)
         }
     }
 
     fun <R : Resource> operateParameters(lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.toParameters()))
-            is Error -> this
-        }
-    }
-
-    fun <R : Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(this.toParameters()), name)
-            is Error -> this
-        }
-    }
-
-    fun <R : Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is SuccessResource -> of(lambda(this.toParameters())) combine this.resources
-            is Error -> this
+            is ResourceSuccess -> of(lambda(this.toParameters()))
+            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()))
+            is Error -> Error(this.operationOutcome)
         }
     }
 
     fun <R : Resource> operateParametersCombined(name: String, lambda: (Parameters) -> R): OperationResult<R> {
         return when (this) {
-            is SuccessResource -> of(lambda(this.toParameters()), name) combine this.resources
-            is Error -> this
+            is ResourceSuccess -> of(lambda(this.toParameters()), name) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()), name) combine this.resources
+            is Error -> Error(this.operationOutcome)
+        }
+    }
+
+    fun <R : Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
+        return when (this) {
+            is ResourceSuccess -> of(lambda(this.toParameters())) combine this.resources
+            is CollectionSuccess<*, *> -> of(lambda(this.toParameters())) combine this.resources
+            is Error -> Error(this.operationOutcome)
         }
     }
 
@@ -136,7 +174,12 @@ sealed class OperationResult<out T : Resource> private constructor(private val r
      */
     private infix fun combine(resources: List<ResourceHolder>): OperationResult<T> {
         return when (this) {
-            is SuccessResource -> {
+            is ResourceSuccess -> {
+                this.resources.addAll(resources)
+                this
+            }
+
+            is CollectionSuccess<*, *> -> {
                 this.resources.addAll(resources)
                 this
             }

@@ -1,0 +1,28 @@
+/*eu.ratkay.operation.ResultTest.operateResourceList when initial resource is OperationOutcome but INFORMATION*/
+{
+  "parameter": [
+    {
+      "name": "operationoutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    },
+    {
+      "name": "operationoutcome",
+      "resource": {
+        "issue": [
+          {
+            "severity": "error"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    }
+  ],
+  "resourceType": "Parameters"
+}
