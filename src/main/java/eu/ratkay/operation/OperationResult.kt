@@ -18,9 +18,9 @@ sealed class OperationResult<T>(private val resources: MutableList<ResourceHolde
         )
     )
 
-    private data class CollectionSuccess<C : Collection<T>, T : Resource>(val name: String, val resource: C) :
+    private data class CollectionSuccess<C : Collection<T>, T : Resource>(val resourceHolders: List<ResourceHolder>, val resource: C) :
         OperationResult<C>(
-            resource.map { ResourceHolder(name, it) }.toMutableList()
+            resourceHolders.toMutableList()
         )
 
     private data class Error<T>(val operationOutcome: OperationOutcome) : OperationResult<T>(mutableListOf(ResourceHolder("error", operationOutcome)))
@@ -35,12 +35,12 @@ sealed class OperationResult<T>(private val resources: MutableList<ResourceHolde
             }
         }
 
-        fun <C : Collection<R>, R : Resource> ofCollection(resource: C, name: String? = null): OperationResult<C> {
-            val paramName = name ?: resource.firstNotNullOfOrNull { it.getResourceTypeAsLowercase() } ?: "resource"
+        fun <C : Collection<R>, R : Resource> ofCollection(resource: C): OperationResult<C> {
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
-                CollectionSuccess(paramName, resource)
+                val resourceHolders = resource.map { ResourceHolder(it.getResourceTypeAsLowercase(), it) }
+                CollectionSuccess(resourceHolders, resource)
             }
         }
     }
