@@ -38,7 +38,7 @@
       }
     },
     {
-      "name": "patient",
+      "name": "operationoutcome",
       "resource": {
         "issue": [
           {
