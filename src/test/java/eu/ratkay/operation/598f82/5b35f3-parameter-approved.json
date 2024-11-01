@@ -1,0 +1,67 @@
+/*eu.ratkay.operation.OperationResultTest.operateResourceCombined when initial resource is a list of resources*/
+{
+  "parameter": [
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "text": "Morgan Freeman"
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    },
+    {
+      "name": "appointment",
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "resourceType": "OperationOutcome"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "OperationOutcome",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    },
+    {
+      "name": "appointment",
+      "resource": {
+        "contained": [
+          {
+            "id": "1",
+            "name": [
+              {
+                "family": "Doe",
+                "given": [
+                  "John"
+                ]
+              }
+            ],
+            "resourceType": "Patient"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "display": "Patient",
+              "reference": "#1"
+            }
+          }
+        ],
+        "resourceType": "Appointment",
+        "status": "booked"
+      }
+    }
+  ],
+  "resourceType": "Parameters"
+}
