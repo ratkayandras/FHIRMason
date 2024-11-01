@@ -105,6 +105,14 @@ sealed class OperationResult<T>(private val resources: MutableList<ResourceHolde
         }
 
     @Suppress("UNCHECKED_CAST")
+    fun <C : Collection<R>, R : Resource> operateResourceListCombined(lambda: (T) -> C): OperationResult<C> =
+        when (this) {
+            is ResourceSuccess -> ofCollection(lambda(this.resource)) combine this.resources
+            is CollectionSuccess<*, *> -> ofCollection(lambda(this.resource as T)) combine this.resources
+            is Error -> Error(this.operationOutcome)
+        }
+
+    @Suppress("UNCHECKED_CAST")
     fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> =
         when (this) {
             is ResourceSuccess -> of(lambda(this.resource))

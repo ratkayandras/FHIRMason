@@ -4,15 +4,8 @@ import ca.uhn.fhir.context.FhirContext
 import ca.uhn.fhir.parser.IParser
 import com.github.karsaig.approvalcrest.jupiter.MatcherAssert.assertThat
 import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsApproved
-import org.hl7.fhir.r4.model.Appointment
-import org.hl7.fhir.r4.model.HumanName
-import org.hl7.fhir.r4.model.OperationOutcome
+import org.hl7.fhir.r4.model.*
 import org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity
-import org.hl7.fhir.r4.model.Parameters
-import org.hl7.fhir.r4.model.Patient
-import org.hl7.fhir.r4.model.Reference
-import org.hl7.fhir.r4.model.Resource
-import org.hl7.fhir.r4.model.StringType
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 
@@ -20,6 +13,7 @@ class OperationResultTest {
 
     companion object {
         private lateinit var jsonParser: IParser
+
         @JvmStatic
         @BeforeAll
         fun setup() {
@@ -804,6 +798,56 @@ class OperationResultTest {
         val operationResult = OperationResult.of(operationOutcome)
             .operateResourceList { resource ->
                 listOf(resource, getOperationOutcome(IssueSeverity.ERROR))
+            }
+
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
+
+        // THEN
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
+    }
+
+    /**
+     * Hash: 5b35f3
+     */
+    @Test
+    fun `operateResourceCombined when initial resource is a list of resources`() {
+        // WHEN
+        val operationResult = OperationResult.of(getPatient())
+            .operateResourceList { patient ->
+                listOf(getAppointment(), getAppointment(patient))
+            }.operateResourceCombined { _ ->
+                Patient().apply {
+                    name = listOf(HumanName().setText("Morgan Freeman"))
+                }
+            }
+
+        val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())
+        val actualAsBundle = jsonParser.encodeResourceToString(operationResult.asBundle())
+
+        // THEN
+        assertThat(actualAsParameters, sameJsonAsApproved<String?>().withUniqueId("parameter"))
+        assertThat(actualAsBundle, sameJsonAsApproved<String?>().withUniqueId("bundle"))
+    }
+
+    /**
+     * Hash: 576f5d
+     */
+    @Test
+    fun `operateResourceCombined when initial resource is a list of resources and combine another resource list`() {
+        // WHEN
+        val operationResult = OperationResult.of(getPatient())
+            .operateResourceList { patient ->
+                listOf(patient, getOperationOutcome(IssueSeverity.INFORMATION))
+            }.operateResourceListCombined { _ ->
+                listOf(
+                    Patient().apply {
+                        name = listOf(HumanName().setText("Morgan Freeman"))
+                    },
+                    Patient().apply {
+                        name = listOf(HumanName().setText("Alex Smith"))
+                    })
             }
 
         val actualAsParameters = jsonParser.encodeResourceToString(operationResult.asParameters())

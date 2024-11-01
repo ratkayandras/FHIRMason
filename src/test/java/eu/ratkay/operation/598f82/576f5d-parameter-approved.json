@@ -1,0 +1,53 @@
+/*eu.ratkay.operation.OperationResultTest.operateResourceCombined when initial resource is a list of resources and combine another resource list*/
+{
+  "parameter": [
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "text": "Morgan Freeman"
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    },
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "text": "Alex Smith"
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    },
+    {
+      "name": "patient",
+      "resource": {
+        "name": [
+          {
+            "family": "Doe",
+            "given": [
+              "John"
+            ]
+          }
+        ],
+        "resourceType": "Patient"
+      }
+    },
+    {
+      "name": "patient",
+      "resource": {
+        "issue": [
+          {
+            "severity": "information"
+          }
+        ],
+        "resourceType": "OperationOutcome"
+      }
+    }
+  ],
+  "resourceType": "Parameters"
+}
