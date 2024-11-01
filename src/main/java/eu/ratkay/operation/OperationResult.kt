@@ -1,7 +1,7 @@
 package eu.ratkay.operation
 
 import eu.ratkay.dto.ResourceHolder
-import eu.ratkay.extension.getParameterName
+import eu.ratkay.extension.getResourceTypeAsLowercase
 import eu.ratkay.extension.hasError
 import eu.ratkay.extension.toBundleEntryComponent
 import eu.ratkay.extension.toParameterComponent
@@ -23,11 +23,11 @@ sealed class OperationResult<T>(private val resources: MutableList<ResourceHolde
             resource.map { ResourceHolder(name, it) }.toMutableList()
         )
 
-    private data class Error<T>(val operationOutcome: OperationOutcome) : OperationResult<T>(mutableListOf())
+    private data class Error<T>(val operationOutcome: OperationOutcome) : OperationResult<T>(mutableListOf(ResourceHolder("error", operationOutcome)))
 
     companion object {
         fun <T : Resource> of(resource: T, name: String? = null): OperationResult<T> {
-            val paramName = name ?: resource.getParameterName()
+            val paramName = name ?: resource.getResourceTypeAsLowercase()
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
@@ -36,7 +36,7 @@ sealed class OperationResult<T>(private val resources: MutableList<ResourceHolde
         }
 
         fun <C : Collection<R>, R : Resource> ofCollection(resource: C, name: String? = null): OperationResult<C> {
-            val paramName = name ?: resource.firstNotNullOfOrNull { it.getParameterName() } ?: "resource"
+            val paramName = name ?: resource.firstNotNullOfOrNull { it.getResourceTypeAsLowercase() } ?: "resource"
             return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
                 Error(resource)
             } else {
