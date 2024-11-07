@@ -1,10 +1,10 @@
-package eu.ratkay.operation
+package dev.ratkay.operation
 
-import eu.ratkay.dto.ResourceHolder
-import eu.ratkay.extension.getResourceTypeAsLowercase
-import eu.ratkay.extension.hasError
-import eu.ratkay.extension.toBundleEntryComponent
-import eu.ratkay.extension.toParameterComponent
+import dev.ratkay.dto.ResourceHolder
+import dev.ratkay.extension.getResourceTypeAsLowercase
+import dev.ratkay.extension.hasError
+import dev.ratkay.extension.toBundleEntryComponent
+import dev.ratkay.extension.toParameterComponent
 import org.hl7.fhir.r4.model.Bundle
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.hl7.fhir.r4.model.Parameters

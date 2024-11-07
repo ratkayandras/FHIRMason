@@ -1,4 +1,4 @@
-package eu.ratkay.dto
+package dev.ratkay.dto
 
 import org.hl7.fhir.r4.model.Resource
 

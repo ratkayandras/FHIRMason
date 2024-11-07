@@ -1,4 +1,4 @@
-package eu.ratkay.extension
+package dev.ratkay.extension
 
 import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent
 import org.hl7.fhir.r4.model.Parameters.ParametersParameterComponent
