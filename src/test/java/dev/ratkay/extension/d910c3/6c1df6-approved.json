@@ -1,0 +1,9 @@
+/*dev.ratkay.extension.ParametersExtensionTest.getResource extension returns expected resource and type*/
+{
+  "name": [
+    {
+      "text": "Mr. Test"
+    }
+  ],
+  "resourceType": "Patient"
+}
