@@ -1,0 +1,5 @@
+/*dev.ratkay.extension.ParametersExtensionTest.getResources returns a list of expected type*/
+[
+  "{\"resourceType\":\"Patient\",\"name\":[{\"text\":\"Mr. Test\"}]}",
+  "{\"resourceType\":\"Patient\",\"name\":[{\"text\":\"Mr. Test 2\"}]}"
+]

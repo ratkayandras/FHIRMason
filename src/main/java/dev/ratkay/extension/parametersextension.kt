@@ -10,3 +10,9 @@ inline fun <reified T : Resource> Parameters.getResource(paramName: String): T {
         .let { it.resource as? T }
         ?: throw IllegalArgumentException("Parameter $paramName is not an instance of ${T::class}")
 }
+
+inline fun <reified T : Resource> Parameters.getResources(paramName: String): List<T> {
+    return this.parameter
+        .filter { it.name == paramName && it.hasResource() && it.resource is T }
+        .map { it.resource as T }
+}

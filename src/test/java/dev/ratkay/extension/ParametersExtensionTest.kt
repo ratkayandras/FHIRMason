@@ -11,6 +11,7 @@ import org.hl7.fhir.r4.model.*
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import kotlin.test.assertEquals
 
 class ParametersExtensionTest {
 
@@ -61,5 +62,38 @@ class ParametersExtensionTest {
         val parameters = getParametersWithStringValue()
 
         assertThrows<IllegalArgumentException> { parameters.getResource<RelatedPerson>("name") }
+    }
+
+    @Test
+    fun `getResources returns a list of expected type`() {
+        val parameters = getParametersWithTwoPatients()
+
+        val patients: List<Patient> = parameters.getResources("patient")
+
+        val jsonList = patients.map { jsonParser.encodeResourceToString(it) }
+
+        assertThat(jsonList, sameJsonAsApproved())
+    }
+
+    @Test
+    fun `getResources returns empty list if type does not match`() {
+        val parameters = getParametersWithTwoPatients()
+
+        val relatedPeople: List<RelatedPerson> = parameters.getResources("patient")
+
+        val jsonList = relatedPeople.map { jsonParser.encodeResourceToString(it) }
+
+        assertEquals(0, jsonList.size)
+    }
+
+    @Test
+    fun `getResources returns empty list if paramName does not match`() {
+        val parameters = getParametersWithTwoPatients()
+
+        val patients: List<Patient> = parameters.getResources("relatedPerson")
+
+        val jsonList = patients.map { jsonParser.encodeResourceToString(it) }
+
+        assertEquals(0, jsonList.size)
     }
 }
