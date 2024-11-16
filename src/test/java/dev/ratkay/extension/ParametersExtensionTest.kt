@@ -7,6 +7,7 @@ import com.github.karsaig.approvalcrest.jupiter.matcher.Matchers.sameJsonAsAppro
 import dev.ratkay.getParametersWithPatientAndOperationOutcome
 import dev.ratkay.getParametersWithStringValue
 import dev.ratkay.getParametersWithTwoPatients
+import org.hamcrest.Matchers.`is`
 import org.hl7.fhir.r4.model.*
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -81,9 +82,7 @@ class ParametersExtensionTest {
 
         val relatedPeople: List<RelatedPerson> = parameters.getResources("patient")
 
-        val jsonList = relatedPeople.map { jsonParser.encodeResourceToString(it) }
-
-        assertEquals(0, jsonList.size)
+        assertEquals(0, relatedPeople.size)
     }
 
     @Test
@@ -92,8 +91,26 @@ class ParametersExtensionTest {
 
         val patients: List<Patient> = parameters.getResources("relatedPerson")
 
-        val jsonList = patients.map { jsonParser.encodeResourceToString(it) }
+        assertEquals(0, patients.size)
+    }
 
-        assertEquals(0, jsonList.size)
+    @Test
+    fun `filter returns Parameters containing components only with the given name`() {
+        val parameters = getParametersWithPatientAndOperationOutcome()
+
+        val newParameters = parameters.filter("patient")
+
+        assertEquals(1, newParameters.parameter.size)
+        assertThat(newParameters.parameter[0].name, `is`("patient"))
+        assertThat(newParameters.parameter[0].resource.javaClass, `is`(Patient::class.java))
+    }
+
+    @Test
+    fun `filter returns Parameters containing components only with the given names`() {
+        val parameters = getParametersWithPatientAndOperationOutcome()
+
+        val newParameters = parameters.filter("patient", "operationOutcome")
+
+        assertEquals(2, newParameters.parameter.size)
     }
 }
