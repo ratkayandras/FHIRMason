@@ -1,210 +1,164 @@
 package dev.ratkay.operation
 
-import dev.ratkay.dto.ResourceHolder
-import dev.ratkay.extension.getResourceTypeAsLowercase
-import dev.ratkay.extension.hasError
-import dev.ratkay.extension.toBundleEntryComponent
-import dev.ratkay.extension.toParameterComponent
-import org.hl7.fhir.r4.model.Bundle
-import org.hl7.fhir.r4.model.OperationOutcome
-import org.hl7.fhir.r4.model.Parameters
-import org.hl7.fhir.r4.model.Resource
+import org.hl7.fhir.r4.model.*
+import kotlin.reflect.KClass
 
-sealed class OperationResult<T>(private val resources: MutableList<ResourceHolder>) {
+class OperationResult<T> private constructor(
+    private val parameters: MutableMap<String, MutableList<Base>>,
+    private val result: T?
+) {
 
-    private data class ResourceSuccess<T : Resource>(val name: String, val resource: T) : OperationResult<T>(
-        mutableListOf(
-            ResourceHolder(name, resource)
-        )
-    )
+    // Builder methods - single item
 
-    private data class CollectionSuccess<C : Collection<T>, T : Resource>(val resourceHolders: List<ResourceHolder>, val resource: C) :
-        OperationResult<C>(
-            resourceHolders.toMutableList()
-        )
+    fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> {
+        val value = builder()
+        val key = name ?: value.fhirType().lowercase()
+        parameters.getOrPut(key) { mutableListOf() }.add(value)
+        return OperationResult(parameters, value)
+    }
 
-    private data class Error<T>(val operationOutcome: OperationOutcome) : OperationResult<T>(mutableListOf(ResourceHolder("error", operationOutcome)))
+    fun <R : Base> add(name: String? = null, builder: (T) -> R): OperationResult<R> {
+        val value = builder(getResult())
+        val key = name ?: value.fhirType().lowercase()
+        parameters.getOrPut(key) { mutableListOf() }.add(value)
+        return OperationResult(parameters, value)
+    }
+
+    // Builder methods - list
+
+    fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> {
+        val values = builder()
+        addToParameters(values, name)
+        return OperationResult(parameters, values)
+    }
+
+    fun <R : Base> addAll(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> {
+        val values = builder(getResult())
+        addToParameters(values, name)
+        return OperationResult(parameters, values)
+    }
+
+    // Builder methods - from existing parameters
+
+    fun <I : Base, R : Base> addFrom(name: String, type: KClass<I>, builder: (List<I>) -> R): OperationResult<R> {
+        val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
+        val value = builder(filtered)
+        parameters.getOrPut(name) { mutableListOf() }.add(value)
+        return OperationResult(parameters, value)
+    }
+
+    fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> List<R>): OperationResult<List<R>> {
+        val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
+        val values = builder(filtered)
+        addToParameters(values, name)
+        return OperationResult(parameters, values)
+    }
+
+    // Query methods
+
+    fun getAllParameters(): Map<String, List<Base>> =
+        parameters.mapValues { it.value.toList() }
+
+    fun getAll(name: String): List<Base> =
+        parameters[name]?.toList() ?: emptyList()
+
+    fun <R : Base> getByType(type: KClass<R>): List<R> =
+        parameters.values.flatten().filterIsInstance(type.java)
+
+    fun containsKey(name: String): Boolean =
+        parameters.containsKey(name)
+
+    fun getKeys(): Set<String> =
+        parameters.keys.toSet()
+
+    fun count(name: String): Int =
+        parameters[name]?.size ?: 0
+
+    fun totalCount(): Int =
+        parameters.values.sumOf { it.size }
+
+    fun isEmpty(): Boolean =
+        parameters.isEmpty()
+
+    fun isNotEmpty(): Boolean =
+        !isEmpty()
+
+    // Functional transformations
+
+    fun <R : Base> filterByType(type: KClass<R>): OperationResult<T> {
+        val filtered = mutableMapOf<String, MutableList<Base>>()
+        parameters.forEach { (name, values) ->
+            val matchingValues = values.filterIsInstance(type.java)
+            if (matchingValues.isNotEmpty()) {
+                filtered[name] = matchingValues.toMutableList()
+            }
+        }
+        return OperationResult(filtered, result)
+    }
+
+    fun filterByName(name: String): OperationResult<T> {
+        val filtered = mutableMapOf<String, MutableList<Base>>()
+        parameters[name]?.let { values ->
+            filtered[name] = values.toMutableList()
+        }
+        return OperationResult(filtered, result)
+    }
+
+    fun mapValues(transform: (Base) -> Base): OperationResult<T> {
+        val transformed = parameters.mapValues { (_, values) ->
+            values.map(transform).toMutableList()
+        }.toMutableMap()
+        return OperationResult(transformed, result)
+    }
+
+    // Core methods
+
+    fun toParameters(): Parameters = Parameters().apply {
+        parameters.forEach { (name, values) ->
+            values.forEach { value ->
+                addParameter().apply {
+                    this.name = name
+                    when (value) {
+                        is Type -> setValue(value)
+                        is Resource -> setResource(value)
+                    }
+                }
+            }
+        }
+    }
+
+    fun getResult(): T = result ?: throw IllegalStateException("No result set")
+
+    // Private helpers
+
+    private fun addToParameters(values: List<Base>, name: String?) {
+        if (name != null) {
+            values.forEach { value ->
+                parameters.getOrPut(name) { mutableListOf() }.add(value)
+            }
+        } else {
+            values.forEach { value ->
+                val key = value.fhirType().lowercase()
+                parameters.getOrPut(key) { mutableListOf() }.add(value)
+            }
+        }
+    }
+
+    // Factory methods
 
     companion object {
-        fun <T : Resource> of(resource: T, name: String? = null): OperationResult<T> {
-            val paramName = name ?: resource.getResourceTypeAsLowercase()
-            return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
-                Error(resource)
-            } else {
-                ResourceSuccess(paramName, resource)
-            }
+        fun <T : Base> of(value: T, name: String? = null): OperationResult<T> {
+            val key = name ?: value.fhirType().lowercase()
+            val params = mutableMapOf<String, MutableList<Base>>()
+            params.getOrPut(key) { mutableListOf() }.add(value)
+            return OperationResult(params, value)
         }
 
-        fun <C : Collection<R>, R : Resource> ofCollection(resource: C): OperationResult<C> {
-            return if (resource is OperationOutcome && resource.hasIssue() && resource.hasError()) {
-                Error(resource)
-            } else {
-                val resourceHolders = resource.map { ResourceHolder(it.getResourceTypeAsLowercase(), it) }
-                CollectionSuccess(resourceHolders, resource)
-            }
+        fun <T : Base> of(values: List<T>, name: String? = null): OperationResult<List<T>> {
+            val params = mutableMapOf<String, MutableList<Base>>()
+            val instance = OperationResult(params, values)
+            instance.addToParameters(values, name)
+            return instance
         }
-    }
-
-    fun asParameters(): Resource {
-        return when (this) {
-            is ResourceSuccess -> this.toParameters()
-            is CollectionSuccess<*, *> -> this.toParameters()
-            is Error -> this.operationOutcome
-        }
-    }
-
-    fun asBundle(): Resource {
-        return when (this) {
-            is ResourceSuccess -> this.toBundle()
-            is CollectionSuccess<*, *> -> this.toBundle()
-            is Error -> this.operationOutcome
-        }
-    }
-
-    fun <T : Resource> operate(lambda: () -> T): OperationResult<T> =
-        when (this) {
-            is ResourceSuccess -> of(lambda())
-            is CollectionSuccess<*, *> -> of(lambda())
-            is Error -> Error(this.operationOutcome)
-        }
-
-    fun <T : Resource> operate(name: String, lambda: () -> T): OperationResult<T> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(), name)
-            is CollectionSuccess<*, *> -> of(lambda(), name)
-            is Error -> Error(this.operationOutcome)
-        }
-
-    fun <T : Resource> operateCombined(lambda: () -> T): OperationResult<T> =
-        when (this) {
-            is ResourceSuccess -> of(lambda()) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda()) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-
-    fun <T : Resource> operateCombined(name: String, lambda: () -> T): OperationResult<T> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(), name) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda(), name) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-
-    fun <C : Collection<R>, R : Resource> operateList(lambda: () -> C): OperationResult<C> =
-        when (this) {
-            is ResourceSuccess -> ofCollection(lambda())
-            is CollectionSuccess<*, *> -> ofCollection(lambda())
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <C : Collection<R>, R : Resource> operateResourceList(lambda: (T) -> C): OperationResult<C> =
-        when (this) {
-            is ResourceSuccess -> ofCollection(lambda(this.resource))
-            is CollectionSuccess<*, *> -> ofCollection(lambda(this.resource as T))
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <C : Collection<R>, R : Resource> operateResourceListCombined(lambda: (T) -> C): OperationResult<C> =
-        when (this) {
-            is ResourceSuccess -> ofCollection(lambda(this.resource)) combine this.resources
-            is CollectionSuccess<*, *> -> ofCollection(lambda(this.resource as T)) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <R : Resource> operateResource(lambda: (T) -> R): OperationResult<R> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(this.resource))
-            is CollectionSuccess<*, *> -> of(lambda(this.resource as T))
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <R : Resource> operateResource(name: String, lambda: (T) -> R): OperationResult<R> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(this.resource), name)
-            is CollectionSuccess<*, *> -> of(lambda(this.resource as T), name)
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <R : Resource> operateResourceCombined(lambda: (T) -> R): OperationResult<R> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(this.resource)) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda(this.resource as T)) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-
-    @Suppress("UNCHECKED_CAST")
-    fun <R : Resource> operateResourceCombined(name: String, lambda: (T) -> R): OperationResult<R> =
-        when (this) {
-            is ResourceSuccess -> of(lambda(this.resource), name) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda(this.resource as T), name) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-
-    fun <R : Resource> operateParameters(name: String, lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is ResourceSuccess -> of(lambda(this.toParameters()), name)
-            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()), name)
-            is Error -> Error(this.operationOutcome)
-        }
-    }
-
-    fun <R : Resource> operateParameters(lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is ResourceSuccess -> of(lambda(this.toParameters()))
-            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()))
-            is Error -> Error(this.operationOutcome)
-        }
-    }
-
-    fun <R : Resource> operateParametersCombined(name: String, lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is ResourceSuccess -> of(lambda(this.toParameters()), name) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda(this.toParameters()), name) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-    }
-
-    fun <R : Resource> operateParametersCombined(lambda: (Parameters) -> R): OperationResult<R> {
-        return when (this) {
-            is ResourceSuccess -> of(lambda(this.toParameters())) combine this.resources
-            is CollectionSuccess<*, *> -> of(lambda(this.toParameters())) combine this.resources
-            is Error -> Error(this.operationOutcome)
-        }
-    }
-
-    /**
-     * Helper function to combine a given List<ResourceHolder> with an OperationResult.SuccessResource's resources
-     * If the OperationResult is Error then the method just returns
-     */
-    private infix fun combine(resources: List<ResourceHolder>): OperationResult<T> {
-        return when (this) {
-            is ResourceSuccess -> {
-                this.resources.addAll(resources)
-                this
-            }
-
-            is CollectionSuccess<*, *> -> {
-                this.resources.addAll(resources)
-                this
-            }
-
-            is Error -> this
-        }
-    }
-
-    private fun toParameters(): Parameters {
-        return this.resources
-            .map { it.resource.toParameterComponent(it.name) }
-            .let { Parameters().apply { parameter = it } }
-    }
-
-    private fun toBundle(): Bundle {
-        return this.resources
-            .map { it.resource.toBundleEntryComponent() }
-            .let { Bundle().apply { entry = it } }
     }
 }

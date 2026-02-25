@@ -1,9 +1,0 @@
-/*eu.ratkay.operation.OperationResultTest.operate on Resource named when initial resource is OperationOutcome but ERROR*/
-{
-  "issue": [
-    {
-      "severity": "error"
-    }
-  ],
-  "resourceType": "OperationOutcome"
-}
