@@ -1,136 +1,146 @@
 # FHIRMason
 
-A Kotlin library that provides a fluent, chainable API for working with [FHIR R4](https://hl7.org/fhir/R4/) resources. FHIRMason wraps FHIR resources in a monadic `OperationResult` container, enabling safe, composable transformation pipelines for healthcare data — with automatic error short-circuiting throughout the chain.
+A Kotlin library that provides a fluent, chainable API for accumulating and transforming [FHIR R4](https://hl7.org/fhir/R4/) resources. FHIRMason wraps FHIR `Base` objects in an `OperationResult` builder, enabling composable pipelines that collect named resources into a shared parameter map.
 
 ---
 
 ## Overview
 
-Working with FHIR resources often involves a sequence of transformation steps where any step can fail with an `OperationOutcome`. FHIRMason models this as a Railway-Oriented pipeline: each step either produces a new resource or propagates an error, so downstream steps never need to check for failures manually.
+Working with FHIR resources often involves fetching and combining multiple resources across several steps. FHIRMason models this as an accumulator pipeline: each step adds one or more named resources to a shared store, and the final state can be inspected or serialized to a `Parameters` resource.
 
 ```kotlin
 val result = OperationResult.of(patient, "patient")
-    .operateResource { p -> lookupCoverage(p) }          // transform using current resource
-    .operateCombined { fetchEncounterHistory() }          // add to accumulated resources
-    .operateParameters { params -> buildClaim(params) }   // transform via Parameters view
-    .asBundle()                                           // serialize to FHIR Bundle
-```
+    .add("coverage") { fetchCoverage() }
+    .add("encounter") { p: Patient -> lookupEncounter(p) }
+    .addAll("history") { fetchEncounterHistory() }
 
-If any step returns an `OperationOutcome` with ERROR or FATAL severity, the rest of the chain is skipped and the outcome is returned directly.
+result.toParameters()   // serialize everything to a FHIR Parameters resource
+result.getResult()      // the most recently added value
+```
 
 ---
 
 ## Features
 
-### Result States
-
-`OperationResult<T>` is a sealed class with three internal states:
-
-| State | Description |
-|---|---|
-| `ResourceSuccess<T>` | Wraps a single FHIR `Resource` |
-| `CollectionSuccess<C, T>` | Wraps a collection of FHIR `Resource`s |
-| `Error<T>` | Wraps an `OperationOutcome` with ERROR or FATAL severity |
-
 ### Entry Points
 
 ```kotlin
-// Wrap a single resource (auto-detects errors)
-OperationResult.of(resource)
-OperationResult.of(resource, "customName")
+// Wrap a single FHIR Base value — name defaults to its fhirType()
+OperationResult.of(patient)
+OperationResult.of(patient, "myPatient")
 
-// Wrap a collection of resources
-OperationResult.ofCollection(listOf(patient, appointment))
+// Wrap a list of values — each item keyed by its fhirType() unless a name is given
+OperationResult.of(listOf(patient, appointment))
+OperationResult.of(listOf(patient, appointment), "items")
 ```
 
-### Chaining Operations
+### Builder Methods
 
-All operation methods are no-ops when the result is in an `Error` state.
+All builder methods add values to the internal parameter map and return a new `OperationResult` whose `getResult()` points to the newly added value(s).
 
-| Method | Lambda receives | Replaces current resource |
+#### Single item
+
+| Method | Lambda signature | Name resolution |
 |---|---|---|
-| `operate { }` | nothing | yes |
-| `operate(name) { }` | nothing | yes |
-| `operateResource { r -> }` | current resource | yes |
-| `operateResource(name) { r -> }` | current resource | yes |
-| `operateList { }` | nothing | yes (as collection) |
-| `operateResourceList { r -> }` | current resource | yes (as collection) |
-| `operateParameters { p -> }` | current state as `Parameters` | yes |
-| `operateParameters(name) { p -> }` | current state as `Parameters` | yes |
+| `add(name?) { -> R }` | No receiver | `name` or `fhirType()` |
+| `add(name?) { t: T -> R }` | Receives current result | `name` or `fhirType()` |
 
-#### Combined variants
+#### Multiple items
 
-`*Combined` methods accumulate all previous resources alongside the new result. Use these when the final output should contain multiple resources from different steps.
+| Method | Lambda signature | Name resolution |
+|---|---|---|
+| `addAll(name?) { -> List<R> }` | No receiver | `name` or per-item `fhirType()` |
+| `addAll(name?) { t: T -> List<R> }` | Receives current result | `name` or per-item `fhirType()` |
 
-| Method | Accumulates previous resources |
+#### From existing parameters
+
+| Method | Description |
 |---|---|
-| `operateCombined { }` | yes |
-| `operateCombined(name) { }` | yes |
-| `operateResourceCombined { r -> }` | yes |
-| `operateResourceCombined(name) { r -> }` | yes |
-| `operateResourceListCombined { r -> }` | yes |
-| `operateParametersCombined { p -> }` | yes |
-| `operateParametersCombined(name) { p -> }` | yes |
+| `addFrom(name, type) { list -> R }` | Filters stored values under `name` by `type`, passes them to the builder, adds result back under the same `name` |
+| `addAllFrom(name, type) { list -> List<R> }` | Same as above but builder returns a list |
 
-### Output Formats
+### Query Methods
 
 ```kotlin
-operationResult.asParameters()  // → Parameters (or OperationOutcome on error)
-operationResult.asBundle()      // → Bundle     (or OperationOutcome on error)
+result.getAllParameters()       // Map<String, List<Base>> — full snapshot
+result.getAll("patient")        // List<Base> for a specific name (empty if absent)
+result.getByType(Patient::class) // all Patient instances across all keys
+result.containsKey("patient")   // Boolean
+result.getKeys()                // Set<String>
+result.count("patient")         // Int — entries under that name
+result.totalCount()             // Int — all entries across all names
+result.isEmpty()                // Boolean
+result.isNotEmpty()             // Boolean
+result.getResult()              // T — the most recently added value
+```
+
+### Functional Transformations
+
+These return a new `OperationResult` with a filtered or transformed parameter map without modifying the original.
+
+```kotlin
+result.filterByType(Patient::class)    // keep only entries whose values are Patients
+result.filterByName("patient")         // keep only the "patient" entry
+result.mapValues { base -> ... }       // transform every stored value
+```
+
+### Output
+
+```kotlin
+result.toParameters()   // FHIR Parameters resource — one parameter entry per stored value
 ```
 
 ---
 
 ## Usage Examples
 
-### Simple transformation
-
-```kotlin
-val result = OperationResult.of(patient)
-    .operateResource { p -> enrichPatient(p) }
-    .asParameters()
-```
-
 ### Accumulating multiple resources
 
 ```kotlin
 val result = OperationResult.of(patient, "patient")
-    .operateCombined("appointment") { fetchAppointment() }
-    .operateCombined("coverage") { fetchCoverage() }
-    .asBundle()
-// Bundle contains patient + appointment + coverage
+    .add("appointment") { -> fetchAppointment() }
+    .add("coverage") { -> fetchCoverage() }
+
+val params = result.toParameters()
+// Parameters contains: patient, appointment, coverage
 ```
 
-### Error short-circuiting
+### Using the current result in the next step
 
 ```kotlin
-val result = OperationResult.of(errorOutcome) // ERROR severity
-    .operateCombined { fetchAppointment() }    // skipped
-    .operateCombined { fetchCoverage() }       // skipped
-    .asParameters()
-// Returns the OperationOutcome directly
+val result = OperationResult.of(patient)
+    .add("encounter") { p: Patient -> lookupEncounter(p) }
+    .add("coverage") { e: Encounter -> lookupCoverageForEncounter(e) }
 ```
 
-### Passing resources between steps via Parameters
+### Adding a list of resources
 
 ```kotlin
 val result = OperationResult.of(patient, "patient")
-    .operateParametersCombined("encounter") { params ->
-        val p = params.getParameter("patient").resource as Patient
-        buildEncounter(p)
-    }
-    .asBundle()
+    .addAll("history") { p: Patient -> fetchEncounterHistory(p) }
+
+result.count("history")   // number of encounters retrieved
 ```
 
----
+### Deriving a new resource from previously accumulated ones
 
-## Error Handling
+```kotlin
+val result = OperationResult.of(listOf(patient, appointment), "inputs")
+    .addFrom("inputs", Patient::class) { patients ->
+        buildClaimFor(patients.first())
+    }
 
-An `OperationOutcome` is treated as an error if it meets **both** conditions:
-- Has at least one issue (`hasIssue() == true`)
-- At least one issue has severity `ERROR` or `FATAL`
+result.getByType(Claim::class)   // the derived Claim
+```
 
-`OperationOutcome` resources with `WARNING` or `INFORMATION` severity are treated as ordinary resources and do not short-circuit the chain.
+### Inspecting and filtering the accumulated state
+
+```kotlin
+val patients = result.getByType(Patient::class)
+
+val patientsOnly = result.filterByType(Patient::class)
+val patientEntry = result.filterByName("patient")
+```
 
 ---
 
@@ -141,7 +151,7 @@ An `OperationOutcome` is treated as an error if it meets **both** conditions:
 | Language | Kotlin 1.9.20 (JVM 11) |
 | FHIR | HAPI FHIR 6.4.2 (R4) |
 | Build | Maven |
-| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest 0.61.6 |
+| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2 |
 
 ---
 
@@ -164,16 +174,11 @@ mvn test
 ```
 src/
 ├── main/java/dev/ratkay/
-│   ├── dto/
-│   │   └── ResourceHolder.kt          # Name + Resource pair
-│   ├── extension/
-│   │   ├── operationoutcomeextension.kt  # Error detection
-│   │   └── resoruceextension.kt          # Resource → Parameters/Bundle helpers
 │   └── operation/
-│       └── OperationResult.kt         # Core sealed class
+│       └── OperationResult.kt         # Core builder/accumulator class
 └── test/java/dev/ratkay/
     └── operation/
-        └── OperationResultTest.kt     # Approval-based test suite
+        └── OperationResultTest.kt     # Unit test suite
 ```
 
 ---
