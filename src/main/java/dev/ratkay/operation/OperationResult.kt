@@ -17,7 +17,7 @@ class OperationResult<T> private constructor(
         return OperationResult(parameters, value)
     }
 
-    fun <R : Base> add(name: String? = null, builder: (T) -> R): OperationResult<R> {
+    fun <R : Base> addUsing(name: String? = null, builder: (T) -> R): OperationResult<R> {
         val value = builder(getResult())
         val key = name ?: value.fhirType().lowercase()
         parameters.getOrPut(key) { mutableListOf() }.add(value)
@@ -32,7 +32,7 @@ class OperationResult<T> private constructor(
         return OperationResult(parameters, values)
     }
 
-    fun <R : Base> addAll(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> {
+    fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> {
         val values = builder(getResult())
         addToParameters(values, name)
         return OperationResult(parameters, values)

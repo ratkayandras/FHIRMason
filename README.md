@@ -11,7 +11,7 @@ Working with FHIR resources often involves fetching and combining multiple resou
 ```kotlin
 val result = OperationResult.of(patient, "patient")
     .add("coverage") { fetchCoverage() }
-    .add("encounter") { p: Patient -> lookupEncounter(p) }
+    .addUsing("encounter") { p -> lookupEncounter(p) }
     .addAll("history") { fetchEncounterHistory() }
 
 result.toParameters()   // serialize everything to a FHIR Parameters resource
@@ -42,15 +42,15 @@ All builder methods add values to the internal parameter map and return a new `O
 
 | Method | Lambda signature | Name resolution |
 |---|---|---|
-| `add(name?) { -> R }` | No receiver | `name` or `fhirType()` |
-| `add(name?) { t: T -> R }` | Receives current result | `name` or `fhirType()` |
+| `add(name?) { R }` | No receiver | `name` or `fhirType()` |
+| `addUsing(name?) { t -> R }` | Receives current result | `name` or `fhirType()` |
 
 #### Multiple items
 
 | Method | Lambda signature | Name resolution |
 |---|---|---|
-| `addAll(name?) { -> List<R> }` | No receiver | `name` or per-item `fhirType()` |
-| `addAll(name?) { t: T -> List<R> }` | Receives current result | `name` or per-item `fhirType()` |
+| `addAll(name?) { List<R> }` | No receiver | `name` or per-item `fhirType()` |
+| `addAllUsing(name?) { t -> List<R> }` | Receives current result | `name` or per-item `fhirType()` |
 
 #### From existing parameters
 
@@ -109,15 +109,15 @@ val params = result.toParameters()
 
 ```kotlin
 val result = OperationResult.of(patient)
-    .add("encounter") { p: Patient -> lookupEncounter(p) }
-    .add("coverage") { e: Encounter -> lookupCoverageForEncounter(e) }
+    .addUsing("encounter") { p -> lookupEncounter(p) }
+    .addUsing("coverage") { e -> lookupCoverageForEncounter(e) }
 ```
 
 ### Adding a list of resources
 
 ```kotlin
 val result = OperationResult.of(patient, "patient")
-    .addAll("history") { p: Patient -> fetchEncounterHistory(p) }
+    .addAllUsing("history") { p -> fetchEncounterHistory(p) }
 
 result.count("history")   // number of encounters retrieved
 ```
