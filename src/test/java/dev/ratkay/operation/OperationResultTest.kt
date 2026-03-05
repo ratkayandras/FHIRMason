@@ -61,9 +61,8 @@ class OperationResultTest {
     @Test
     fun `add lambda without name uses fhirType as key`() {
         val appt = appointment()
-        // Use { -> ... } to explicitly select the () -> R overload (no ambiguity)
         val result = OperationResult.of(patient())
-            .add { -> appt }
+            .add { appt }
 
         assertTrue(result.containsKey("appointment"))
         assertThat(result.getResult(), sameInstance(appt))
@@ -72,7 +71,7 @@ class OperationResultTest {
     @Test
     fun `add lambda with explicit name uses that name`() {
         val result = OperationResult.of(patient())
-            .add("myAppt") { -> appointment() }
+            .add("myAppt") { appointment() }
 
         assertTrue(result.containsKey("myAppt"))
         assertFalse(result.containsKey("appointment"))
@@ -81,7 +80,7 @@ class OperationResultTest {
     @Test
     fun `add accumulates previous resources alongside new one`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
+            .add { appointment() }
 
         assertTrue(result.containsKey("patient"))
         assertTrue(result.containsKey("appointment"))
@@ -90,30 +89,30 @@ class OperationResultTest {
     @Test
     fun `add multiple items under same key accumulates them`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
-            .add { -> appointment() }
+            .add { appointment() }
+            .add { appointment() }
 
         assertEquals(2, result.count("appointment"))
         assertEquals(3, result.totalCount())
     }
 
-    // ── add(builder: (T) -> R) ────────────────────────────────────────────────
+    // ── addUsing(builder: (T) -> R) ───────────────────────────────────────────
 
     @Test
-    fun `add with result receiver passes current result to builder`() {
+    fun `addUsing passes current result to builder`() {
         val patient = patient()
         var received: Patient? = null
 
         OperationResult.of(patient)
-            .add { p: Patient -> received = p; appointment() }
+            .addUsing { p -> received = p; appointment() }
 
         assertThat(received, sameInstance(patient))
     }
 
     @Test
-    fun `add with result receiver and explicit name`() {
+    fun `addUsing with explicit name`() {
         val result = OperationResult.of(patient(), "patient")
-            .add("appt") { _: Patient -> appointment() }
+            .addUsing("appt") { _ -> appointment() }
 
         assertTrue(result.containsKey("patient"))
         assertTrue(result.containsKey("appt"))
@@ -124,7 +123,7 @@ class OperationResultTest {
     @Test
     fun `addAll without name uses fhirType per item`() {
         val result = OperationResult.of(patient())
-            .addAll { -> listOf(patient(), appointment()) }
+            .addAll { listOf(patient(), appointment()) }
 
         assertEquals(2, result.count("patient"))
         assertEquals(1, result.count("appointment"))
@@ -133,28 +132,28 @@ class OperationResultTest {
     @Test
     fun `addAll with name groups all items under that name`() {
         val result = OperationResult.of(patient())
-            .addAll("resources") { -> listOf(patient(), appointment()) }
+            .addAll("resources") { listOf(patient(), appointment()) }
 
         assertEquals(2, result.count("resources"))
         assertFalse(result.containsKey("appointment"))
     }
 
-    // ── addAll(builder: (T) -> List<R>) ──────────────────────────────────────
+    // ── addAllUsing(builder: (T) -> List<R>) ─────────────────────────────────
 
     @Test
-    fun `addAll with result receiver passes current result to builder`() {
+    fun `addAllUsing passes current result to builder`() {
         val patient = patient()
         val result = OperationResult.of(patient)
-            .addAll { p: Patient -> listOf(p, appointment()) }
+            .addAllUsing { p -> listOf(p, appointment()) }
 
         assertEquals(2, result.count("patient"))
         assertEquals(1, result.count("appointment"))
     }
 
     @Test
-    fun `addAll with result receiver and explicit name`() {
+    fun `addAllUsing with explicit name`() {
         val result = OperationResult.of(patient())
-            .addAll("items") { _: Patient -> listOf(appointment(), appointment()) }
+            .addAllUsing("items") { _ -> listOf(appointment(), appointment()) }
 
         assertEquals(2, result.count("items"))
     }
@@ -207,7 +206,7 @@ class OperationResultTest {
     @Test
     fun `getAllParameters returns immutable snapshot of all entries`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
+            .add { appointment() }
 
         val all = result.getAllParameters()
         assertThat(all.keys, containsInAnyOrder("patient", "appointment"))
@@ -222,7 +221,7 @@ class OperationResultTest {
     @Test
     fun `getByType returns all instances of that type across all keys`() {
         val result = OperationResult.of(listOf(patient(), patient()), "people")
-            .add("appt") { -> appointment() }
+            .add("appt") { appointment() }
 
         assertThat(result.getByType(Patient::class), hasSize(2))
         assertThat(result.getByType(Appointment::class), hasSize(1))
@@ -237,7 +236,7 @@ class OperationResultTest {
     @Test
     fun `getKeys returns the set of all parameter names`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
+            .add { appointment() }
 
         assertThat(result.getKeys(), containsInAnyOrder("patient", "appointment"))
     }
@@ -250,8 +249,8 @@ class OperationResultTest {
     @Test
     fun `totalCount sums all values across all keys`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
-            .add { -> appointment() }
+            .add { appointment() }
+            .add { appointment() }
 
         assertEquals(3, result.totalCount())
     }
@@ -278,7 +277,7 @@ class OperationResultTest {
     @Test
     fun `filterByType keeps only entries whose values match the given type`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
+            .add { appointment() }
             .filterByType(Patient::class)
 
         assertTrue(result.containsKey("patient"))
@@ -296,7 +295,7 @@ class OperationResultTest {
     @Test
     fun `filterByName keeps only the entry with the given name`() {
         val result = OperationResult.of(patient())
-            .add { -> appointment() }
+            .add { appointment() }
             .filterByName("appointment")
 
         assertTrue(result.containsKey("appointment"))
@@ -335,7 +334,7 @@ class OperationResultTest {
     fun `toParameters produces one parameter entry per stored value`() {
         // Use the (Patient) -> R overload explicitly to avoid ambiguity
         val params = OperationResult.of(patient(), "patient")
-            .add("appt") { _: Patient -> appointment() }
+            .addUsing("appt") { _ -> appointment() }
             .toParameters()
 
         assertThat(params.parameter, hasSize(2))
@@ -355,9 +354,8 @@ class OperationResultTest {
     @Test
     fun `toParameters sets value for Type entries and resource for Resource entries`() {
         val stringVal = StringType("hello")
-        // Use (StringType) -> R overload explicitly to avoid ambiguity
         val params = OperationResult.of(stringVal, "msg")
-            .add("p") { _: StringType -> patient() }
+            .addUsing("p") { _ -> patient() }
             .toParameters()
 
         val msgParam = params.getParameter("msg")
