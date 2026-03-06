@@ -147,6 +147,11 @@ class OperationResult<T> private constructor(
     // Factory methods
 
     companion object {
+        internal fun fromMap(params: Map<String, List<Base>>): OperationResult<Base> {
+            val mutable = params.mapValues { it.value.toMutableList() }.toMutableMap()
+            return OperationResult(mutable, null)
+        }
+
         fun <T : Base> of(value: T, name: String? = null): OperationResult<T> {
             val key = name ?: value.fhirType().lowercase()
             val params = mutableMapOf<String, MutableList<Base>>()
