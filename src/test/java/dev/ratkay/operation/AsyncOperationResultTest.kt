@@ -216,4 +216,169 @@ class AsyncOperationResultTest {
         assertThat(result.containsKey("patient"), `is`(true))
         assertThat((result.getAll("patient").first() as Patient).id, `is`("p1"))
     }
+
+    // ── Group 8: Type-safe single-dependency methods ────────────────────────
+
+    @Test
+    fun `addAfter with type - dependent task receives typed upstream result`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "p1" } }
+            .addAfter("coverage", "patient", Patient::class) { patient ->
+                Coverage().apply { id = "cov-for-${patient.id}" }
+            }
+            .run()
+
+        val coverage = result.getAll("coverage").first() as Coverage
+        assertThat(coverage.id, `is`("cov-for-p1"))
+    }
+
+    @Test
+    fun `addAfter with type - throws when upstream has no matching type`() {
+        assertThrows<NoSuchElementException> {
+            runBlocking {
+                AsyncOperationResult()
+                    .add("data") { StringType("hello") }
+                    .addAfter("out", "data", Patient::class) { patient ->
+                        Basic().apply { id = patient.id }
+                    }
+                    .run()
+            }
+        }
+    }
+
+    @Test
+    fun `addAfter with type - works in multi-level chain`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "P" } }
+            .addAfter("coverage", "patient", Patient::class) { patient ->
+                Coverage().apply { id = "cov-${patient.id}" }
+            }
+            .addAfter("claim", "coverage", Coverage::class) { coverage ->
+                Claim().apply { id = "claim-${coverage.id}" }
+            }
+            .run()
+
+        val claim = result.getAll("claim").first() as Claim
+        assertThat(claim.id, `is`("claim-cov-P"))
+    }
+
+    @Test
+    fun `addListAfter with type - returns list from typed single dependency`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "p1" } }
+            .addListAfter("observations", "patient", Patient::class) { patient ->
+                listOf(
+                    Observation().apply { id = "obs1-${patient.id}" },
+                    Observation().apply { id = "obs2-${patient.id}" }
+                )
+            }
+            .run()
+
+        assertThat(result.count("observations"), `is`(2))
+        assertThat((result.getAll("observations").first() as Observation).id, `is`("obs1-p1"))
+    }
+
+    // ── Group 9: Type-safe list-injection methods ───────────────────────────
+
+    @Test
+    fun `addAfterAll - receives typed list of all upstream values`() = runBlocking {
+        val result = AsyncOperationResult()
+            .addList("observations") {
+                listOf(
+                    Observation().apply { id = "obs1" },
+                    Observation().apply { id = "obs2" },
+                    Observation().apply { id = "obs3" }
+                )
+            }
+            .addAfterAll("summary", "observations", Observation::class) { observations ->
+                Basic().apply { id = "count-${observations.size}" }
+            }
+            .run()
+
+        val summary = result.getAll("summary").first() as Basic
+        assertThat(summary.id, `is`("count-3"))
+    }
+
+    @Test
+    fun `addAfterAll - filters by type when upstream has mixed types`() = runBlocking {
+        val result = AsyncOperationResult()
+            .addList("mixed") {
+                listOf(
+                    Patient().apply { id = "p1" },
+                    Observation().apply { id = "obs1" },
+                    Patient().apply { id = "p2" }
+                )
+            }
+            .addAfterAll("patientCount", "mixed", Patient::class) { patients ->
+                Basic().apply { id = "patients-${patients.size}" }
+            }
+            .run()
+
+        val summary = result.getAll("patientCount").first() as Basic
+        assertThat(summary.id, `is`("patients-2"))
+    }
+
+    @Test
+    fun `addAfterAll - receives empty list when no values match type`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("data") { StringType("hello") }
+            .addAfterAll("out", "data", Patient::class) { patients ->
+                Basic().apply { id = "found-${patients.size}" }
+            }
+            .run()
+
+        val out = result.getAll("out").first() as Basic
+        assertThat(out.id, `is`("found-0"))
+    }
+
+    @Test
+    fun `addListAfterAll - receives typed list and returns list`() = runBlocking {
+        val result = AsyncOperationResult()
+            .addList("observations") {
+                listOf(
+                    Observation().apply { id = "obs1" },
+                    Observation().apply { id = "obs2" }
+                )
+            }
+            .addListAfterAll("derived", "observations", Observation::class) { observations ->
+                observations.map { obs ->
+                    Observation().apply { id = "derived-${obs.id}" }
+                }
+            }
+            .run()
+
+        assertThat(result.count("derived"), `is`(2))
+        assertThat((result.getAll("derived").first() as Observation).id, `is`("derived-obs1"))
+    }
+
+    // ── Group 10: Backward compatibility ────────────────────────────────────
+
+    @Test
+    fun `original addAfter still works with map-based deps`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "p1" } }
+            .addAfter("coverage", "patient") { deps ->
+                val patient = deps["patient"]!!.first() as Patient
+                Coverage().apply { id = "cov-${patient.id}" }
+            }
+            .run()
+
+        val coverage = result.getAll("coverage").first() as Coverage
+        assertThat(coverage.id, `is`("cov-p1"))
+    }
+
+    @Test
+    fun `original addListAfter still works with map-based deps`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "p1" } }
+            .addListAfter("observations", "patient") { deps ->
+                val patient = deps["patient"]!!.first() as Patient
+                listOf(
+                    Observation().apply { id = "obs-${patient.id}" }
+                )
+            }
+            .run()
+
+        assertThat(result.count("observations"), `is`(1))
+    }
 }

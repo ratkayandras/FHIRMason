@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.hl7.fhir.r4.model.Base
+import kotlin.reflect.KClass
 
 class AsyncOperationResult {
 
@@ -59,6 +60,50 @@ class AsyncOperationResult {
         requireKeysExist(depList)
         requireNoCycle(key, depList)
         nodes[key] = TaskNode.DependentList(key, depList, block)
+    }
+
+    // Type-safe single-dependency convenience methods
+
+    fun <T : Base> addAfter(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        block: suspend (T) -> Base
+    ): AsyncOperationResult = addAfter(key, dep) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    fun <T : Base> addListAfter(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        block: suspend (T) -> List<Base>
+    ): AsyncOperationResult = addListAfter(key, dep) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    // Type-safe list-injection convenience methods
+
+    fun <T : Base> addAfterAll(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        block: suspend (List<T>) -> Base
+    ): AsyncOperationResult = addAfter(key, dep) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
+    }
+
+    fun <T : Base> addListAfterAll(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        block: suspend (List<T>) -> List<Base>
+    ): AsyncOperationResult = addListAfter(key, dep) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
     }
 
     suspend fun run(): OperationResult<Base> = coroutineScope {
