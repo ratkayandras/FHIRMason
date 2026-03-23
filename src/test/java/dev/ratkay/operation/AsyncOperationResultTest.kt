@@ -5,6 +5,9 @@ import kotlinx.coroutines.runBlocking
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
 import org.hl7.fhir.r4.model.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -131,14 +134,53 @@ class AsyncOperationResultTest {
     // ── Group 4: Error handling ───────────────────────────────────────────────
 
     @Test
-    fun `exception in a task propagates from run()`() {
-        assertThrows<IllegalStateException> {
-            runBlocking {
-                AsyncOperationResult()
-                    .add("failing") { error("task exploded") }
-                    .run()
-            }
-        }
+    fun `exception in a task is captured as OperationOutcome instead of propagating`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("failing") { error("task exploded") }
+            .run()
+
+        assertTrue(result.hasErrors())
+        assertFalse(result.containsKey("failing"))
+        assertTrue(result.getFailedTasks().containsKey("failing"))
+    }
+
+    @Test
+    fun `independent tasks continue running when one task fails`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("failing") { error("boom") }
+            .add("succeeding") { Patient().apply { id = "p1" } }
+            .run()
+
+        assertTrue(result.containsKey("succeeding"))
+        assertFalse(result.containsKey("failing"))
+        assertTrue(result.hasErrors())
+        assertEquals(1, result.getFailedTasks().size)
+    }
+
+    @Test
+    fun `dependent task is skipped when its dependency fails`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("failing") { error("boom") }
+            .addAfter("dependent", "failing") { Patient().apply { id = "d1" } }
+            .run()
+
+        assertFalse(result.containsKey("failing"))
+        assertFalse(result.containsKey("dependent"))
+        assertEquals(2, result.getFailedTasks().size)
+        assertTrue(result.getFailedTasks().containsKey("failing"))
+        assertTrue(result.getFailedTasks().containsKey("dependent"))
+    }
+
+    @Test
+    fun `getFailedTasks - independent success tasks are not included`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("patient") { Patient().apply { id = "p1" } }
+            .add("failing") { error("boom") }
+            .addAfter("dependent", "failing") { Patient() }
+            .run()
+
+        assertThat(result.getFailedTasks().keys, containsInAnyOrder("failing", "dependent"))
+        assertThat(result.getAll("patient"), hasSize(1))
     }
 
     // ── Group 5: Validation ───────────────────────────────────────────────────
@@ -233,17 +275,16 @@ class AsyncOperationResultTest {
     }
 
     @Test
-    fun `addAfter with type - throws when upstream has no matching type`() {
-        assertThrows<NoSuchElementException> {
-            runBlocking {
-                AsyncOperationResult()
-                    .add("data") { StringType("hello") }
-                    .addAfter("out", "data", Patient::class) { patient ->
-                        Basic().apply { id = patient.id }
-                    }
-                    .run()
+    fun `addAfter with type - captures NoSuchElementException as failed task when upstream has no matching type`() = runBlocking {
+        val result = AsyncOperationResult()
+            .add("data") { StringType("hello") }
+            .addAfter("out", "data", Patient::class) { patient ->
+                Basic().apply { id = patient.id }
             }
-        }
+            .run()
+
+        assertTrue(result.getFailedTasks().containsKey("out"))
+        assertFalse(result.containsKey("out"))
     }
 
     @Test

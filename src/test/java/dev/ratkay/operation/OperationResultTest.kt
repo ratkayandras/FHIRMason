@@ -365,6 +365,148 @@ class OperationResultTest {
         assertThat(pParam.resource, instanceOf(Patient::class.java))
     }
 
+    // ── Error handling: FAIL_FAST ─────────────────────────────────────────────
+
+    @Test
+    fun `add - exception in FAIL_FAST records outcome and stops pipeline`() {
+        val result = OperationResult.of(patient())
+            .add { error("step failed") }
+            .add { appointment() }
+
+        assertTrue(result.hasErrors())
+        assertFalse(result.isSuccessful())
+        assertFalse(result.containsKey("appointment"))
+        assertEquals(1, result.getOutcomes().size)
+    }
+
+    @Test
+    fun `add - exception sets ERROR severity on outcome`() {
+        val result = OperationResult.of(patient())
+            .add { error("boom") }
+
+        val issue = result.getOutcomes().first().issueFirstRep
+        assertEquals(OperationOutcome.IssueSeverity.ERROR, issue.severity)
+        assertEquals("boom", issue.diagnostics)
+    }
+
+    @Test
+    fun `isSuccessful returns true when no errors`() {
+        val result = OperationResult.of(patient())
+        assertTrue(result.isSuccessful())
+        assertFalse(result.hasErrors())
+    }
+
+    // ── Error handling: ACCUMULATE ────────────────────────────────────────────
+
+    @Test
+    fun `add - exception in ACCUMULATE continues pipeline and collects outcome`() {
+        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+            .add { error("step 1 failed") }
+            .add { appointment() }
+
+        assertTrue(result.hasErrors())
+        assertTrue(result.containsKey("appointment"))
+        assertEquals(1, result.getOutcomes().size)
+    }
+
+    @Test
+    fun `ACCUMULATE - multiple failing steps collect all outcomes`() {
+        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+            .add { error("step 1 failed") }
+            .add { error("step 2 failed") }
+            .add { appointment() }
+
+        assertEquals(2, result.getOutcomes().size)
+        assertTrue(result.containsKey("appointment"))
+    }
+
+    // ── addOrSkip ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `addOrSkip - skips step on exception and logs WARNING outcome`() {
+        val result = OperationResult.of(patient())
+            .addOrSkip { error("optional step failed") }
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.hasErrors())
+        assertEquals(1, result.getOutcomes().size)
+        assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
+    }
+
+    @Test
+    fun `addOrSkip - preserves previous result type when step is skipped`() {
+        val patient = patient()
+        val result = OperationResult.of(patient)
+            .addOrSkip { error("skip me") }
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `addOrSkip - adds resource normally when step succeeds`() {
+        val result = OperationResult.of(patient())
+            .addOrSkip { appointment() }
+
+        assertTrue(result.containsKey("appointment"))
+        assertFalse(result.hasErrors())
+    }
+
+    // ── addOrDefault ──────────────────────────────────────────────────────────
+
+    @Test
+    fun `addOrDefault - uses default value on exception and logs WARNING outcome`() {
+        val defaultAppt = appointment()
+        val result = OperationResult.of(patient())
+            .addOrDefault(default = defaultAppt) { error("step failed") }
+
+        assertTrue(result.containsKey("appointment"))
+        assertThat(result.getAll("appointment").first(), sameInstance(defaultAppt))
+        assertEquals(1, result.getOutcomes().size)
+        assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
+    }
+
+    @Test
+    fun `addOrDefault - uses builder result when step succeeds`() {
+        val successAppt = appointment()
+        val defaultAppt = appointment()
+        val result = OperationResult.of(patient())
+            .addOrDefault(default = defaultAppt) { successAppt }
+
+        assertThat(result.getResult(), sameInstance(successAppt))
+        assertFalse(result.hasErrors())
+    }
+
+    @Test
+    fun `addOrDefault - explicit name used for both success and default paths`() {
+        val defaultAppt = appointment()
+        val result = OperationResult.of(patient())
+            .addOrDefault("myAppt", defaultAppt) { error("boom") }
+
+        assertTrue(result.containsKey("myAppt"))
+        assertFalse(result.containsKey("appointment"))
+    }
+
+    // ── toOperationOutcome (merging) ──────────────────────────────────────────
+
+    @Test
+    fun `toOperationOutcome - merges all collected issues into single OperationOutcome`() {
+        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+            .add { error("step 1 failed") }
+            .add { error("step 2 failed") }
+
+        val merged = result.toOperationOutcome()
+        assertEquals(2, merged.issue.size)
+    }
+
+    @Test
+    fun `toOperationOutcome - returns empty OperationOutcome when pipeline is successful`() {
+        val result = OperationResult.of(patient())
+            .add { appointment() }
+
+        val outcome = result.toOperationOutcome()
+        assertTrue(outcome.issue.isEmpty())
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {

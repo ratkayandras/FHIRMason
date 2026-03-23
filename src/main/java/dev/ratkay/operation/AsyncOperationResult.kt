@@ -5,6 +5,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.hl7.fhir.r4.model.Base
+import org.hl7.fhir.r4.model.OperationOutcome
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
 class AsyncOperationResult {
@@ -107,25 +109,70 @@ class AsyncOperationResult {
     }
 
     suspend fun run(): OperationResult<Base> = coroutineScope {
-        val resolved = mutableMapOf<String, Deferred<List<Base>>>()
+        val resolved = mutableMapOf<String, Deferred<List<Base>?>>()
+        val failedTasks = ConcurrentHashMap<String, OperationOutcome>()
 
-        fun launchNode(node: TaskNode): Deferred<List<Base>> =
+        fun launchNode(node: TaskNode): Deferred<List<Base>?> =
             resolved.getOrPut(node.key) {
                 async {
                     when (node) {
-                        is TaskNode.Root -> listOf(node.block())
-                        is TaskNode.RootList -> node.block()
+                        is TaskNode.Root -> try {
+                            listOf(node.block())
+                        } catch (e: Exception) {
+                            failedTasks[node.key] = e.toOperationOutcome()
+                            null
+                        }
+                        is TaskNode.RootList -> try {
+                            node.block()
+                        } catch (e: Exception) {
+                            failedTasks[node.key] = e.toOperationOutcome()
+                            null
+                        }
                         is TaskNode.Dependent -> {
-                            val depResults = node.deps.associate { depKey ->
-                                depKey to launchNode(nodes[depKey]!!).await()
+                            val depResults = mutableMapOf<String, List<Base>>()
+                            var failedDep: String? = null
+                            for (depKey in node.deps) {
+                                val depResult = launchNode(nodes[depKey]!!).await()
+                                if (depResult == null) {
+                                    failedDep = depKey
+                                    break
+                                }
+                                depResults[depKey] = depResult
                             }
-                            listOf(node.block(depResults))
+                            if (failedDep != null) {
+                                failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
+                                null
+                            } else {
+                                try {
+                                    listOf(node.block(depResults))
+                                } catch (e: Exception) {
+                                    failedTasks[node.key] = e.toOperationOutcome()
+                                    null
+                                }
+                            }
                         }
                         is TaskNode.DependentList -> {
-                            val depResults = node.deps.associate { depKey ->
-                                depKey to launchNode(nodes[depKey]!!).await()
+                            val depResults = mutableMapOf<String, List<Base>>()
+                            var failedDep: String? = null
+                            for (depKey in node.deps) {
+                                val depResult = launchNode(nodes[depKey]!!).await()
+                                if (depResult == null) {
+                                    failedDep = depKey
+                                    break
+                                }
+                                depResults[depKey] = depResult
                             }
-                            node.block(depResults)
+                            if (failedDep != null) {
+                                failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
+                                null
+                            } else {
+                                try {
+                                    node.block(depResults)
+                                } catch (e: Exception) {
+                                    failedTasks[node.key] = e.toOperationOutcome()
+                                    null
+                                }
+                            }
                         }
                     }
                 }
@@ -135,13 +182,26 @@ class AsyncOperationResult {
 
         val accumulator = mutableMapOf<String, MutableList<Base>>()
         resolved.forEach { (key, deferred) ->
-            accumulator.getOrPut(key) { mutableListOf() }.addAll(deferred.await())
+            val taskResult = deferred.await()
+            if (taskResult != null) {
+                accumulator.getOrPut(key) { mutableListOf() }.addAll(taskResult)
+            }
         }
 
-        OperationResult.fromMap(accumulator)
+        val outcomes = failedTasks.values.toList()
+        OperationResult.fromMap(accumulator, outcomes, failedTasks)
     }
 
     fun runBlocking(): OperationResult<Base> = runBlocking { run() }
+
+    private fun dependencyFailureOutcome(taskKey: String, failedDep: String): OperationOutcome =
+        OperationOutcome().apply {
+            addIssue().apply {
+                severity = OperationOutcome.IssueSeverity.ERROR
+                code = OperationOutcome.IssueType.PROCESSING
+                diagnostics = "Task '$taskKey' skipped: dependency '$failedDep' failed"
+            }
+        }
 
     private fun requireKeysExist(deps: List<String>) {
         deps.forEach { dep ->
