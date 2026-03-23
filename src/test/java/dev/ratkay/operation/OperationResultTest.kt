@@ -173,7 +173,7 @@ class OperationResultTest {
 
         // 2 original patients + 1 new OperationOutcome, all under "people"
         assertEquals(3, result.count("people"))
-        assertThat(result.getByType(OperationOutcome::class), hasSize(1))
+        assertThat(result.getByType<OperationOutcome>(), hasSize(1))
     }
 
     @Test
@@ -183,7 +183,7 @@ class OperationResultTest {
                 Appointment().apply { addParticipant().actor = Reference().apply { display = "count=${patients.size}" } }
             }
 
-        val appt = result.getByType(Appointment::class).first()
+        val appt: Appointment = result.getResult()
         assertEquals("count=0", appt.participantFirstRep.actor.display)
     }
 
@@ -198,7 +198,7 @@ class OperationResultTest {
 
         // 1 patient + 1 appointment + 1 outcome (mapped from patient)
         assertEquals(3, result.count("items"))
-        assertThat(result.getByType(OperationOutcome::class), hasSize(1))
+        assertThat(result.getByType<OperationOutcome>(), hasSize(1))
     }
 
     // ── Query methods ─────────────────────────────────────────────────────────
@@ -223,9 +223,9 @@ class OperationResultTest {
         val result = OperationResult.of(listOf(patient(), patient()), "people")
             .add("appt") { appointment() }
 
-        assertThat(result.getByType(Patient::class), hasSize(2))
-        assertThat(result.getByType(Appointment::class), hasSize(1))
-        assertThat(result.getByType(OperationOutcome::class), empty())
+        assertThat(result.getByType<Patient>(), hasSize(2))
+        assertThat(result.getByType<Appointment>(), hasSize(1))
+        assertThat(result.getByType<OperationOutcome>(), empty())
     }
 
     @Test
@@ -269,7 +269,9 @@ class OperationResultTest {
     fun `getResult returns the most recently added value`() {
         val patient = patient()
         val result = OperationResult.of(patient)
-        assertThat(result.getResult(), instanceOf(Patient::class.java))
+        // Typed assignment proves the compiler tracks T = Patient through of()
+        val retrieved: Patient = result.getResult()
+        assertThat(retrieved, sameInstance(patient))
     }
 
     // ── Functional transformations ────────────────────────────────────────────
@@ -278,7 +280,7 @@ class OperationResultTest {
     fun `filterByType keeps only entries whose values match the given type`() {
         val result = OperationResult.of(patient())
             .add { appointment() }
-            .filterByType(Patient::class)
+            .filterByType<Patient>()
 
         assertTrue(result.containsKey("patient"))
         assertFalse(result.containsKey("appointment"))
@@ -287,7 +289,7 @@ class OperationResultTest {
     @Test
     fun `filterByType removes key entirely when no values match`() {
         val result = OperationResult.of(patient())
-            .filterByType(Appointment::class)
+            .filterByType<Appointment>()
 
         assertTrue(result.isEmpty())
     }
@@ -315,8 +317,8 @@ class OperationResultTest {
         val result = OperationResult.of(patient(), "p")
             .mapValues { _ -> appointment() }
 
-        assertThat(result.getByType(Appointment::class), hasSize(1))
-        assertThat(result.getByType(Patient::class), empty())
+        assertThat(result.getByType<Appointment>(), hasSize(1))
+        assertThat(result.getByType<Patient>(), empty())
     }
 
     // ── toParameters ─────────────────────────────────────────────────────────
@@ -439,7 +441,9 @@ class OperationResultTest {
         val result = OperationResult.of(patient)
             .addOrSkip { error("skip me") }
 
-        assertThat(result.getResult(), sameInstance(patient))
+        // T is still Patient — typed assignment verifies the compiler preserves the type
+        val retrieved: Patient = result.getResult()
+        assertThat(retrieved, sameInstance(patient))
     }
 
     @Test
@@ -472,7 +476,9 @@ class OperationResultTest {
         val result = OperationResult.of(patient())
             .addOrDefault(default = defaultAppt) { successAppt }
 
-        assertThat(result.getResult(), sameInstance(successAppt))
+        // T = Appointment — typed assignment proves no cast is needed
+        val appt: Appointment = result.getResult()
+        assertThat(appt, sameInstance(successAppt))
         assertFalse(result.hasErrors())
     }
 
@@ -607,6 +613,114 @@ class OperationResultTest {
 
         assertEquals(Bundle.BundleType.BATCH, bundle.type)
         assertEquals(Bundle.HTTPVerb.POST, bundle.entryFirstRep.request.method)
+    }
+
+    // ── Type safety ───────────────────────────────────────────────────────────
+    // These tests prove compile-time type enforcement: if the generic machinery
+    // were broken the typed assignments below would fail to compile.
+
+    @Test
+    fun `of infers generic type - getResult requires no cast`() {
+        val patient = patient()
+        // Explicit type annotation proves of() returns OperationResult<Patient>
+        val result: OperationResult<Patient> = OperationResult.of(patient)
+        // If getResult() returned Base this line would not compile:
+        val retrieved: Patient = result.getResult()
+        assertThat(retrieved, sameInstance(patient))
+    }
+
+    @Test
+    fun `add changes generic type - chained getResult returns new type without cast`() {
+        val appt = appointment()
+        // After .add { Appointment } the type becomes OperationResult<Appointment>
+        val result: OperationResult<Appointment> = OperationResult.of(patient()).add { appt }
+        val retrieved: Appointment = result.getResult()
+        assertThat(retrieved, sameInstance(appt))
+    }
+
+    @Test
+    fun `addUsing lambda parameter is typed to current pipeline type`() {
+        var receivedAsPatient: Patient? = null
+        // The explicit Patient annotation in the lambda verifies the compiler
+        // resolves T = Patient from the OperationResult<Patient> receiver.
+        val result: OperationResult<Coverage> = OperationResult.of(patient())
+            .addUsing { p: Patient ->
+                receivedAsPatient = p
+                Coverage().apply { id = "cov-${p.idElement}" }
+            }
+        val coverage: Coverage = result.getResult()
+        assertThat(receivedAsPatient, notNullValue())
+        assertThat(coverage, instanceOf(Coverage::class.java))
+    }
+
+    @Test
+    fun `addAll result is typed as List - getResultList returns typed list without cast`() {
+        val appts = listOf(appointment(), appointment())
+        val result = OperationResult.of(patient())
+            .addAll("appts") { appts }
+
+        // getResultList() extension only exists on OperationResult<List<R>>
+        val retrieved: List<Appointment> = result.getResultList()
+        assertEquals(2, retrieved.size)
+        assertThat(retrieved, sameInstance(appts))
+    }
+
+    @Test
+    fun `addAllUsing result is typed as List - getResultList returns typed list`() {
+        val result = OperationResult.of(patient())
+            .addAllUsing { p: Patient ->
+                listOf(
+                    Coverage().apply { id = "c1-${p.idElement}" },
+                    Coverage().apply { id = "c2-${p.idElement}" }
+                )
+            }
+
+        val coverages: List<Coverage> = result.getResultList()
+        assertEquals(2, coverages.size)
+    }
+
+    @Test
+    fun `getByType reified overload requires no KClass argument`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "people")
+            .add("appt") { appointment() }
+
+        // Reified call — no ::class argument needed
+        val patients: List<Patient> = result.getByType<Patient>()
+        val appts: List<Appointment> = result.getByType<Appointment>()
+        assertThat(patients, hasSize(2))
+        assertThat(appts, hasSize(1))
+    }
+
+    @Test
+    fun `filterByType reified overload requires no KClass argument`() {
+        val result = OperationResult.of(patient())
+            .add { appointment() }
+            .filterByType<Patient>()
+
+        assertTrue(result.containsKey("patient"))
+        assertFalse(result.containsKey("appointment"))
+    }
+
+    @Test
+    fun `multi-step chain carries correct type at every stage`() {
+        val patient = patient()
+        // Each step is typed; assigning to a wrong type would cause a compile error.
+        val step1: OperationResult<Patient> = OperationResult.of(patient)
+        val step2: OperationResult<Appointment> = step1.add { appointment() }
+        val step3: OperationResult<Coverage> = step2.addUsing { _: Appointment -> Coverage() }
+
+        val coverage: Coverage = step3.getResult()
+        assertThat(coverage, instanceOf(Coverage::class.java))
+        // All earlier resources are still in the map
+        assertTrue(step3.containsKey("patient"))
+        assertTrue(step3.containsKey("appointment"))
+    }
+
+    @Test
+    fun `OperationResult of Base is valid for backward compatibility`() {
+        // Code that explicitly uses OperationResult<Base> must still compile and run.
+        val result: OperationResult<Base> = OperationResult.of(patient() as Base)
+        assertThat(result.getResult(), instanceOf(Patient::class.java))
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
