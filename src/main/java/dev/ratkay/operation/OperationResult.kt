@@ -225,6 +225,50 @@ class OperationResult<T> private constructor(
         }
     }
 
+    fun toBundleEntry(resource: Base): Bundle.BundleEntryComponent =
+        Bundle.BundleEntryComponent().apply {
+            if (resource is Resource) setResource(resource)
+        }
+
+    fun toBundle(
+        type: Bundle.BundleType,
+        configBlock: ((Bundle.BundleEntryComponent) -> Unit)? = null
+    ): Bundle = Bundle().apply {
+        this.type = type
+        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        allResources.forEach { resource ->
+            val entry = toBundleEntry(resource)
+            when (type) {
+                Bundle.BundleType.TRANSACTION, Bundle.BundleType.BATCH -> {
+                    entry.request = Bundle.BundleEntryRequestComponent().apply {
+                        if (resource.hasId()) {
+                            method = Bundle.HTTPVerb.PUT
+                            url = "${resource.resourceType}/${resource.idPart}"
+                        } else {
+                            method = Bundle.HTTPVerb.POST
+                            url = resource.resourceType.toString()
+                        }
+                    }
+                }
+                Bundle.BundleType.SEARCHSET -> {
+                    entry.search = Bundle.BundleEntrySearchComponent().apply {
+                        mode = Bundle.SearchEntryMode.MATCH
+                    }
+                }
+                else -> {}
+            }
+            configBlock?.invoke(entry)
+            addEntry(entry)
+        }
+        if (type == Bundle.BundleType.SEARCHSET) {
+            total = allResources.size
+        }
+    }
+
+    fun toTransactionBundle(): Bundle = toBundle(Bundle.BundleType.TRANSACTION)
+
+    fun toBatchBundle(): Bundle = toBundle(Bundle.BundleType.BATCH)
+
     fun getResult(): T = result ?: throw IllegalStateException("No result set")
 
     // Private helpers
