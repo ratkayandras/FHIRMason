@@ -507,6 +507,108 @@ class OperationResultTest {
         assertTrue(outcome.issue.isEmpty())
     }
 
+    // ── toBundle ──────────────────────────────────────────────────────────────
+
+    @Test
+    fun `toBundle COLLECTION - produces bundle with all resources preserving insertion order`() {
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+
+        val bundle = result.toBundle(Bundle.BundleType.COLLECTION)
+
+        assertEquals(Bundle.BundleType.COLLECTION, bundle.type)
+        assertThat(bundle.entry, hasSize(2))
+        assertThat(bundle.entry[0].resource, instanceOf(Patient::class.java))
+        assertThat(bundle.entry[1].resource, instanceOf(Appointment::class.java))
+    }
+
+    @Test
+    fun `toBundle TRANSACTION - infers PUT with resourceType slash id when resource has id`() {
+        val result = OperationResult.of(Patient().apply { id = "p1" }, "patient")
+
+        val bundle = result.toBundle(Bundle.BundleType.TRANSACTION)
+
+        val entry = bundle.entryFirstRep
+        assertEquals(Bundle.HTTPVerb.PUT, entry.request.method)
+        assertEquals("Patient/p1", entry.request.url)
+    }
+
+    @Test
+    fun `toBundle TRANSACTION - infers POST with resourceType when resource has no id`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        val bundle = result.toBundle(Bundle.BundleType.TRANSACTION)
+
+        val entry = bundle.entryFirstRep
+        assertEquals(Bundle.HTTPVerb.POST, entry.request.method)
+        assertEquals("Patient", entry.request.url)
+    }
+
+    @Test
+    fun `toBundle BATCH - infers HTTP method same as TRANSACTION`() {
+        val result = OperationResult.of(Patient().apply { id = "p2" }, "patient")
+
+        val bundle = result.toBundle(Bundle.BundleType.BATCH)
+
+        val entry = bundle.entryFirstRep
+        assertEquals(Bundle.HTTPVerb.PUT, entry.request.method)
+        assertEquals("Patient/p2", entry.request.url)
+    }
+
+    @Test
+    fun `toBundle SEARCHSET - adds search mode MATCH and sets total`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "patients")
+
+        val bundle = result.toBundle(Bundle.BundleType.SEARCHSET)
+
+        assertEquals(Bundle.BundleType.SEARCHSET, bundle.type)
+        assertEquals(2, bundle.total)
+        bundle.entry.forEach { entry ->
+            assertEquals(Bundle.SearchEntryMode.MATCH, entry.search.mode)
+        }
+    }
+
+    @Test
+    fun `toBundle with configBlock - applies custom configuration to each entry`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        val bundle = result.toBundle(Bundle.BundleType.COLLECTION) { entry ->
+            entry.fullUrl = "http://example.com/fhir/Patient/custom"
+        }
+
+        assertEquals("http://example.com/fhir/Patient/custom", bundle.entryFirstRep.fullUrl)
+    }
+
+    @Test
+    fun `toBundleEntry - produces entry with resource set`() {
+        val p = patient()
+        val result = OperationResult.of(p)
+
+        val entry = result.toBundleEntry(p)
+
+        assertThat(entry.resource, sameInstance(p))
+    }
+
+    @Test
+    fun `toTransactionBundle - convenience alias produces TRANSACTION bundle`() {
+        val result = OperationResult.of(Patient().apply { id = "p1" }, "patient")
+
+        val bundle = result.toTransactionBundle()
+
+        assertEquals(Bundle.BundleType.TRANSACTION, bundle.type)
+        assertEquals(Bundle.HTTPVerb.PUT, bundle.entryFirstRep.request.method)
+    }
+
+    @Test
+    fun `toBatchBundle - convenience alias produces BATCH bundle`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        val bundle = result.toBatchBundle()
+
+        assertEquals(Bundle.BundleType.BATCH, bundle.type)
+        assertEquals(Bundle.HTTPVerb.POST, bundle.entryFirstRep.request.method)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {
