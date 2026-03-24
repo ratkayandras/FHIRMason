@@ -3,6 +3,15 @@ package dev.ratkay.operation
 import org.hl7.fhir.r4.model.*
 import kotlin.reflect.KClass
 
+/**
+ * A typed, immutable pipeline builder that accumulates FHIR resources keyed by name and
+ * carries the type of the most recently added resource through the generic parameter [T].
+ *
+ * The internal parameter map is always `Map<String, List<Base>>`; [T] only tracks the
+ * "head" of the pipeline so that [getResult] returns the correct type without casting.
+ * When the last step produced a list, [T] becomes `List<R>` and the result can be
+ * retrieved via [getResult] or via the [getResultList] extension.
+ */
 class OperationResult<T> private constructor(
     private val parameters: MutableMap<String, MutableList<Base>>,
     private val result: T?,
@@ -71,6 +80,8 @@ class OperationResult<T> private constructor(
     }
 
     // Builder methods - list
+    // addAll/addAllUsing return OperationResult<List<R>>; use getResultList() or getResult()
+    // to retrieve the typed list without casting.
 
     fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> {
         if (shouldSkip()) return skippedResult()
@@ -160,8 +171,15 @@ class OperationResult<T> private constructor(
     fun getAll(name: String): List<Base> =
         parameters[name]?.toList() ?: emptyList()
 
+    /**
+     * Returns all accumulated values that are instances of [type], across all keys.
+     * Prefer the inline reified overload [getByType] where the type can be inferred.
+     */
     fun <R : Base> getByType(type: KClass<R>): List<R> =
         parameters.values.flatten().filterIsInstance(type.java)
+
+    /** Reified overload — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> getByType(): List<R> = getByType(R::class)
 
     fun containsKey(name: String): Boolean =
         parameters.containsKey(name)
@@ -183,6 +201,10 @@ class OperationResult<T> private constructor(
 
     // Functional transformations
 
+    /**
+     * Returns a new result containing only entries whose values match [type].
+     * Prefer the inline reified overload [filterByType] where the type can be inferred.
+     */
     fun <R : Base> filterByType(type: KClass<R>): OperationResult<T> {
         val filtered = mutableMapOf<String, MutableList<Base>>()
         parameters.forEach { (name, values) ->
@@ -193,6 +215,9 @@ class OperationResult<T> private constructor(
         }
         return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks)
     }
+
+    /** Reified overload — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> filterByType(): OperationResult<T> = filterByType(R::class)
 
     fun filterByName(name: String): OperationResult<T> {
         val filtered = mutableMapOf<String, MutableList<Base>>()
@@ -269,6 +294,11 @@ class OperationResult<T> private constructor(
 
     fun toBatchBundle(): Bundle = toBundle(Bundle.BundleType.BATCH)
 
+    /**
+     * Returns the most recently added value, typed as [T].
+     * No cast is needed because [T] is tracked through the pipeline generics.
+     * For list-producing steps use the [getResultList] extension.
+     */
     fun getResult(): T = result ?: throw IllegalStateException("No result set")
 
     // Private helpers
@@ -321,3 +351,16 @@ class OperationResult<T> private constructor(
         }
     }
 }
+
+/**
+ * Type-safe accessor for pipeline stages that produced a list (i.e. after [OperationResult.addAll]
+ * or [OperationResult.addAllUsing]).  Because [T] is already `List<R>`, [OperationResult.getResult]
+ * returns the correctly typed list — this extension is a readable alias for that call.
+ *
+ * ```kotlin
+ * val appointments: List<Appointment> = OperationResult.of(patient())
+ *     .addAll { listOf(Appointment(), Appointment()) }
+ *     .getResultList()
+ * ```
+ */
+fun <R : Base> OperationResult<List<R>>.getResultList(): List<R> = getResult()
