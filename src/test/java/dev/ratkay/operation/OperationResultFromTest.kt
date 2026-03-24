@@ -156,6 +156,113 @@ class OperationResultFromTest {
         assertThat(roundTripped.getByType<Patient>(), hasSize(3))
     }
 
+    @Test
+    fun `round-trip fromParameters toParameters reconstructs nested parts - two-level`() {
+        val original = Parameters().apply {
+            addParameter().apply {
+                name = "address"
+                addPart().apply { name = "city";    value = StringType("Springfield") }
+                addPart().apply { name = "country"; value = StringType("US") }
+            }
+        }
+
+        val reconstructed = OperationResult.fromParameters(original).toParameters()
+
+        // Must NOT emit flat "address.city" / "address.country" parameter names
+        assertFalse(reconstructed.hasParameter("address.city"))
+        assertFalse(reconstructed.hasParameter("address.country"))
+
+        // Must emit a single top-level "address" parameter
+        val addressParams = reconstructed.parameter.filter { it.name == "address" }
+        assertThat(addressParams, hasSize(1))
+
+        // "address" must carry its children as parts, not as a value/resource
+        val addressParam = addressParams.first()
+        assertFalse(addressParam.hasValue())
+        assertFalse(addressParam.hasResource())
+        assertThat(addressParam.part, hasSize(2))
+
+        val cityPart    = addressParam.part.first { it.name == "city" }
+        val countryPart = addressParam.part.first { it.name == "country" }
+        assertEquals("Springfield", (cityPart.value    as StringType).value)
+        assertEquals("US",          (countryPart.value as StringType).value)
+    }
+
+    @Test
+    fun `round-trip fromParameters toParameters reconstructs deeply nested parts - three-level`() {
+        val original = Parameters().apply {
+            addParameter().apply {
+                name = "outer"
+                addPart().apply {
+                    name = "inner"
+                    addPart().apply { name = "leaf"; value = StringType("deep") }
+                }
+            }
+        }
+
+        val reconstructed = OperationResult.fromParameters(original).toParameters()
+
+        assertFalse(reconstructed.hasParameter("outer.inner.leaf"))
+
+        val outerParams = reconstructed.parameter.filter { it.name == "outer" }
+        assertThat(outerParams, hasSize(1))
+
+        val innerParts = outerParams.first().part.filter { it.name == "inner" }
+        assertThat(innerParts, hasSize(1))
+
+        val leafParts = innerParts.first().part.filter { it.name == "leaf" }
+        assertThat(leafParts, hasSize(1))
+        assertEquals("deep", (leafParts.first().value as StringType).value)
+    }
+
+    @Test
+    fun `round-trip fromParameters toParameters handles mixed flat and nested parameters`() {
+        val original = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = patient() }
+            addParameter().apply {
+                name = "contact"
+                addPart().apply { name = "phone"; value = StringType("555-1234") }
+                addPart().apply { name = "email"; value = StringType("a@b.com") }
+            }
+            addParameter().apply { name = "flag"; value = BooleanType(true) }
+        }
+
+        val reconstructed = OperationResult.fromParameters(original).toParameters()
+
+        // Flat params preserved as-is
+        assertTrue(reconstructed.hasParameter("patient"))
+        assertTrue(reconstructed.hasParameter("flag"))
+        assertFalse(reconstructed.hasParameter("contact.phone"))
+        assertFalse(reconstructed.hasParameter("contact.email"))
+
+        // Nested param reconstructed
+        val contactParams = reconstructed.parameter.filter { it.name == "contact" }
+        assertThat(contactParams, hasSize(1))
+        val parts = contactParams.first().part
+        assertThat(parts.map { it.name }, containsInAnyOrder("phone", "email"))
+    }
+
+    @Test
+    fun `round-trip fromParameters toParameters handles multiple values at same nested key`() {
+        // Two separate "label" parts under "meta"
+        val original = Parameters().apply {
+            addParameter().apply {
+                name = "meta"
+                addPart().apply { name = "label"; value = StringType("alpha") }
+                addPart().apply { name = "label"; value = StringType("beta") }
+            }
+        }
+
+        val reconstructed = OperationResult.fromParameters(original).toParameters()
+
+        val metaParams = reconstructed.parameter.filter { it.name == "meta" }
+        assertThat(metaParams, hasSize(1))
+        val labelParts = metaParams.first().part.filter { it.name == "label" }
+        assertThat(labelParts, hasSize(2))
+        val labelValues = labelParts.map { (it.value as StringType).value }
+        assertThat(labelValues, containsInAnyOrder("alpha", "beta"))
+    }
+
     // ── fromParametersTyped ───────────────────────────────────────────────────
 
     @Test

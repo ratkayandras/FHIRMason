@@ -236,17 +236,22 @@ class OperationResult<T> private constructor(
 
     // Core methods
 
+    /**
+     * Serialises the accumulated resources to a FHIR [Parameters] resource.
+     *
+     * Keys that contain a dot are treated as hierarchical paths, matching the composite
+     * `"parent.child"` keys produced by [fromParameters] when it flattens nested
+     * [Parameters.ParametersParameterComponent.part] entries.  This ensures a full
+     * round-trip: `fromParameters(p).toParameters()` reconstructs the original nested
+     * structure rather than emitting flat `"parent.child"` parameter names.
+     *
+     * Keys without dots are emitted as ordinary top-level parameters (one entry per value),
+     * exactly as before.
+     */
     fun toParameters(): Parameters = Parameters().apply {
-        parameters.forEach { (name, values) ->
-            values.forEach { value ->
-                addParameter().apply {
-                    this.name = name
-                    when (value) {
-                        is Type -> setValue(value)
-                        is Resource -> setResource(value)
-                    }
-                }
-            }
+        val fhirParams = this
+        buildParameterComponents(parameters) { name ->
+            fhirParams.addParameter().also { it.name = name }
         }
     }
 
@@ -302,6 +307,63 @@ class OperationResult<T> private constructor(
     fun getResult(): T = result ?: throw IllegalStateException("No result set")
 
     // Private helpers
+
+    /**
+     * Recursively builds [Parameters.ParametersParameterComponent] entries from [entries].
+     *
+     * [addComponent] abstracts the difference between adding to a [Parameters] root
+     * (`parameters.addParameter()`) and adding to a parent part (`component.addPart()`),
+     * so the same logic handles both levels.
+     *
+     * Algorithm:
+     * - Collect all unique top-level segments (the portion of each key before the first dot),
+     *   preserving map insertion order.
+     * - For a segment whose values live directly under that key (no dot sub-keys):
+     *   emit one component per value (leaf node).
+     * - For a segment whose values all live under dot-qualified sub-keys:
+     *   emit a single parent component with no value/resource, then recurse for its children.
+     *
+     * This means `"address.city"` and `"address.country"` together produce:
+     * ```
+     * name="address"
+     *   part: name="city",    value=…
+     *   part: name="country", value=…
+     * ```
+     * and `"outer.inner.leaf"` produces three levels of nesting.
+     */
+    private fun buildParameterComponents(
+        entries: Map<String, List<Base>>,
+        addComponent: (String) -> Parameters.ParametersParameterComponent
+    ) {
+        // Unique top-level segments in insertion order
+        val topSegments = entries.keys.mapTo(linkedSetOf()) { it.substringBefore('.') }
+
+        topSegments.forEach { segment ->
+            val directValues = entries[segment]
+            // Sub-entries for keys like "segment.rest" — strip the "segment." prefix
+            val childEntries: Map<String, List<Base>> = entries
+                .filterKeys { it.startsWith("$segment.") }
+                .mapKeys { (key, _) -> key.removePrefix("$segment.") }
+
+            if (childEntries.isEmpty()) {
+                // Leaf: one component per value
+                directValues?.forEach { value ->
+                    addComponent(segment).apply {
+                        when (value) {
+                            is Type     -> setValue(value)
+                            is Resource -> setResource(value)
+                        }
+                    }
+                }
+            } else {
+                // Branch: single parent component whose children are built recursively
+                val parent = addComponent(segment)
+                buildParameterComponents(childEntries) { childName ->
+                    parent.addPart().also { it.name = childName }
+                }
+            }
+        }
+    }
 
     private fun warningOutcome(e: Exception): OperationOutcome = OperationOutcome().apply {
         addIssue().apply {
