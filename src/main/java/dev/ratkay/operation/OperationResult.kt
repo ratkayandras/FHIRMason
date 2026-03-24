@@ -349,6 +349,121 @@ class OperationResult<T> private constructor(
             instance.addToParameters(values, name)
             return instance
         }
+
+        /**
+         * Builds an [OperationResult] from an existing FHIR [Parameters] resource.
+         *
+         * Each top-level [Parameters.parameter] entry is stored using its [Parameters.ParametersParameterComponent.name]
+         * as the map key. Both resource parameters and primitive-type parameters (e.g. [StringType],
+         * [BooleanType]) are supported.
+         *
+         * Parameters that contain nested [Parameters.ParametersParameterComponent.part] entries (but no
+         * direct value or resource) are flattened recursively: each part is stored under the composite
+         * key `"<parentName>.<partName>"`, preserving the hierarchy in the key name.
+         *
+         * The returned result has no "current" typed head ([getResult] will throw); use
+         * [fromParametersTyped] when a typed head is required.
+         */
+        fun fromParameters(parameters: Parameters): OperationResult<Base> {
+            val params = mutableMapOf<String, MutableList<Base>>()
+            parameters.parameter.forEach { param -> populateFromParam(params, param) }
+            return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+        }
+
+        /**
+         * Like [fromParameters] but also sets the typed pipeline head to the first value stored
+         * under [primaryKey] that is an instance of [type].
+         *
+         * @throws IllegalArgumentException if no value of [type] exists under [primaryKey].
+         */
+        fun <T : Base> fromParametersTyped(
+            parameters: Parameters,
+            primaryKey: String,
+            type: KClass<T>
+        ): OperationResult<T> {
+            val params = mutableMapOf<String, MutableList<Base>>()
+            parameters.parameter.forEach { param -> populateFromParam(params, param) }
+            val primary = params[primaryKey]
+                ?.filterIsInstance(type.java)
+                ?.firstOrNull()
+                ?: throw IllegalArgumentException(
+                    "No value of type '${type.simpleName}' found under key '$primaryKey'"
+                )
+            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+        }
+
+        /** Reified overload of [fromParametersTyped] — no [KClass] argument needed at call sites. */
+        inline fun <reified T : Base> fromParametersTyped(
+            parameters: Parameters,
+            primaryKey: String
+        ): OperationResult<T> = fromParametersTyped(parameters, primaryKey, T::class)
+
+        /**
+         * Builds an [OperationResult] from a FHIR [Bundle].
+         *
+         * Each entry that carries a resource is stored using `resource.fhirType().lowercase()` as
+         * the key. Entries without a resource (e.g. bare transaction-response entries) are silently
+         * skipped. Resources of the same FHIR type accumulate under the same key.
+         *
+         * The returned result has no typed head; use [fromParametersTyped] pattern via
+         * [fromBundle] with a custom [keyStrategy] or cast after the fact if a head is needed.
+         *
+         * @see fromBundle overload with [keyStrategy] for custom key extraction.
+         */
+        fun fromBundle(bundle: Bundle): OperationResult<Base> =
+            fromBundle(bundle) { entry -> entry.resource.fhirType().lowercase() }
+
+        /**
+         * Builds an [OperationResult] from a FHIR [Bundle] with a custom key extractor.
+         *
+         * [keyStrategy] receives each [Bundle.BundleEntryComponent] that has a resource and must
+         * return the map key for that resource.  Returning an empty string causes the entry to be
+         * skipped, which is useful when the caller wants to filter entries conditionally.
+         *
+         * Example — key by `fullUrl`:
+         * ```kotlin
+         * OperationResult.fromBundle(bundle) { entry -> entry.fullUrl ?: entry.resource.fhirType() }
+         * ```
+         */
+        fun fromBundle(
+            bundle: Bundle,
+            keyStrategy: (Bundle.BundleEntryComponent) -> String
+        ): OperationResult<Base> {
+            val params = mutableMapOf<String, MutableList<Base>>()
+            bundle.entry
+                .filter { it.hasResource() }
+                .forEach { entry ->
+                    val key = keyStrategy(entry)
+                    if (key.isNotEmpty()) {
+                        params.getOrPut(key) { mutableListOf() }.add(entry.resource)
+                    }
+                }
+            return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+        }
+
+        // ── Private helpers ───────────────────────────────────────────────────
+
+        /**
+         * Recursively populates [params] from a single [Parameters.ParametersParameterComponent].
+         *
+         * - Resource parameter  → stored under [keyPrefix]`.<name>` (or just `<name>` at root)
+         * - Value parameter     → stored under [keyPrefix]`.<name>`
+         * - Parts-only entry    → each part is processed recursively with the current key as prefix
+         */
+        private fun populateFromParam(
+            params: MutableMap<String, MutableList<Base>>,
+            param: Parameters.ParametersParameterComponent,
+            keyPrefix: String = ""
+        ) {
+            val key = if (keyPrefix.isEmpty()) param.name else "$keyPrefix.${param.name}"
+            when {
+                param.hasResource() -> params.getOrPut(key) { mutableListOf() }.add(param.resource)
+                param.hasValue()    -> params.getOrPut(key) { mutableListOf() }.add(param.value)
+                param.hasPart()     -> param.part.forEach { part ->
+                    populateFromParam(params, part, key)
+                }
+            }
+        }
     }
 }
 
