@@ -1,5 +1,7 @@
 # FHIRMason
 
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/85172d09-f525-4365-b485-bf746576d494" />
+
 A Kotlin library that provides a fluent, chainable API for accumulating and transforming [FHIR R4](https://hl7.org/fhir/R4/) resources. FHIRMason wraps FHIR `Base` objects in an `OperationResult` builder, enabling composable pipelines that collect named resources into a shared parameter map.
 
 ---
