@@ -559,21 +559,26 @@ suspend fun buildOutput(): Parameters {
 | FHIR | HAPI FHIR 6.4.2 (R4) |
 | Async | Kotlin Coroutines 1.5.0 |
 | Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
-| Build | Maven |
-| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest, Logback 1.2.12 |
+| Spring Boot | 2.7.18 (optional — `fhirmason-spring` module) |
+| Build | Maven (multi-module) |
+| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
+
+---
+
+## Modules
+
+| Module | Artifact ID | Description |
+|---|---|---|
+| `fhirmason-core` | `fhirmason-core` | Core pipeline builders — no Spring dependency |
+| `fhirmason-spring` | `fhirmason-spring` | Spring Boot auto-configuration and base provider class |
 
 ---
 
 ## Building
 
 ```bash
-mvn clean install
-```
-
-## Running Tests
-
-```bash
-mvn test
+mvn clean test          # build and test all modules
+mvn clean install       # build, test, and install to local repo
 ```
 
 ---
@@ -581,31 +586,133 @@ mvn test
 ## Project Structure
 
 ```
-src/
-├── main/java/dev/ratkay/operation/
-│   ├── OperationResult.kt              # Synchronous accumulator builder
-│   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
-│   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
-│   ├── StepMetrics.kt                  # Per-step timing and outcome data
-│   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-│   └── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
-└── test/java/dev/ratkay/operation/
-    ├── OperationResultTest.kt
-    ├── OperationResultFromTest.kt
-    ├── OperationResultLinkReferencesTest.kt
-    ├── OperationResultMetricsTest.kt
-    ├── AsyncOperationResultTest.kt
-    └── AsyncOperationResultMetricsTest.kt
+fhirmason-core/
+└── src/
+    ├── main/java/dev/ratkay/operation/
+    │   ├── OperationResult.kt              # Synchronous accumulator builder
+    │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
+    │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
+    │   ├── StepMetrics.kt                  # Per-step timing and outcome data
+    │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+    │   └── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
+    └── test/java/dev/ratkay/operation/
+        ├── OperationResultTest.kt
+        ├── OperationResultFromTest.kt
+        ├── OperationResultLinkReferencesTest.kt
+        ├── OperationResultMetricsTest.kt
+        ├── AsyncOperationResultTest.kt
+        └── AsyncOperationResultMetricsTest.kt
+
+fhirmason-spring/
+└── src/
+    ├── main/java/dev/ratkay/spring/
+    │   ├── FhirMasonAutoConfiguration.kt   # Spring Boot auto-configuration
+    │   ├── FhirMasonProperties.kt          # @ConfigurationProperties (prefix=fhirmason)
+    │   ├── FhirMasonFactory.kt             # Spring @Bean — creates pipelines
+    │   └── FhirMasonOperationProvider.kt   # Abstract base for operation providers
+    ├── main/resources/META-INF/
+    │   ├── spring.factories                # Boot 2.x auto-config registration
+    │   └── spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+    └── test/java/dev/ratkay/spring/
+        └── FhirMasonAutoConfigurationTest.kt
 ```
 
 ---
 
-## Artifact
+## Spring Boot Integration
+
+### Dependency
 
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason</artifactId>
+    <artifactId>fhirmason-spring</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+### Auto-configuration
+
+When `fhirmason-spring` is on the classpath in a Spring Boot application, a `FhirMasonFactory` bean is registered automatically. No explicit configuration is required.
+
+### Configuration Properties
+
+```yaml
+fhirmason:
+  error-strategy: ACCUMULATE   # FAIL_FAST | ACCUMULATE (default: ACCUMULATE)
+  metrics:
+    enabled: true               # enable per-step timing (default: false)
+```
+
+### Injecting the Factory
+
+```kotlin
+@Service
+class PatientService(private val fhirMason: FhirMasonFactory) {
+
+    fun buildBundle(patient: Patient): Parameters =
+        fhirMason.pipeline(patient)
+            .add("encounter") { fetchEncounter(patient.idElement.idPart) }
+            .add("coverage")  { fetchCoverage(patient.idElement.idPart) }
+            .toParameters()
+
+    fun buildAsync(): OperationResult<Base> =
+        fhirMason.asyncPipeline()
+            .add("patient") { fetchPatient() }
+            .add("coverage") { fetchCoverage() }
+            .runBlocking()
+}
+```
+
+### Operation Provider Base Class
+
+Extend `FhirMasonOperationProvider` to inherit pipeline helpers in your HAPI FHIR operation provider. Implement `IResourceProvider` in your subclass.
+
+```kotlin
+@Component
+class PatientOperationProvider(fhirMason: FhirMasonFactory) :
+    FhirMasonOperationProvider(fhirMason), IResourceProvider {
+
+    override fun getResourceType() = Patient::class.java
+
+    @Operation(name = "\$summary")
+    fun summary(@IdParam id: IdType): Parameters =
+        parameters {
+            pipeline(fetchPatient(id))
+                .add("encounter") { fetchEncounter(id) }
+                .add("coverage")  { fetchCoverage(id) }
+        }
+
+    @Operation(name = "\$bundle")
+    fun bundle(@IdParam id: IdType): Bundle =
+        bundle(Bundle.BundleType.COLLECTION) {
+            pipeline(fetchPatient(id))
+                .addAll("observations") { fetchObservations(id) }
+        }
+}
+```
+
+### Custom Factory Bean
+
+Override the auto-configured factory by declaring your own:
+
+```kotlin
+@Configuration
+class FhirMasonConfig {
+    @Bean
+    fun fhirMasonFactory(properties: FhirMasonProperties) =
+        FhirMasonFactory(properties)  // or a custom subclass
+}
+```
+
+---
+
+## Core Artifact
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-core</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
