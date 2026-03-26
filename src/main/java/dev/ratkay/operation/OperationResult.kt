@@ -234,6 +234,91 @@ class OperationResult<T> private constructor(
         return OperationResult(transformed, result, outcomes, errorStrategy, failedTasks)
     }
 
+    // Reference linking
+
+    /**
+     * Wires FHIR references between accumulated resources using explicit [rules].
+     *
+     * For each rule, every resource of [ReferenceLinkRule.sourceType] is paired with every
+     * resource of [ReferenceLinkRule.targetType] (cross-product, skipping self-pairs) and
+     * the rule's setter is invoked to assign the reference.
+     *
+     * Returns a new [OperationResult] with the same parameters; mutations happen in-place
+     * on the already-accumulated resource objects (HAPI FHIR resources are mutable).
+     */
+    fun linkReferences(vararg rules: ReferenceLinkRule<*, *>): OperationResult<T> {
+        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        rules.forEach { rule ->
+            val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
+            val targets = allResources.filter { rule.targetType.java.isInstance(it) }
+            require(targets.size <= 1) {
+                "Ambiguous reference target: ${targets.size} resources of type " +
+                "'${rule.targetType.simpleName}' found; exactly one is required per rule"
+            }
+            val target = targets.singleOrNull() ?: return@forEach
+            sources.forEach { source ->
+                if (source !== target) rule.applyTo(source, target)
+            }
+        }
+        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+    }
+
+    /**
+     * Automatically wires FHIR references between accumulated resources by introspecting
+     * each resource's HAPI child properties.
+     *
+     * Algorithm:
+     * 1. Build an index of ID-bearing resources keyed by `fhirType().lowercase()`.
+     * 2. For every accumulated resource, iterate its [Base.children] properties.
+     * 3. For each unset property whose typeCode starts with `"Reference("`, parse the
+     *    allowed target types from the typeCode (e.g. `"Reference(Patient|Group)"`).
+     * 4. If exactly one matching resource exists in the index for one of those types,
+     *    assign a `Reference("<Type>/<id>")` via [Base.setProperty].
+     *
+     * Only unset reference properties are touched; already-populated references are left
+     * unchanged.  Ambiguous cases (multiple candidates for the same reference property)
+     * are silently skipped to avoid incorrect wiring.
+     *
+     * Returns a new [OperationResult] wrapping the same (mutated) parameter map.
+     */
+    fun linkReferences(): OperationResult<T> {
+        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+
+        // Index resources that have an id, by their fhirType (lowercase)
+        val resourceIndex: Map<String, List<Resource>> = allResources
+            .filter { it.hasId() }
+            .groupBy { it.fhirType().lowercase() }
+
+        allResources.forEach { source ->
+            source.children().forEach { property ->
+                val typeCode = property.typeCode ?: return@forEach
+                if (!typeCode.startsWith("Reference(")) return@forEach
+                // Only wire unset (empty) reference slots
+                if (property.hasValues()) return@forEach
+
+                // Parse allowed types: "Reference(Patient|Group)" → ["patient", "group"]
+                val allowedTypes = typeCode
+                    .removePrefix("Reference(")
+                    .removeSuffix(")")
+                    .split("|")
+                    .map { it.trim().lowercase() }
+
+                // Find all candidates across allowed types
+                val candidates: List<Resource> = allowedTypes.flatMap { type ->
+                    resourceIndex[type]?.filter { it !== source } ?: emptyList()
+                }
+
+                // Wire only when unambiguous (exactly one candidate)
+                if (candidates.size == 1) {
+                    val target = candidates.single()
+                    val ref = Reference("${target.fhirType()}/${target.idPart}")
+                    runCatching { source.setProperty(property.name, ref) }
+                }
+            }
+        }
+        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+    }
+
     // Core methods
 
     /**
