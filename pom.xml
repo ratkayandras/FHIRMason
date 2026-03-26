@@ -18,6 +18,8 @@
         <approvalcrest.version>0.61.6</approvalcrest.version>
         <hamcrest.version>2.2</hamcrest.version>
         <coroutines.version>1.5.0</coroutines.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        <logback.version>1.2.12</logback.version>
     </properties>
 
     <dependencies>
@@ -58,6 +60,19 @@
             <groupId>com.github.karsaig</groupId>
             <artifactId>approvalcrest-junit-jupiter</artifactId>
             <version>${approvalcrest.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- SLF4J API — no binding included; consumers choose their own -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+        <!-- Logback classic — test scope only, for log-capture assertions -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
