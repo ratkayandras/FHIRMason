@@ -174,6 +174,65 @@ result.filterByName("patient")         // keep only the "patient" key
 result.mapValues { base -> transform(base) }
 ```
 
+### Logging and Metrics
+
+FHIRMason logs pipeline activity via SLF4J (no binding included — add your own). Three log levels are used:
+
+| Level | When |
+|---|---|
+| `DEBUG` | Every step: name, FHIR type, and duration |
+| `TRACE` | Parameter map state (key names and counts) after each step |
+| `WARN`  | When `addOrSkip` / `addOrDefault` catches an exception |
+
+Log format:
+```
+FHIRMason | step='coverage' | type=Coverage | duration=45ms
+FHIRMason | state: {patient=1, coverage=1}
+FHIRMason | step='risky' | WARN: connection timed out
+```
+
+#### Per-step metrics (`timed()` / `getMetrics()`)
+
+Call `timed()` anywhere in the chain to enable `StepMetrics` collection. When disabled (the default), `getMetrics()` returns an empty list — zero overhead.
+
+```kotlin
+val result = OperationResult.of(patient)
+    .timed()                                      // enable metrics collection
+    .add("coverage") { fetchCoverage() }
+    .add("encounter") { fetchEncounter() }
+
+result.getMetrics().forEach { m ->
+    println("${m.stepName}: ${m.durationMs}ms  success=${m.success}  type=${m.resourceType}")
+}
+// coverage: 38ms  success=true  type=Coverage
+// encounter: 12ms  success=true  type=Encounter
+```
+
+`StepMetrics` fields: `stepName`, `resourceType`, `durationMs`, `success`.
+
+#### Async logging and metrics
+
+`AsyncOperationResult` logs task lifecycle events and DAG completion:
+
+```
+FHIRMason.async | task='patient'   | status=STARTED
+FHIRMason.async | task='patient'   | status=COMPLETED | duration=120ms
+FHIRMason.async | task='coverage'  | status=COMPLETED | duration=85ms
+FHIRMason.async | dag=COMPLETED    | totalDuration=135ms | tasks=2
+```
+
+```kotlin
+val dag = AsyncOperationResult()
+    .timed()
+    .add("patient")  { fetchPatient() }
+    .add("coverage") { fetchCoverage() }
+
+dag.runBlocking()
+
+dag.getMetrics()           // Map<String, StepMetrics> keyed by task name
+dag.getTotalDuration()     // wall-clock DAG execution time in ms
+```
+
 ### Reference Linking
 
 `linkReferences` wires FHIR references between accumulated resources and returns a **new** `OperationResult` — the original resources are never mutated (deep copy is performed before modification).
@@ -499,8 +558,9 @@ suspend fun buildOutput(): Parameters {
 | Language | Kotlin 1.9.20 (JVM 11) |
 | FHIR | HAPI FHIR 6.4.2 (R4) |
 | Async | Kotlin Coroutines 1.5.0 |
+| Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
 | Build | Maven |
-| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest |
+| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest, Logback 1.2.12 |
 
 ---
 
@@ -526,13 +586,16 @@ src/
 │   ├── OperationResult.kt              # Synchronous accumulator builder
 │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
 │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
+│   ├── StepMetrics.kt                  # Per-step timing and outcome data
 │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
 │   └── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
 └── test/java/dev/ratkay/operation/
     ├── OperationResultTest.kt
     ├── OperationResultFromTest.kt
     ├── OperationResultLinkReferencesTest.kt
-    └── AsyncOperationResultTest.kt
+    ├── OperationResultMetricsTest.kt
+    ├── AsyncOperationResultTest.kt
+    └── AsyncOperationResultMetricsTest.kt
 ```
 
 ---
