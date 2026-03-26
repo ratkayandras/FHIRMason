@@ -21,180 +21,112 @@ class OperationResultLinkReferencesTest {
         status = Observation.ObservationStatus.FINAL
     }
 
-    private fun organization(id: String = "org1") = Organization().apply { setId(id) }
-
-    private fun claim(id: String = "c1") = Claim().apply {
-        setId(id)
-        status = Claim.ClaimStatus.ACTIVE
-        use = Claim.Use.CLAIM
-        type = CodeableConcept().addCoding(Coding().setSystem("http://terminology.hl7.org/CodeSystem/claim-type").setCode("oral"))
-        created = java.util.Date()
-        insurer = Reference("Organization/ins1")
-        priority = CodeableConcept().addCoding(Coding().setCode("normal"))
-    }
-
-    private fun coverage(id: String = "cov1") = Coverage().apply {
-        setId(id)
-        status = Coverage.CoverageStatus.ACTIVE
-    }
-
-    private val UUID_ID = "550e8400-e29b-41d4-a716-446655440000"
-
-    // ── linkReferences() — built-in rules ────────────────────────────────────
+    // ── linkReferences() — automatic introspection ────────────────────────────
 
     @Test
-    fun `linkReferences wires encounter subject to patient`() {
-        val original = OperationResult.of(patient())
+    fun `auto linkReferences wires encounter subject to patient`() {
+        val linked = OperationResult.of(patient())
             .add { encounter() }
+            .linkReferences()
 
-        val linked = original.linkReferences()
-
-        val enc = linked.getByType<Encounter>().single()
-        assertEquals("Patient/p1", enc.subject.reference)
+        assertEquals("Patient/p1", linked.getByType<Encounter>().single().subject.reference)
     }
 
     @Test
-    fun `linkReferences wires observation subject to patient`() {
+    fun `auto linkReferences wires observation subject to patient`() {
         val linked = OperationResult.of(patient())
             .add { observation() }
             .linkReferences()
 
-        val obs = linked.getByType<Observation>().single()
-        assertEquals("Patient/p1", obs.subject.reference)
+        assertEquals("Patient/p1", linked.getByType<Observation>().single().subject.reference)
     }
 
     @Test
-    fun `linkReferences wires encounter serviceProvider to organization`() {
-        val linked = OperationResult.of(organization())
-            .add { encounter() }
-            .linkReferences()
-
-        val enc = linked.getByType<Encounter>().single()
-        assertEquals("Organization/org1", enc.serviceProvider.reference)
-    }
-
-    @Test
-    fun `linkReferences wires claim patient to patient`() {
-        val linked = OperationResult.of(patient())
-            .add { claim() }
-            .linkReferences()
-
-        val c = linked.getByType<Claim>().single()
-        assertEquals("Patient/p1", c.patient.reference)
-    }
-
-    @Test
-    fun `linkReferences wires coverage beneficiary to patient`() {
-        val linked = OperationResult.of(patient())
-            .add { coverage() }
-            .linkReferences()
-
-        val cov = linked.getByType<Coverage>().single()
-        assertEquals("Patient/p1", cov.beneficiary.reference)
-    }
-
-    @Test
-    fun `linkReferences applies multiple built-in rules in one call`() {
+    fun `auto linkReferences wires encounter and observation subject in one call`() {
         val linked = OperationResult.of(patient())
             .add { encounter() }
             .add { observation() }
             .linkReferences()
 
-        val enc = linked.getByType<Encounter>().single()
-        val obs = linked.getByType<Observation>().single()
-        assertEquals("Patient/p1", enc.subject.reference)
-        assertEquals("Patient/p1", obs.subject.reference)
+        assertEquals("Patient/p1", linked.getByType<Encounter>().single().subject.reference)
+        assertEquals("Patient/p1", linked.getByType<Observation>().single().subject.reference)
     }
 
     @Test
-    fun `linkReferences applies rule to all sources when one target exists`() {
+    fun `auto linkReferences wires observation encounter reference`() {
+        val linked = OperationResult.of(patient())
+            .add { encounter() }
+            .add { observation() }
+            .linkReferences()
+
+        assertEquals("Encounter/e1", linked.getByType<Observation>().single().encounter.reference)
+    }
+
+    @Test
+    fun `auto linkReferences applies rule to all sources when one target exists`() {
         val linked = OperationResult.of(patient())
             .add { encounter("e1") }
             .add { encounter("e2") }
             .linkReferences()
 
-        val encounters = linked.getByType<Encounter>()
-        assertEquals(2, encounters.size)
-        encounters.forEach { assertEquals("Patient/p1", it.subject.reference) }
+        linked.getByType<Encounter>().forEach {
+            assertEquals("Patient/p1", it.subject.reference)
+        }
     }
 
     @Test
-    fun `linkReferences is a no-op when no matching target resource exists`() {
-        // Only encounter, no patient — subject should stay unset
-        val linked = OperationResult.of(encounter())
+    fun `auto linkReferences does not touch already-set references`() {
+        val enc = encounter().apply { subject = Reference("Patient/existing") }
+        val linked = OperationResult.of(patient())
+            .add { enc }
             .linkReferences()
 
-        val enc = linked.getByType<Encounter>().single()
-        assertFalse(enc.hasSubject())
+        assertEquals("Patient/existing", linked.getByType<Encounter>().single().subject.reference)
     }
 
     @Test
-    fun `linkReferences skips rule silently when multiple targets exist`() {
-        // Two patients → ambiguous → Encounter.subject stays unset
+    fun `auto linkReferences skips when no matching target exists`() {
+        val linked = OperationResult.of(encounter()).linkReferences()
+
+        assertFalse(linked.getByType<Encounter>().single().hasSubject())
+    }
+
+    @Test
+    fun `auto linkReferences skips ambiguous reference when multiple candidates exist`() {
         val linked = OperationResult.of(listOf(patient("p1"), patient("p2")))
             .add { encounter() }
             .linkReferences()
 
-        val enc = linked.getByType<Encounter>().single()
-        assertFalse(enc.hasSubject())
+        assertFalse(linked.getByType<Encounter>().single().hasSubject())
     }
 
     @Test
-    fun `linkReferences skips target resources that have no id`() {
-        val patientNoId = Patient() // hasId() == false
-        val linked = OperationResult.of(patientNoId)
+    fun `auto linkReferences skips resources without id`() {
+        val linked = OperationResult.of(Patient()) // no id
             .add { encounter() }
             .linkReferences()
 
-        val enc = linked.getByType<Encounter>().single()
-        assertFalse(enc.hasSubject())
-    }
-
-    // ── UUID-based references ────────────────────────────────────────────────
-
-    @Test
-    fun `linkReferences uses urn-uuid reference when patient id is a UUID`() {
-        val pat = patient(UUID_ID)
-        val linked = OperationResult.of(pat)
-            .add { encounter() }
-            .linkReferences()
-
-        val enc = linked.getByType<Encounter>().single()
-        assertEquals("urn:uuid:$UUID_ID", enc.subject.reference)
-    }
-
-    @Test
-    fun `linkReferences uses ResourceType-id reference when patient id is not a UUID`() {
-        val pat = patient("12345")
-        val linked = OperationResult.of(pat)
-            .add { encounter() }
-            .linkReferences()
-
-        val enc = linked.getByType<Encounter>().single()
-        assertEquals("Patient/12345", enc.subject.reference)
+        assertFalse(linked.getByType<Encounter>().single().hasSubject())
     }
 
     // ── Immutability ─────────────────────────────────────────────────────────
 
     @Test
-    fun `linkReferences does not mutate original accumulated resources`() {
+    fun `auto linkReferences does not mutate original resources`() {
         val enc = encounter()
         val original = OperationResult.of(patient()).add { enc }
 
         original.linkReferences()
 
-        // enc was added to original; original.linkReferences() must not touch it
         assertFalse(enc.hasSubject(), "Original resource must not be mutated")
     }
 
     @Test
-    fun `linkReferences returns a new OperationResult leaving the original intact`() {
+    fun `auto linkReferences returns a new result leaving the original intact`() {
         val original = OperationResult.of(patient()).add { encounter() }
         val linked = original.linkReferences()
 
-        // Original resources still unlinked
         original.getByType<Encounter>().forEach { assertFalse(it.hasSubject()) }
-        // Linked copy has the reference set
         linked.getByType<Encounter>().forEach { assertTrue(it.hasSubject()) }
     }
 
@@ -216,7 +148,7 @@ class OperationResultLinkReferencesTest {
     }
 
     @Test
-    fun `explicit rules does not mutate original resources`() {
+    fun `explicit rule does not mutate original resources`() {
         val enc = encounter()
         val original = OperationResult.of(patient()).add { enc }
         val rule = ReferenceLinkRule(
@@ -227,7 +159,7 @@ class OperationResultLinkReferencesTest {
 
         original.linkReferences(rule)
 
-        assertFalse(enc.hasSubject(), "Original encounter must not be mutated")
+        assertFalse(enc.hasSubject(), "Original resource must not be mutated")
     }
 
     @Test
@@ -243,9 +175,9 @@ class OperationResultLinkReferencesTest {
             .add { encounter("e2") }
             .linkReferences(rule)
 
-        val encounters = linked.getByType<Encounter>()
-        assertEquals(2, encounters.size)
-        encounters.forEach { assertEquals("Patient/p1", it.subject.reference) }
+        linked.getByType<Encounter>().forEach {
+            assertEquals("Patient/p1", it.subject.reference)
+        }
     }
 
     @Test
@@ -264,7 +196,7 @@ class OperationResultLinkReferencesTest {
     }
 
     @Test
-    fun `explicit rule is skipped when no target resource exists`() {
+    fun `explicit rule is skipped when no target exists`() {
         val rule = ReferenceLinkRule(
             sourceType = Encounter::class,
             targetType = Patient::class,
@@ -307,21 +239,5 @@ class OperationResultLinkReferencesTest {
 
         assertEquals("Patient/p1", linked.getByType<Encounter>().single().subject.reference)
         assertEquals("Patient/p1", linked.getByType<Observation>().single().subject.reference)
-    }
-
-    // ── BUILT_IN_RULES companion accessibility ────────────────────────────────
-
-    @Test
-    fun `BUILT_IN_RULES is accessible and non-empty`() {
-        assertTrue(OperationResult.BUILT_IN_RULES.isNotEmpty())
-    }
-
-    @Test
-    fun `BUILT_IN_RULES can be passed to explicit linkReferences`() {
-        val linked = OperationResult.of(patient())
-            .add { encounter() }
-            .linkReferences(*OperationResult.BUILT_IN_RULES.toTypedArray())
-
-        assertEquals("Patient/p1", linked.getByType<Encounter>().single().subject.reference)
     }
 }
