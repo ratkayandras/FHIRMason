@@ -3,6 +3,7 @@ package dev.ratkay.operation
 import org.hl7.fhir.r4.model.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class OperationResultLinkReferencesTest {
 
@@ -102,29 +103,43 @@ class OperationResultLinkReferencesTest {
     }
 
     @Test
-    fun `linkReferences with explicit rule applies to all matching pairs`() {
-        val patient1 = patient("p1")
-        val patient2 = patient("p2")
+    fun `linkReferences applies rule to all sources when there is exactly one target`() {
+        val patient = patient("p1")
         val enc1 = encounter("e1")
         val enc2 = encounter("e2")
-        val linkedPairs = mutableListOf<Pair<String, String>>()
 
         val rule = ReferenceLinkRule(
             sourceType = Encounter::class,
             targetType = Patient::class,
-            setter = { e, p ->
-                linkedPairs.add(e.idPart to p.idPart)
-                e.subject = Reference("Patient/${p.idPart}")
-            }
+            setter = { e, p -> e.subject = Reference("Patient/${p.idPart}") }
         )
 
-        OperationResult.of(listOf(patient1, patient2))
+        OperationResult.of(patient)
             .add { enc1 }
             .add { enc2 }
             .linkReferences(rule)
 
-        // 2 encounters × 2 patients = 4 pairs
-        assertEquals(4, linkedPairs.size)
+        assertEquals("Patient/p1", enc1.subject.reference)
+        assertEquals("Patient/p1", enc2.subject.reference)
+    }
+
+    @Test
+    fun `linkReferences throws when multiple targets exist for a rule`() {
+        val patient1 = patient("p1")
+        val patient2 = patient("p2")
+        val enc = encounter("e1")
+
+        val rule = ReferenceLinkRule(
+            sourceType = Encounter::class,
+            targetType = Patient::class,
+            setter = { e, p -> e.subject = Reference("Patient/${p.idPart}") }
+        )
+
+        assertThrows<IllegalArgumentException> {
+            OperationResult.of(listOf(patient1, patient2))
+                .add { enc }
+                .linkReferences(rule)
+        }
     }
 
     @Test

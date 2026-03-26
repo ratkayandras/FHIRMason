@@ -251,10 +251,13 @@ class OperationResult<T> private constructor(
         rules.forEach { rule ->
             val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
             val targets = allResources.filter { rule.targetType.java.isInstance(it) }
+            require(targets.size <= 1) {
+                "Ambiguous reference target: ${targets.size} resources of type " +
+                "'${rule.targetType.simpleName}' found; exactly one is required per rule"
+            }
+            val target = targets.singleOrNull() ?: return@forEach
             sources.forEach { source ->
-                targets.forEach { target ->
-                    if (source !== target) rule.applyTo(source, target)
-                }
+                if (source !== target) rule.applyTo(source, target)
             }
         }
         return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
