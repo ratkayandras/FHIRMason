@@ -239,15 +239,20 @@ class OperationResult<T> private constructor(
     /**
      * Wires FHIR references between accumulated resources using explicit [rules].
      *
-     * For each rule, every resource of [ReferenceLinkRule.sourceType] is paired with every
-     * resource of [ReferenceLinkRule.targetType] (cross-product, skipping self-pairs) and
-     * the rule's setter is invoked to assign the reference.
+     * For each rule:
+     * - There must be **at most one** resource of [ReferenceLinkRule.targetType]; if multiple
+     *   are found an [IllegalArgumentException] is thrown because the wiring would be ambiguous.
+     * - Every resource of [ReferenceLinkRule.sourceType] has its reference set to the single target.
+     * - Self-pairs (source === target) are skipped.
      *
-     * Returns a new [OperationResult] with the same parameters; mutations happen in-place
-     * on the already-accumulated resource objects (HAPI FHIR resources are mutable).
+     * Resources are deep-copied before modification so the original [OperationResult] and its
+     * accumulated resources remain unchanged.
+     *
+     * @throws IllegalArgumentException if more than one target resource exists for any rule.
      */
     fun linkReferences(vararg rules: ReferenceLinkRule<*, *>): OperationResult<T> {
-        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        val copiedParams = deepCopyParameters()
+        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
         rules.forEach { rule ->
             val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
             val targets = allResources.filter { rule.targetType.java.isInstance(it) }
@@ -260,7 +265,7 @@ class OperationResult<T> private constructor(
                 if (source !== target) rule.applyTo(source, target)
             }
         }
-        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks)
     }
 
     /**
@@ -273,18 +278,19 @@ class OperationResult<T> private constructor(
      * 3. For each unset property whose typeCode starts with `"Reference("`, parse the
      *    allowed target types from the typeCode (e.g. `"Reference(Patient|Group)"`).
      * 4. If exactly one matching resource exists in the index for one of those types,
-     *    assign a `Reference("<Type>/<id>")` via [Base.setProperty].
+     *    assign a `Reference("ResourceType/id")` via [Base.setProperty].
      *
      * Only unset reference properties are touched; already-populated references are left
-     * unchanged.  Ambiguous cases (multiple candidates for the same reference property)
+     * unchanged. Ambiguous cases (multiple candidates for the same reference property)
      * are silently skipped to avoid incorrect wiring.
      *
-     * Returns a new [OperationResult] wrapping the same (mutated) parameter map.
+     * Resources are deep-copied before modification so the original [OperationResult] and its
+     * accumulated resources remain unchanged.
      */
     fun linkReferences(): OperationResult<T> {
-        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        val copiedParams = deepCopyParameters()
+        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
 
-        // Index resources that have an id, by their fhirType (lowercase)
         val resourceIndex: Map<String, List<Resource>> = allResources
             .filter { it.hasId() }
             .groupBy { it.fhirType().lowercase() }
@@ -293,22 +299,18 @@ class OperationResult<T> private constructor(
             source.children().forEach { property ->
                 val typeCode = property.typeCode ?: return@forEach
                 if (!typeCode.startsWith("Reference(")) return@forEach
-                // Only wire unset (empty) reference slots
                 if (property.hasValues()) return@forEach
 
-                // Parse allowed types: "Reference(Patient|Group)" → ["patient", "group"]
                 val allowedTypes = typeCode
                     .removePrefix("Reference(")
                     .removeSuffix(")")
                     .split("|")
                     .map { it.trim().lowercase() }
 
-                // Find all candidates across allowed types
                 val candidates: List<Resource> = allowedTypes.flatMap { type ->
                     resourceIndex[type]?.filter { it !== source } ?: emptyList()
                 }
 
-                // Wire only when unambiguous (exactly one candidate)
                 if (candidates.size == 1) {
                     val target = candidates.single()
                     val ref = Reference("${target.fhirType()}/${target.idPart}")
@@ -316,7 +318,7 @@ class OperationResult<T> private constructor(
                 }
             }
         }
-        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks)
     }
 
     // Core methods
@@ -450,6 +452,17 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /**
+     * Returns a deep copy of [parameters] so that [linkReferences] can mutate the copies
+     * without affecting the original accumulated resources.
+     *
+     * HAPI FHIR's [Base.copy] performs a recursive clone of each element.
+     */
+    private fun deepCopyParameters(): MutableMap<String, MutableList<Base>> =
+        parameters.mapValues { (_, values) ->
+            values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
+        }.toMutableMap()
+
     private fun warningOutcome(e: Exception): OperationOutcome = OperationOutcome().apply {
         addIssue().apply {
             severity = OperationOutcome.IssueSeverity.WARNING
@@ -474,6 +487,7 @@ class OperationResult<T> private constructor(
     // Factory methods
 
     companion object {
+
         internal fun fromMap(
             params: Map<String, List<Base>>,
             outcomes: List<OperationOutcome> = emptyList(),
