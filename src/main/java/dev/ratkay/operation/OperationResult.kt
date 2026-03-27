@@ -1,5 +1,7 @@
 package dev.ratkay.operation
 
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
 import kotlin.reflect.KClass
 
@@ -60,6 +62,9 @@ class OperationResult<T> private constructor(
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -73,6 +78,9 @@ class OperationResult<T> private constructor(
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -89,6 +97,9 @@ class OperationResult<T> private constructor(
             val values = builder()
             addToParameters(values, name)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -101,6 +112,9 @@ class OperationResult<T> private constructor(
             val values = builder(getResult())
             addToParameters(values, name)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -116,6 +130,9 @@ class OperationResult<T> private constructor(
             val value = builder(filtered)
             parameters.getOrPut(name) { mutableListOf() }.add(value)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -129,6 +146,9 @@ class OperationResult<T> private constructor(
             val values = builder(filtered)
             addToParameters(values, name)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             outcomes.add(e.toOperationOutcome())
             skippedResult()
@@ -143,6 +163,9 @@ class OperationResult<T> private constructor(
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
             OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(warningOutcome(e))
+            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
         } catch (e: Exception) {
             outcomes.add(warningOutcome(e))
             OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
@@ -155,6 +178,11 @@ class OperationResult<T> private constructor(
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+        } catch (e: BaseServerResponseException) {
+            outcomes.add(warningOutcome(e))
+            val key = name ?: default.fhirType().lowercase()
+            parameters.getOrPut(key) { mutableListOf() }.add(default)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks)
         } catch (e: Exception) {
             outcomes.add(warningOutcome(e))
             val key = name ?: default.fhirType().lowercase()
@@ -301,6 +329,30 @@ class OperationResult<T> private constructor(
         return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks)
     }
 
+    // Terminal error helpers
+
+    /**
+     * Throws an [InternalErrorException] containing the merged [OperationOutcome] of all
+     * accumulated errors when the pipeline [hasErrors]; otherwise returns `this` unchanged.
+     *
+     * Designed for use as a fluent terminal step in HAPI FHIR server operations:
+     * ```kotlin
+     * fun summary(@IdParam id: IdType): Parameters =
+     *     OperationResult.of(fetchPatient(id))
+     *         .add("coverage") { fetchCoverage(id) }
+     *         .throwIfErrors()
+     *         .toParameters()
+     * ```
+     */
+    fun throwIfErrors(): OperationResult<T> {
+        if (hasErrors()) {
+            val outcome = toOperationOutcome()
+            val message = outcome.issue.firstOrNull()?.diagnostics ?: "Pipeline completed with errors"
+            throw InternalErrorException(message, outcome)
+        }
+        return this
+    }
+
     // Core methods
 
     /**
@@ -443,12 +495,14 @@ class OperationResult<T> private constructor(
             values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
         }.toMutableMap()
 
-    private fun warningOutcome(e: Exception): OperationOutcome = OperationOutcome().apply {
-        addIssue().apply {
-            severity = OperationOutcome.IssueSeverity.WARNING
-            code = OperationOutcome.IssueType.EXCEPTION
-            diagnostics = e.message ?: e.javaClass.simpleName
+    private fun warningOutcome(e: Exception): OperationOutcome {
+        // Extract the richest available OperationOutcome, then downgrade all issues to WARNING
+        val base = when (e) {
+            is BaseServerResponseException -> e.toOperationOutcome()
+            else -> e.toOperationOutcome()
         }
+        base.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+        return base
     }
 
     private fun addToParameters(values: List<Base>, name: String?) {

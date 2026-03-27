@@ -121,10 +121,51 @@ result.filterByName("patient")         // keep only the "patient" entry
 result.mapValues { base -> transform(base) } // transform every stored value
 ```
 
+### Error Handling
+
+Every builder step (`add`, `addAll`, `addUsing`, etc.) catches exceptions internally. When an exception is thrown:
+
+- The exception is converted to an `OperationOutcome` with `ERROR` severity and added to the outcome list.
+- If the caught exception is a HAPI FHIR `BaseServerResponseException` that already carries an embedded `OperationOutcome`, **that outcome is preserved** rather than replaced with a generic one. Rich diagnostic information from upstream FHIR servers or clients survives the pipeline intact.
+- In `FAIL_FAST` mode subsequent steps are skipped; in `ACCUMULATE` mode they continue.
+
+```kotlin
+// Embedded OperationOutcome from HAPI FHIR exceptions is preserved in full
+val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+    .add("encounter") { fhirClient.read(Encounter::class.java, encounterId) }  // may throw BaseServerResponseException
+    .add("coverage")  { fhirClient.read(Coverage::class.java, coverageId) }
+
+result.hasErrors()           // true when any step threw
+result.getOutcomes()         // List<OperationOutcome> — one per failing step
+result.toOperationOutcome()  // single merged OperationOutcome with all issues
+```
+
+#### Graceful degradation
+
+| Method | On error | Result type |
+|---|---|---|
+| `addOrSkip(name?) { R }` | skips step, records WARNING outcome | `OperationResult<T>` (unchanged head) |
+| `addOrDefault(name?, default) { R }` | uses `default`, records WARNING outcome | `OperationResult<R>` |
+
+#### Surfacing errors as HAPI FHIR exceptions
+
+`throwIfErrors()` is a fluent terminal step that throws `InternalErrorException` (with the merged `OperationOutcome` attached) when the pipeline has errors, and returns `this` unchanged when there are none:
+
+```kotlin
+fun summary(@IdParam id: IdType): Parameters =
+    OperationResult.of(fetchPatient(id))
+        .add("encounter") { fetchEncounter(id) }
+        .add("coverage")  { fetchCoverage(id) }
+        .throwIfErrors()   // throws InternalErrorException if any step failed
+        .toParameters()
+```
+
 ### Output
 
 ```kotlin
 result.toParameters()   // FHIR Parameters resource — one parameter entry per stored value
+result.toBundle(type)   // FHIR Bundle (COLLECTION, TRANSACTION, BATCH, SEARCHSET, …)
+result.throwIfErrors()  // returns this unchanged, or throws InternalErrorException
 ```
 
 ---
