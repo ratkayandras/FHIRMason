@@ -1,5 +1,6 @@
 package dev.ratkay.spring
 
+import ca.uhn.fhir.rest.server.IResourceProvider
 import dev.ratkay.operation.AsyncOperationResult
 import dev.ratkay.operation.OperationResult
 import org.hl7.fhir.r4.model.Base
@@ -7,18 +8,17 @@ import org.hl7.fhir.r4.model.Bundle
 import org.hl7.fhir.r4.model.Parameters
 
 /**
- * Convenience base class for HAPI FHIR operation providers that use FHIRMason to build
- * their responses.
+ * Convenience base class for HAPI FHIR `IResourceProvider` implementations that use FHIRMason
+ * to build their responses.
  *
  * Subclasses inherit helper methods for creating pre-configured pipelines and for converting
  * the results into FHIR [Parameters] or [Bundle] resources.
- * To integrate with a HAPI FHIR server, implement `IResourceProvider` in your subclass.
  *
  * Example:
  * ```kotlin
  * @Component
  * class PatientOperationProvider(fhirMason: FhirMasonFactory) :
- *     FhirMasonOperationProvider(fhirMason), IResourceProvider {
+ *     FhirMasonOperationProvider(fhirMason) {
  *
  *     override fun getResourceType() = Patient::class.java
  *
@@ -27,11 +27,19 @@ import org.hl7.fhir.r4.model.Parameters
  *         parameters {
  *             pipeline(fetchPatient(id))
  *                 .add("encounter") { fetchEncounter(id) }
+ *                 .add("coverage")  { fetchCoverage(id) }
+ *         }
+ *
+ *     @Operation(name = "\$bundle")
+ *     fun bundle(@IdParam id: IdType): Bundle =
+ *         bundle(Bundle.BundleType.COLLECTION) {
+ *             pipeline(fetchPatient(id))
+ *                 .addAll("observations") { fetchObservations(id) }
  *         }
  * }
  * ```
  */
-abstract class FhirMasonOperationProvider(private val factory: FhirMasonFactory) {
+abstract class FhirMasonOperationProvider(private val factory: FhirMasonFactory) : IResourceProvider {
 
     /**
      * Starts a FHIRMason pipeline with [resource] as the seed value, using the factory's
@@ -45,7 +53,7 @@ abstract class FhirMasonOperationProvider(private val factory: FhirMasonFactory)
     protected fun asyncPipeline(): AsyncOperationResult = factory.asyncPipeline()
 
     /**
-     * DSL helper: builds a [Parameters] from the [OperationResult] produced by [block].
+     * DSL helper: builds a [Parameters] resource from the [OperationResult] produced by [block].
      *
      * ```kotlin
      * parameters {

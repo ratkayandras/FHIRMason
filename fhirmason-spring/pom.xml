@@ -34,6 +34,30 @@
             <artifactId>hapi-fhir-structures-r4</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- HAPI FHIR Server for IResourceProvider — provided so consumer supplies it -->
+        <dependency>
+            <groupId>ca.uhn.hapi.fhir</groupId>
+            <artifactId>hapi-fhir-server</artifactId>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.simplejavamail</groupId>
+                    <artifactId>simple-java-mail</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.springframework</groupId>
+                    <artifactId>spring-messaging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.httpcomponents</groupId>
+                    <artifactId>httpcore</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>javax.servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
