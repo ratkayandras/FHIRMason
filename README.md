@@ -602,11 +602,11 @@ suspend fun buildOutput(): Parameters {
 |---|---|
 | Language | Kotlin 2.1.21 (JVM 11) |
 | FHIR | HAPI FHIR 7.6.1 (R4) |
-| Async | Kotlin Coroutines 1.9.0 |
+| Async | Kotlin Coroutines 1.10.2 |
 | Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
 | Spring Boot | 2.7.18 (optional — `fhirmason-spring` module) |
 | Build | Maven (multi-module) |
-| Testing | JUnit Jupiter 5.11.4, Hamcrest 2.2, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
+| Testing | JUnit Jupiter 5.14.3, Hamcrest 3.0, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
 
 ---
 
