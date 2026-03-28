@@ -273,14 +273,10 @@ class OperationResult<T> private constructor(
      * - Every resource of [ReferenceLinkRule.sourceType] has its reference set to the single target.
      * - Self-pairs (source === target) are skipped.
      *
-     * Resources are deep-copied before modification so the original [OperationResult] and its
-     * accumulated resources remain unchanged.
-     *
      * @throws IllegalArgumentException if more than one target resource exists for any rule.
      */
     fun linkReferences(vararg rules: ReferenceLinkRule<*, *>): OperationResult<T> {
-        val copiedParams = deepCopyParameters()
-        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
+        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
         rules.forEach { rule ->
             val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
             val targets = allResources.filter { rule.targetType.java.isInstance(it) }
@@ -293,40 +289,63 @@ class OperationResult<T> private constructor(
                 if (source !== target) rule.applyTo(source, target)
             }
         }
-        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
     }
 
     /**
-     * Wires FHIR references between accumulated resources using [BUILT_IN_RULES].
+     * Automatically wires FHIR references between accumulated resources by introspecting
+     * each resource's HAPI child properties.
      *
-     * Built-in rules cover the most common FHIR reference patterns:
-     * - `Encounter.subject`         → Patient
-     * - `Encounter.serviceProvider` → Organization
-     * - `Observation.subject`       → Patient
-     * - `Claim.patient`             → Patient
-     * - `Coverage.beneficiary`      → Patient
+     * Algorithm:
+     * 1. Build an index of ID-bearing resources keyed by `fhirType().lowercase()`.
+     * 2. For every accumulated resource, iterate its [Base.children] properties.
+     * 3. For each unset property whose typeCode starts with `"Reference("`, parse the
+     *    allowed target types from the typeCode (e.g. `"Reference(Patient|Group)"`).
+     * 4. If exactly one matching resource exists in the index for one of those types,
+     *    assign a `Reference("<Type>/<id>")` via [Base.setProperty].
      *
-     * A rule is applied only when **exactly one** resource of the target type (with an id) exists
-     * in the map; rules with zero or multiple candidates are silently skipped.
+     * Only unset reference properties are touched; already-populated references are left
+     * unchanged.  Ambiguous cases (multiple candidates for the same reference property)
+     * are silently skipped to avoid incorrect wiring.
      *
-     * Reference strings are produced by [referenceFor]: resources whose id matches the UUID
-     * pattern emit `"urn:uuid:{id}"` instead of `"ResourceType/{id}"`.
-     *
-     * Resources are deep-copied before modification so the original [OperationResult] and its
-     * accumulated resources remain unchanged.
+     * Returns a new [OperationResult] wrapping the same (mutated) parameter map.
      */
     fun linkReferences(): OperationResult<T> {
-        val copiedParams = deepCopyParameters()
-        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
-        BUILT_IN_RULES.forEach { rule ->
-            val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
-            // Only ID-bearing targets are eligible; skip the rule when ambiguous
-            val targets = allResources.filter { rule.targetType.java.isInstance(it) && it.hasId() }
-            if (sources.isEmpty() || targets.size != 1) return@forEach
-            val target = targets.single()
-            sources.forEach { source -> if (source !== target) rule.applyTo(source, target) }
+        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+
+        // Index resources that have an id, by their fhirType (lowercase)
+        val resourceIndex: Map<String, List<Resource>> = allResources
+            .filter { it.hasId() }
+            .groupBy { it.fhirType().lowercase() }
+
+        allResources.forEach { source ->
+            source.children().forEach { property ->
+                val typeCode = property.typeCode ?: return@forEach
+                if (!typeCode.startsWith("Reference(")) return@forEach
+                // Only wire unset (empty) reference slots
+                if (property.hasValues()) return@forEach
+
+                // Parse allowed types: "Reference(Patient|Group)" → ["patient", "group"]
+                val allowedTypes = typeCode
+                    .removePrefix("Reference(")
+                    .removeSuffix(")")
+                    .split("|")
+                    .map { it.trim().lowercase() }
+
+                // Find all candidates across allowed types
+                val candidates: List<Resource> = allowedTypes.flatMap { type ->
+                    resourceIndex[type]?.filter { it !== source } ?: emptyList()
+                }
+
+                // Wire only when unambiguous (exactly one candidate)
+                if (candidates.size == 1) {
+                    val target = candidates.single()
+                    val ref = Reference("${target.fhirType()}/${target.idPart}")
+                    runCatching { source.setProperty(property.name, ref) }
+                }
+            }
         }
-        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
     }
 
     // Terminal error helpers
@@ -484,17 +503,6 @@ class OperationResult<T> private constructor(
         }
     }
 
-    /**
-     * Returns a deep copy of [parameters] so that [linkReferences] can mutate the copies
-     * without affecting the original accumulated resources.
-     *
-     * HAPI FHIR's [Base.copy] performs a recursive clone of each element.
-     */
-    private fun deepCopyParameters(): MutableMap<String, MutableList<Base>> =
-        parameters.mapValues { (_, values) ->
-            values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
-        }.toMutableMap()
-
     private fun warningOutcome(e: Exception): OperationOutcome {
         // Extract the richest available OperationOutcome, then downgrade all issues to WARNING
         val base = when (e) {
@@ -521,48 +529,6 @@ class OperationResult<T> private constructor(
     // Factory methods
 
     companion object {
-
-        // ── Reference linking helpers ─────────────────────────────────────────
-
-        /** Matches a bare UUID (no `urn:uuid:` prefix). */
-        private val UUID_PATTERN = Regex(
-            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-        )
-
-        /**
-         * Builds a FHIR reference string for [resource]:
-         * - If the resource's [Resource.idPart] matches the UUID pattern → `"urn:uuid:{id}"`
-         * - Otherwise → `"ResourceType/{id}"`
-         */
-        private fun referenceFor(resource: Resource): String {
-            val id = resource.idPart ?: return resource.fhirType()
-            return if (UUID_PATTERN.matches(id)) "urn:uuid:$id" else "${resource.fhirType()}/$id"
-        }
-
-        /**
-         * Built-in rules covering the most common FHIR reference patterns.
-         * These are applied by [linkReferences] (no-arg overload) and can also be combined
-         * with custom rules by passing them to [linkReferences] (vararg overload).
-         */
-        val BUILT_IN_RULES: List<ReferenceLinkRule<*, *>> = listOf(
-            ReferenceLinkRule(Encounter::class, Patient::class) { enc, pat ->
-                enc.subject = Reference(referenceFor(pat))
-            },
-            ReferenceLinkRule(Encounter::class, Organization::class) { enc, org ->
-                enc.serviceProvider = Reference(referenceFor(org))
-            },
-            ReferenceLinkRule(Observation::class, Patient::class) { obs, pat ->
-                obs.subject = Reference(referenceFor(pat))
-            },
-            ReferenceLinkRule(Claim::class, Patient::class) { claim, pat ->
-                claim.patient = Reference(referenceFor(pat))
-            },
-            ReferenceLinkRule(Coverage::class, Patient::class) { cov, pat ->
-                cov.beneficiary = Reference(referenceFor(pat))
-            },
-        )
-
-        // ── Factory methods ───────────────────────────────────────────────────
 
         internal fun fromMap(
             params: Map<String, List<Base>>,
