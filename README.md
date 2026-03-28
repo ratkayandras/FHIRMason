@@ -165,13 +165,55 @@ result.isNotEmpty()
 
 These return a new `OperationResult` without modifying the original.
 
+#### Filtering
+
 ```kotlin
 // Reified overloads — no KClass argument needed
 result.filterByType<Patient>()         // keep only entries whose values are Patients
 result.filterByType(Patient::class)    // same, explicit form
 
 result.filterByName("patient")         // keep only the "patient" key
-result.mapValues { base -> transform(base) }
+```
+
+#### Mapping and chaining
+
+```kotlin
+// Type-safe map — transforms every value across all keys, changes pipeline head type
+val mapped: OperationResult<Appointment> = result.mapValues { base -> toAppointment(base) }
+
+// flatMap — chain an inner pipeline; all its parameter entries are merged into the outer map
+val combined: OperationResult<Coverage> = OperationResult.of(patient)
+    .flatMap { p ->
+        OperationResult.of(coverage(p), "coverage")
+            .add("encounter") { lookupEncounter(p) }
+    }
+// outer map now contains: patient, coverage, encounter
+
+// merge — combine two OperationResults; overlapping keys accumulate their values
+val merged = resultA.merge(resultB)   // OperationResult<T> — A's head type preserved
+```
+
+#### Structural edits
+
+```kotlin
+result.remove("coverage")             // new OperationResult without the "coverage" key (no-op if absent)
+result.rename("old", "new")           // move all values from "old" to "new"
+```
+
+#### Side effects (peek)
+
+```kotlin
+result.peek { map ->                  // inspect the map without modifying the pipeline
+    log.debug("keys: {}", map.keys)
+}
+```
+
+#### Convenience lookups
+
+```kotlin
+result.takeFirst("patient")                       // Base? — first value under "patient"
+result.takeFirstTyped("patient", Patient::class)  // Patient? — first Patient under "patient"
+result.takeFirstTyped<Patient>("patient")         // same, reified form
 ```
 
 ### Logging and Metrics
@@ -554,7 +596,31 @@ result.toTransactionBundle()
 val patientsOnly = result.filterByType<Patient>()
 val patientEntry = result.filterByName("patient")
 val allPatients  = result.getByType<Patient>()
-val mapped       = result.mapValues { base -> normalize(base) }
+
+// Type-safe map — changes pipeline head type to Appointment
+val mapped: OperationResult<Appointment> = result.mapValues { base -> normalize(base) }
+
+// Peek for side effects (debugging, logging) — returns the same instance unchanged
+val same = result.peek { map -> log.debug("state: {}", map.keys) }
+
+// Convenience first-value lookups
+val firstPatient: Patient? = result.takeFirstTyped<Patient>("patient")
+val first: Base?           = result.takeFirst("patient")
+
+// Remove a key (no-op if absent) or rename a key
+val trimmed  = result.remove("draft")
+val renamed  = result.rename("old", "new")
+
+// Merge two pipelines — overlapping keys accumulate
+val merged = resultA.merge(resultB)
+
+// flatMap — chain an inner pipeline and merge all of its entries into the outer map
+val result = OperationResult.of(patient)
+    .flatMap { p ->
+        OperationResult.of(encounter(p), "encounter")
+            .add("coverage") { fetchCoverage(p) }
+    }
+// map now contains: patient, encounter, coverage
 ```
 
 ### 11. Async DAG — parallel fetching with typed dependencies
