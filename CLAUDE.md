@@ -23,10 +23,10 @@ src/test/java/dev/ratkay/operation/
 
 ## Tech Stack
 
-- Kotlin 1.9.20, JVM target Java 11
-- HAPI FHIR 6.4.2 (R4)
-- Kotlin Coroutines 1.5.0
-- JUnit Jupiter 5, Hamcrest 2.2, ApprovalCrest
+- Kotlin 2.1.21, JVM target Java 11
+- HAPI FHIR 7.6.1 (R4)
+- Kotlin Coroutines 1.10.2
+- JUnit Jupiter 5.14.3, Hamcrest 3.0, ApprovalCrest
 - Maven
 
 ## Conventions
