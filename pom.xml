@@ -18,12 +18,12 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <kotlin.version>1.9.20</kotlin.version>
-        <hapi.fhir.version>6.4.2</hapi.fhir.version>
-        <junit-jupiter.version>5.9.1</junit-jupiter.version>
+        <kotlin.version>2.1.21</kotlin.version>
+        <hapi.fhir.version>7.6.1</hapi.fhir.version>
+        <junit-jupiter.version>5.11.4</junit-jupiter.version>
         <approvalcrest.version>0.61.6</approvalcrest.version>
         <hamcrest.version>2.2</hamcrest.version>
-        <coroutines.version>1.5.0</coroutines.version>
+        <coroutines.version>1.9.0</coroutines.version>
         <slf4j.version>1.7.36</slf4j.version>
         <logback.version>1.2.12</logback.version>
         <spring.boot.version>2.7.18</spring.boot.version>
