@@ -1,5 +1,6 @@
 package dev.ratkay.operation
 
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -139,12 +140,18 @@ class AsyncOperationResult {
                     val taskResult: List<Base>? = when (node) {
                         is TaskNode.Root -> try {
                             listOf(node.block())
+                        } catch (e: BaseServerResponseException) {
+                            failedTasks[node.key] = e.toOperationOutcome()
+                            null
                         } catch (e: Exception) {
                             failedTasks[node.key] = e.toOperationOutcome()
                             null
                         }
                         is TaskNode.RootList -> try {
                             node.block()
+                        } catch (e: BaseServerResponseException) {
+                            failedTasks[node.key] = e.toOperationOutcome()
+                            null
                         } catch (e: Exception) {
                             failedTasks[node.key] = e.toOperationOutcome()
                             null
@@ -166,6 +173,9 @@ class AsyncOperationResult {
                             } else {
                                 try {
                                     listOf(node.block(depResults))
+                                } catch (e: BaseServerResponseException) {
+                                    failedTasks[node.key] = e.toOperationOutcome()
+                                    null
                                 } catch (e: Exception) {
                                     failedTasks[node.key] = e.toOperationOutcome()
                                     null
@@ -189,6 +199,9 @@ class AsyncOperationResult {
                             } else {
                                 try {
                                     node.block(depResults)
+                                } catch (e: BaseServerResponseException) {
+                                    failedTasks[node.key] = e.toOperationOutcome()
+                                    null
                                 } catch (e: Exception) {
                                     failedTasks[node.key] = e.toOperationOutcome()
                                     null

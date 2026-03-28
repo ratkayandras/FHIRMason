@@ -1,5 +1,7 @@
 package dev.ratkay.operation
 
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
 import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
@@ -43,6 +45,15 @@ class OperationResult<T> private constructor(
                 }
             }
         }
+    }
+
+    fun throwIfErrors(): OperationResult<T> {
+        if (hasErrors()) {
+            val outcome = toOperationOutcome()
+            val message = outcome.issue.firstOrNull()?.diagnostics ?: "Pipeline completed with errors"
+            throw InternalErrorException(message, outcome)
+        }
+        return this
     }
 
     // Builder helpers
@@ -92,6 +103,11 @@ class OperationResult<T> private constructor(
             recordMetric(key, value.fhirType(), durationMs, true)
             logStep(key, value.fhirType(), durationMs)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name ?: "unknown", "", durationMs, false)
@@ -111,6 +127,11 @@ class OperationResult<T> private constructor(
             recordMetric(key, value.fhirType(), durationMs, true)
             logStep(key, value.fhirType(), durationMs)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name ?: "unknown", "", durationMs, false)
@@ -135,6 +156,11 @@ class OperationResult<T> private constructor(
             recordMetric(key, typeDesc, durationMs, true)
             logStep(key, typeDesc, durationMs)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name ?: "unknown", "", durationMs, false)
@@ -155,6 +181,11 @@ class OperationResult<T> private constructor(
             recordMetric(key, typeDesc, durationMs, true)
             logStep(key, typeDesc, durationMs)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name ?: "unknown", "", durationMs, false)
@@ -176,6 +207,11 @@ class OperationResult<T> private constructor(
             recordMetric(name, value.fhirType(), durationMs, true)
             logStep(name, value.fhirType(), durationMs)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name, "", durationMs, false)
@@ -196,6 +232,11 @@ class OperationResult<T> private constructor(
             recordMetric(name, typeDesc, durationMs, true)
             logStep(name, typeDesc, durationMs)
             OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
+            outcomes.add(e.toOperationOutcome())
+            skippedResult()
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             recordMetric(name, "", durationMs, false)
@@ -215,6 +256,13 @@ class OperationResult<T> private constructor(
             parameters.getOrPut(key) { mutableListOf() }.add(value)
             recordMetric(key, value.fhirType(), durationMs, true)
             logStep(key, value.fhirType(), durationMs)
+            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: "unknown"
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
             OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
@@ -236,6 +284,22 @@ class OperationResult<T> private constructor(
             recordMetric(key, value.fhirType(), durationMs, true)
             logStep(key, value.fhirType(), durationMs)
             OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: default.fhirType().lowercase()
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
+            parameters.getOrPut(key) { mutableListOf() }.add(default)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: default.fhirType().lowercase()
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
+            parameters.getOrPut(key) { mutableListOf() }.add(default)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
             val key = name ?: default.fhirType().lowercase()
@@ -547,12 +611,13 @@ class OperationResult<T> private constructor(
             values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
         }.toMutableMap()
 
-    private fun warningOutcome(e: Exception): OperationOutcome = OperationOutcome().apply {
-        addIssue().apply {
-            severity = OperationOutcome.IssueSeverity.WARNING
-            code = OperationOutcome.IssueType.EXCEPTION
-            diagnostics = e.message ?: e.javaClass.simpleName
+    private fun warningOutcome(e: Exception): OperationOutcome {
+        val base = when (e) {
+            is BaseServerResponseException -> e.toOperationOutcome()
+            else -> e.toOperationOutcome()
         }
+        base.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+        return base
     }
 
     private fun addToParameters(values: List<Base>, name: String?) {
