@@ -39,3 +39,10 @@ src/test/java/dev/ratkay/operation/
 - Test method names use Kotlin backtick syntax: `` `descriptive test name` ``
 - Validate with `require()` and `error()` — no checked exceptions
 - `AsyncOperationResult` uses sealed classes for DAG task nodes with cycle detection at registration time
+
+## README Maintenance
+
+Keep `README.md` up to date on every branch. When a branch adds or changes a feature, update the relevant section(s) of the README before committing:
+- Add new methods to the appropriate table or code block
+- Add or update usage examples that demonstrate the new behaviour
+- Update the Project Structure section if new source files are added

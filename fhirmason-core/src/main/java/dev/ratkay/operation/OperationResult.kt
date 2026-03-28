@@ -3,6 +3,7 @@ package dev.ratkay.operation
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
+import org.slf4j.LoggerFactory
 import kotlin.reflect.KClass
 
 /**
@@ -19,7 +20,9 @@ class OperationResult<T> private constructor(
     private val result: T?,
     private val outcomes: MutableList<OperationOutcome>,
     private val errorStrategy: ErrorStrategy,
-    private val failedTasks: MutableMap<String, OperationOutcome>
+    private val failedTasks: MutableMap<String, OperationOutcome>,
+    private val timingEnabled: Boolean = false,
+    private val metrics: MutableList<StepMetrics> = mutableListOf()
 ) {
 
     // Error state
@@ -44,28 +47,70 @@ class OperationResult<T> private constructor(
         }
     }
 
+    fun throwIfErrors(): OperationResult<T> {
+        if (hasErrors()) {
+            val outcome = toOperationOutcome()
+            val message = outcome.issue.firstOrNull()?.diagnostics ?: "Pipeline completed with errors"
+            throw InternalErrorException(message, outcome)
+        }
+        return this
+    }
+
     // Builder helpers
 
     private fun shouldSkip() = errorStrategy == ErrorStrategy.FAIL_FAST && hasErrors()
 
     private fun <R> skippedResult(): OperationResult<R> {
         @Suppress("UNCHECKED_CAST")
-        return OperationResult(parameters, null, outcomes, errorStrategy, failedTasks) as OperationResult<R>
+        return OperationResult(parameters, null, outcomes, errorStrategy, failedTasks, timingEnabled, metrics) as OperationResult<R>
+    }
+
+    // Metrics and timing
+
+    /**
+     * Enables per-step metrics collection for subsequent pipeline steps.
+     * When disabled (the default), [getMetrics] returns an empty list.
+     */
+    fun timed(): OperationResult<T> =
+        OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, true, metrics)
+
+    /** Returns a snapshot of [StepMetrics] collected so far. Empty when [timed] was not called. */
+    fun getMetrics(): List<StepMetrics> = metrics.toList()
+
+    // Private logging/metrics helpers
+
+    private fun logStep(key: String, typeDescription: String, durationMs: Long) {
+        logger.debug("FHIRMason | step='{}' | type={} | duration={}ms", key, typeDescription, durationMs)
+        if (logger.isTraceEnabled) {
+            logger.trace("FHIRMason | state: {}", parameters.mapValues { it.value.size })
+        }
+    }
+
+    private fun recordMetric(key: String, resourceType: String, durationMs: Long, success: Boolean) {
+        if (timingEnabled) metrics.add(StepMetrics(key, resourceType, durationMs, success))
     }
 
     // Builder methods - single item
 
     fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val value = builder()
+            val durationMs = System.currentTimeMillis() - start
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
-            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+            recordMetric(key, value.fhirType(), durationMs, true)
+            logStep(key, value.fhirType(), durationMs)
+            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -73,15 +118,23 @@ class OperationResult<T> private constructor(
 
     fun <R : Base> addUsing(name: String? = null, builder: (T) -> R): OperationResult<R> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val value = builder(getResult())
+            val durationMs = System.currentTimeMillis() - start
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
-            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+            recordMetric(key, value.fhirType(), durationMs, true)
+            logStep(key, value.fhirType(), durationMs)
+            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -93,14 +146,24 @@ class OperationResult<T> private constructor(
 
     fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val values = builder()
+            val durationMs = System.currentTimeMillis() - start
             addToParameters(values, name)
-            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+            val key = name ?: values.firstOrNull()?.fhirType()?.lowercase() ?: "list"
+            val typeDesc = "${values.firstOrNull()?.fhirType() ?: "Empty"}[${values.size}]"
+            recordMetric(key, typeDesc, durationMs, true)
+            logStep(key, typeDesc, durationMs)
+            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -108,14 +171,24 @@ class OperationResult<T> private constructor(
 
     fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val values = builder(getResult())
+            val durationMs = System.currentTimeMillis() - start
             addToParameters(values, name)
-            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+            val key = name ?: values.firstOrNull()?.fhirType()?.lowercase() ?: "list"
+            val typeDesc = "${values.firstOrNull()?.fhirType() ?: "Empty"}[${values.size}]"
+            recordMetric(key, typeDesc, durationMs, true)
+            logStep(key, typeDesc, durationMs)
+            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name ?: "unknown", "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -125,15 +198,23 @@ class OperationResult<T> private constructor(
 
     fun <I : Base, R : Base> addFrom(name: String, type: KClass<I>, builder: (List<I>) -> R): OperationResult<R> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
             val value = builder(filtered)
+            val durationMs = System.currentTimeMillis() - start
             parameters.getOrPut(name) { mutableListOf() }.add(value)
-            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
+            recordMetric(name, value.fhirType(), durationMs, true)
+            logStep(name, value.fhirType(), durationMs)
+            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -141,15 +222,24 @@ class OperationResult<T> private constructor(
 
     fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> List<R>): OperationResult<List<R>> {
         if (shouldSkip()) return skippedResult()
+        val start = System.currentTimeMillis()
         return try {
             val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
             val values = builder(filtered)
+            val durationMs = System.currentTimeMillis() - start
             addToParameters(values, name)
-            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks)
+            val typeDesc = "${values.firstOrNull()?.fhirType() ?: "Empty"}[${values.size}]"
+            recordMetric(name, typeDesc, durationMs, true)
+            logStep(name, typeDesc, durationMs)
+            OperationResult(parameters, values, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, "", durationMs, false)
             outcomes.add(e.toOperationOutcome())
             skippedResult()
         }
@@ -158,36 +248,66 @@ class OperationResult<T> private constructor(
     // Builder variants with explicit error handling
 
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
+        val start = System.currentTimeMillis()
         return try {
             val value = builder()
+            val durationMs = System.currentTimeMillis() - start
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
-            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+            recordMetric(key, value.fhirType(), durationMs, true)
+            logStep(key, value.fhirType(), durationMs)
+            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: "unknown"
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
             outcomes.add(warningOutcome(e))
-            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: "unknown"
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
             outcomes.add(warningOutcome(e))
-            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+            OperationResult(parameters, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         }
     }
 
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
+        val start = System.currentTimeMillis()
         return try {
             val value = builder()
+            val durationMs = System.currentTimeMillis() - start
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
-            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks)
-        } catch (e: BaseServerResponseException) {
-            outcomes.add(warningOutcome(e))
-            val key = name ?: default.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(default)
-            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks)
+            recordMetric(key, value.fhirType(), durationMs, true)
+            logStep(key, value.fhirType(), durationMs)
+            OperationResult(parameters, value, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         } catch (e: Exception) {
-            outcomes.add(warningOutcome(e))
+            val durationMs = System.currentTimeMillis() - start
             val key = name ?: default.fhirType().lowercase()
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
             parameters.getOrPut(key) { mutableListOf() }.add(default)
-            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: BaseServerResponseException) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: default.fhirType().lowercase()
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
+            parameters.getOrPut(key) { mutableListOf() }.add(default)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            val key = name ?: default.fhirType().lowercase()
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(e))
+            parameters.getOrPut(key) { mutableListOf() }.add(default)
+            OperationResult(parameters, default, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
         }
     }
 
@@ -241,7 +361,7 @@ class OperationResult<T> private constructor(
                 filtered[name] = matchingValues.toMutableList()
             }
         }
-        return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
     /** Reified overload — no [KClass] argument needed at call sites. */
@@ -252,14 +372,14 @@ class OperationResult<T> private constructor(
         parameters[name]?.let { values ->
             filtered[name] = values.toMutableList()
         }
-        return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
     fun mapValues(transform: (Base) -> Base): OperationResult<T> {
         val transformed = parameters.mapValues { (_, values) ->
             values.map(transform).toMutableList()
         }.toMutableMap()
-        return OperationResult(transformed, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(transformed, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
     // Reference linking
@@ -273,10 +393,14 @@ class OperationResult<T> private constructor(
      * - Every resource of [ReferenceLinkRule.sourceType] has its reference set to the single target.
      * - Self-pairs (source === target) are skipped.
      *
+     * Resources are deep-copied before modification so the original [OperationResult] and its
+     * accumulated resources remain unchanged.
+     *
      * @throws IllegalArgumentException if more than one target resource exists for any rule.
      */
     fun linkReferences(vararg rules: ReferenceLinkRule<*, *>): OperationResult<T> {
-        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        val copiedParams = deepCopyParameters()
+        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
         rules.forEach { rule ->
             val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
             val targets = allResources.filter { rule.targetType.java.isInstance(it) }
@@ -289,7 +413,7 @@ class OperationResult<T> private constructor(
                 if (source !== target) rule.applyTo(source, target)
             }
         }
-        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
+        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
     /**
@@ -302,18 +426,19 @@ class OperationResult<T> private constructor(
      * 3. For each unset property whose typeCode starts with `"Reference("`, parse the
      *    allowed target types from the typeCode (e.g. `"Reference(Patient|Group)"`).
      * 4. If exactly one matching resource exists in the index for one of those types,
-     *    assign a `Reference("<Type>/<id>")` via [Base.setProperty].
+     *    assign a `Reference("ResourceType/id")` via [Base.setProperty].
      *
      * Only unset reference properties are touched; already-populated references are left
-     * unchanged.  Ambiguous cases (multiple candidates for the same reference property)
+     * unchanged. Ambiguous cases (multiple candidates for the same reference property)
      * are silently skipped to avoid incorrect wiring.
      *
-     * Returns a new [OperationResult] wrapping the same (mutated) parameter map.
+     * Resources are deep-copied before modification so the original [OperationResult] and its
+     * accumulated resources remain unchanged.
      */
     fun linkReferences(): OperationResult<T> {
-        val allResources = parameters.values.flatten().filterIsInstance<Resource>()
+        val copiedParams = deepCopyParameters()
+        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
 
-        // Index resources that have an id, by their fhirType (lowercase)
         val resourceIndex: Map<String, List<Resource>> = allResources
             .filter { it.hasId() }
             .groupBy { it.fhirType().lowercase() }
@@ -322,22 +447,18 @@ class OperationResult<T> private constructor(
             source.children().forEach { property ->
                 val typeCode = property.typeCode ?: return@forEach
                 if (!typeCode.startsWith("Reference(")) return@forEach
-                // Only wire unset (empty) reference slots
                 if (property.hasValues()) return@forEach
 
-                // Parse allowed types: "Reference(Patient|Group)" → ["patient", "group"]
                 val allowedTypes = typeCode
                     .removePrefix("Reference(")
                     .removeSuffix(")")
                     .split("|")
                     .map { it.trim().lowercase() }
 
-                // Find all candidates across allowed types
                 val candidates: List<Resource> = allowedTypes.flatMap { type ->
                     resourceIndex[type]?.filter { it !== source } ?: emptyList()
                 }
 
-                // Wire only when unambiguous (exactly one candidate)
                 if (candidates.size == 1) {
                     val target = candidates.single()
                     val ref = Reference("${target.fhirType()}/${target.idPart}")
@@ -345,31 +466,7 @@ class OperationResult<T> private constructor(
                 }
             }
         }
-        return OperationResult(parameters, result, outcomes, errorStrategy, failedTasks)
-    }
-
-    // Terminal error helpers
-
-    /**
-     * Throws an [InternalErrorException] containing the merged [OperationOutcome] of all
-     * accumulated errors when the pipeline [hasErrors]; otherwise returns `this` unchanged.
-     *
-     * Designed for use as a fluent terminal step in HAPI FHIR server operations:
-     * ```kotlin
-     * fun summary(@IdParam id: IdType): Parameters =
-     *     OperationResult.of(fetchPatient(id))
-     *         .add("coverage") { fetchCoverage(id) }
-     *         .throwIfErrors()
-     *         .toParameters()
-     * ```
-     */
-    fun throwIfErrors(): OperationResult<T> {
-        if (hasErrors()) {
-            val outcome = toOperationOutcome()
-            val message = outcome.issue.firstOrNull()?.diagnostics ?: "Pipeline completed with errors"
-            throw InternalErrorException(message, outcome)
-        }
-        return this
+        return OperationResult(copiedParams, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
     // Core methods
@@ -503,8 +600,18 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /**
+     * Returns a deep copy of [parameters] so that [linkReferences] can mutate the copies
+     * without affecting the original accumulated resources.
+     *
+     * HAPI FHIR's [Base.copy] performs a recursive clone of each element.
+     */
+    private fun deepCopyParameters(): MutableMap<String, MutableList<Base>> =
+        parameters.mapValues { (_, values) ->
+            values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
+        }.toMutableMap()
+
     private fun warningOutcome(e: Exception): OperationOutcome {
-        // Extract the richest available OperationOutcome, then downgrade all issues to WARNING
         val base = when (e) {
             is BaseServerResponseException -> e.toOperationOutcome()
             else -> e.toOperationOutcome()
@@ -529,6 +636,8 @@ class OperationResult<T> private constructor(
     // Factory methods
 
     companion object {
+
+        private val logger = LoggerFactory.getLogger(OperationResult::class.java)
 
         internal fun fromMap(
             params: Map<String, List<Base>>,

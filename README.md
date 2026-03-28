@@ -8,7 +8,7 @@ A Kotlin library that provides a fluent, chainable API for accumulating and tran
 
 ## Overview
 
-Working with FHIR resources often involves fetching and combining multiple resources across several steps. FHIRMason models this as an accumulator pipeline: each step adds one or more named resources to a shared store, and the final state can be inspected or serialized to a `Parameters` resource.
+Working with FHIR resources often involves fetching and combining multiple resources across several steps. FHIRMason models this as an accumulator pipeline: each step adds one or more named resources to a shared store, and the final state can be inspected, filtered, serialized, or linked.
 
 Two builders are provided:
 
@@ -17,13 +17,15 @@ Two builders are provided:
 
 ```kotlin
 // Synchronous
-val result = OperationResult.of(patient, "patient")
+val result = OperationResult.of(patient)
     .add("coverage") { fetchCoverage() }
     .addUsing("encounter") { p -> lookupEncounter(p) }
     .addAll("history") { fetchEncounterHistory() }
+    .linkReferences()           // auto-wire FHIR references between resources
 
-result.toParameters()   // serialize everything to a FHIR Parameters resource
-result.getResult()      // the most recently added value
+result.toParameters()           // serialize to a FHIR Parameters resource
+result.toTransactionBundle()    // serialize to a FHIR transaction Bundle
+result.getResult()              // the most recently added value (typed)
 
 // Async
 val result = AsyncOperationResult()
@@ -40,30 +42,41 @@ val result = AsyncOperationResult()
 ### Entry Points
 
 ```kotlin
-// Single value — name defaults to fhirType().lowercase() when omitted
+// From a single value — name defaults to fhirType().lowercase() when omitted
 OperationResult.of(patient)
 OperationResult.of(patient, "myPatient")
+OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
 
-// List of values — each item keyed by its fhirType() unless a shared name is given
+// From a list — each item keyed by its fhirType() unless a shared name is given
 OperationResult.of(listOf(patient, appointment))
 OperationResult.of(listOf(patient, appointment), "inputs")
+
+// From an existing FHIR Parameters resource
+OperationResult.fromParameters(parameters)
+OperationResult.fromParametersTyped<Patient>(parameters, primaryKey = "patient")
+
+// From a FHIR Bundle
+OperationResult.fromBundle(bundle)
+OperationResult.fromBundle(bundle) { entry -> entry.fullUrl }   // custom key strategy
 ```
 
 ### Builder Methods
 
-All builder methods add values to the internal parameter map and return a new `OperationResult` whose `getResult()` points to the newly added value(s).
+All builder methods add values to the internal parameter map and return a new `OperationResult` whose generic type `T` tracks the most recently added value. Calling `getResult()` on the returned instance gives back that value without casting.
 
 #### Single item
 
 | Method | Lambda receives | Name resolution |
 |---|---|---|
 | `add(name?) { R }` | nothing | `name` or `fhirType()` |
-| `addUsing(name?) { t -> R }` | current result `t` | `name` or `fhirType()` |
+| `addUsing(name?) { t -> R }` | current result `t: T` | `name` or `fhirType()` |
 
 ```kotlin
-val result = OperationResult.of(patient, "patient")
-    .add("appointment") { fetchAppointment() }           // no access to previous result
-    .addUsing("coverage") { appt -> fetchCoverage(appt) } // receives the last added value
+val result = OperationResult.of(patient)
+    .add("appointment") { fetchAppointment() }             // no access to previous value
+    .addUsing("encounter") { appt -> fetchEncounter(appt) } // receives last added value
+
+val encounter: Encounter = result.getResult()   // typed — no cast needed
 ```
 
 #### Multiple items
@@ -71,54 +84,194 @@ val result = OperationResult.of(patient, "patient")
 | Method | Lambda receives | Name resolution |
 |---|---|---|
 | `addAll(name?) { List<R> }` | nothing | `name` or per-item `fhirType()` |
-| `addAllUsing(name?) { t -> List<R> }` | current result `t` | `name` or per-item `fhirType()` |
+| `addAllUsing(name?) { t -> List<R> }` | current result `t: T` | `name` or per-item `fhirType()` |
 
 ```kotlin
-val result = OperationResult.of(patient, "patient")
+val result = OperationResult.of(patient)
     .addAll("history") { fetchEncounters() }
     .addAllUsing("observations") { encounters -> fetchObservations(encounters) }
+
+val observations: List<Observation> = result.getResultList()  // typed list, no cast
 ```
 
 #### From existing parameters
 
 | Method | Description |
 |---|---|
-| `addFrom(name, type) { list -> R }` | Filters stored values under `name` by `type`, passes the typed list to the builder, stores the result back under `name` |
-| `addAllFrom(name, type) { list -> List<R> }` | Same but the builder returns a list |
+| `addFrom(name, type) { list -> R }` | Filters stored values under `name` by `type`, passes the typed list to the builder |
+| `addAllFrom(name, type) { list -> List<R> }` | Same, but the builder returns a list |
 
 ```kotlin
-// Accumulate mixed inputs under "inputs", then derive a Claim from the Patient within
 val result = OperationResult.of(listOf(patient, appointment), "inputs")
     .addFrom("inputs", Patient::class) { patients ->
         buildClaimFor(patients.first())
     }
+```
 
-result.getByType(Claim::class)  // [the derived Claim]
+#### Error-resilient variants
+
+| Method | On exception | Returns |
+|---|---|---|
+| `addOrSkip(name?) { R }` | Records a warning `OperationOutcome`, skips the value | `OperationResult<T>` (unchanged head) |
+| `addOrDefault(name?, default) { R }` | Records a warning, stores `default` instead | `OperationResult<R>` |
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addOrSkip("coverage") { fetchCoverageOrThrow() }   // failure adds a warning, pipeline continues
+    .addOrDefault("score", defaultScore) { computeRiskScore() }
+```
+
+### Error Strategy
+
+`OperationResult` supports two strategies, set at construction time via `of()`:
+
+| Strategy | Behaviour on failure in `add` / `addUsing` / etc. |
+|---|---|
+| `FAIL_FAST` (default) | Records the error `OperationOutcome` and skips all subsequent builder steps |
+| `ACCUMULATE` | Records the error and continues executing subsequent steps |
+
+```kotlin
+val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+    .add { riskyStep() }      // failure recorded but next step still runs
+    .add { anotherStep() }
+
+result.hasErrors()            // true if any step failed
+result.isSuccessful()         // true if no failures
+result.getOutcomes()          // List<OperationOutcome> — one per failure
+result.toOperationOutcome()   // merged OperationOutcome with all issues
 ```
 
 ### Query Methods
 
 ```kotlin
-result.getResult()              // T — the most recently added value (throws if none)
-result.getAllParameters()        // Map<String, List<Base>> — full snapshot
-result.getAll("patient")        // List<Base> for a specific key (empty if absent)
-result.getByType(Patient::class) // all Patient instances across all keys
-result.containsKey("patient")   // Boolean
-result.getKeys()                // Set<String>
-result.count("patient")         // Int — entries under that key
-result.totalCount()             // Int — all entries across all keys
-result.isEmpty()                // Boolean
-result.isNotEmpty()             // Boolean
+result.getResult()               // T — most recently added value (throws if none)
+result.getResultList()           // List<R> — when T is List<R> (after addAll/addAllUsing)
+result.getAllParameters()         // Map<String, List<Base>> — full snapshot
+result.getAll("patient")         // List<Base> for a specific key (empty if absent)
+
+// Type-safe lookups — reified overloads avoid KClass arguments
+result.getByType<Patient>()      // all Patient instances across all keys
+result.getByType(Patient::class) // same, explicit KClass form
+
+result.containsKey("patient")    // Boolean
+result.getKeys()                 // Set<String>
+result.count("patient")          // Int — entries under that key
+result.totalCount()              // Int — all entries across all keys
+result.isEmpty()
+result.isNotEmpty()
 ```
 
 ### Functional Transformations
 
-These return a new `OperationResult` with a filtered or transformed parameter map without modifying the original.
+These return a new `OperationResult` without modifying the original.
 
 ```kotlin
-result.filterByType(Patient::class)    // keep only entries whose values are Patients
-result.filterByName("patient")         // keep only the "patient" entry
-result.mapValues { base -> transform(base) } // transform every stored value
+// Reified overloads — no KClass argument needed
+result.filterByType<Patient>()         // keep only entries whose values are Patients
+result.filterByType(Patient::class)    // same, explicit form
+
+result.filterByName("patient")         // keep only the "patient" key
+result.mapValues { base -> transform(base) }
+```
+
+### Logging and Metrics
+
+FHIRMason logs pipeline activity via SLF4J (no binding included — add your own). Three log levels are used:
+
+| Level | When |
+|---|---|
+| `DEBUG` | Every step: name, FHIR type, and duration |
+| `TRACE` | Parameter map state (key names and counts) after each step |
+| `WARN`  | When `addOrSkip` / `addOrDefault` catches an exception |
+
+Log format:
+```
+FHIRMason | step='coverage' | type=Coverage | duration=45ms
+FHIRMason | state: {patient=1, coverage=1}
+FHIRMason | step='risky' | WARN: connection timed out
+```
+
+#### Per-step metrics (`timed()` / `getMetrics()`)
+
+Call `timed()` anywhere in the chain to enable `StepMetrics` collection. When disabled (the default), `getMetrics()` returns an empty list — zero overhead.
+
+```kotlin
+val result = OperationResult.of(patient)
+    .timed()                                      // enable metrics collection
+    .add("coverage") { fetchCoverage() }
+    .add("encounter") { fetchEncounter() }
+
+result.getMetrics().forEach { m ->
+    println("${m.stepName}: ${m.durationMs}ms  success=${m.success}  type=${m.resourceType}")
+}
+// coverage: 38ms  success=true  type=Coverage
+// encounter: 12ms  success=true  type=Encounter
+```
+
+`StepMetrics` fields: `stepName`, `resourceType`, `durationMs`, `success`.
+
+#### Async logging and metrics
+
+`AsyncOperationResult` logs task lifecycle events and DAG completion:
+
+```
+FHIRMason.async | task='patient'   | status=STARTED
+FHIRMason.async | task='patient'   | status=COMPLETED | duration=120ms
+FHIRMason.async | task='coverage'  | status=COMPLETED | duration=85ms
+FHIRMason.async | dag=COMPLETED    | totalDuration=135ms | tasks=2
+```
+
+```kotlin
+val dag = AsyncOperationResult()
+    .timed()
+    .add("patient")  { fetchPatient() }
+    .add("coverage") { fetchCoverage() }
+
+dag.runBlocking()
+
+dag.getMetrics()           // Map<String, StepMetrics> keyed by task name
+dag.getTotalDuration()     // wall-clock DAG execution time in ms
+```
+
+### Reference Linking
+
+`linkReferences` wires FHIR references between accumulated resources and returns a **new** `OperationResult` — the original resources are never mutated (deep copy is performed before modification).
+
+#### Automatic (HAPI introspection)
+
+Scans every resource's child properties via HAPI's `Base.children()` API, detects unset `Reference(...)` fields, and wires them when exactly one unambiguous candidate exists in the map. Ambiguous cases (multiple candidates for the same field) are silently skipped.
+
+```kotlin
+val result = OperationResult.of(patient("p1"))
+    .add { encounter("e1") }
+    .add { observation("obs1") }
+    .linkReferences()
+
+// encounter.subject    → Reference("Patient/p1")   — one Patient, unambiguous
+// observation.subject  → Reference("Patient/p1")
+// observation.encounter → Reference("Encounter/e1")
+```
+
+#### Explicit rules
+
+For precise control, supply one or more `ReferenceLinkRule` instances. Each rule requires exactly one target resource (throws `IllegalArgumentException` if multiple targets exist); multiple sources are fine — all receive the reference.
+
+```kotlin
+val encounterPatientRule = ReferenceLinkRule(
+    sourceType = Encounter::class,
+    targetType = Patient::class,
+    setter     = { enc, pat -> enc.subject = Reference("Patient/${pat.idPart}") }
+)
+val observationEncounterRule = ReferenceLinkRule(
+    sourceType = Observation::class,
+    targetType = Encounter::class,
+    setter     = { obs, enc -> obs.encounter = Reference("Encounter/${enc.idPart}") }
+)
+
+val result = OperationResult.of(patient)
+    .add { encounter }
+    .add { observation }
+    .linkReferences(encounterPatientRule, observationEncounterRule)
 ```
 
 ### Error Handling
@@ -162,10 +315,53 @@ fun summary(@IdParam id: IdType): Parameters =
 
 ### Output
 
+#### FHIR Parameters
+
 ```kotlin
-result.toParameters()   // FHIR Parameters resource — one parameter entry per stored value
-result.toBundle(type)   // FHIR Bundle (COLLECTION, TRANSACTION, BATCH, SEARCHSET, …)
-result.throwIfErrors()  // returns this unchanged, or throws InternalErrorException
+val params: Parameters = result.toParameters()
+```
+
+Nested parameter structure is fully preserved on round-trips. Parameters with nested `part` entries are flattened to composite `"parent.child"` keys internally; `toParameters()` reconstructs the original nesting.
+
+```kotlin
+// Round-trip — nested structure is preserved
+val result = OperationResult.fromParameters(original)
+result.toParameters()   // structurally identical to `original`
+```
+
+#### FHIR Bundle
+
+```kotlin
+result.toTransactionBundle()          // Bundle (type = TRANSACTION), PUT/POST requests added per resource
+result.toBatchBundle()                // Bundle (type = BATCH)
+result.toBundle(Bundle.BundleType.COLLECTION)
+result.toBundle(Bundle.BundleType.SEARCHSET) { entry ->
+    entry.search.mode = Bundle.SearchEntryMode.MATCH  // optional entry config block
+}
+```
+
+#### Error Terminal
+
+```kotlin
+result.throwIfErrors()  // returns this unchanged, or throws InternalErrorException if any step failed
+```
+
+### Constructing from FHIR Resources
+
+```kotlin
+// From a Parameters resource
+val result = OperationResult.fromParameters(parameters)
+
+// Typed head — getResult() returns a Patient without casting
+val result = OperationResult.fromParametersTyped<Patient>(parameters, primaryKey = "patient")
+
+// From a Bundle — keys default to fhirType().lowercase()
+val result = OperationResult.fromBundle(bundle)
+
+// Custom key strategy
+val result = OperationResult.fromBundle(bundle) { entry ->
+    entry.fullUrl ?: entry.resource.fhirType().lowercase()
+}
 ```
 
 ---
@@ -180,8 +376,8 @@ result.throwIfErrors()  // returns this unchanged, or throws InternalErrorExcept
 
 ```kotlin
 AsyncOperationResult()
-    .add("patient") { fetchPatient() }           // suspending lambda → single Base
-    .addList("observations") { fetchObs() }      // suspending lambda → List<Base>
+    .add("patient") { fetchPatient() }        // suspending lambda → single Base
+    .addList("observations") { fetchObs() }   // suspending lambda → List<Base>
 ```
 
 #### Dependent tasks — raw Map API
@@ -216,11 +412,11 @@ When a task has exactly one dependency, use the typed overloads to skip the manu
 AsyncOperationResult()
     .add("patient") { fetchPatient() }
     .addList("observations") { fetchObservations() }
-    // single value injected — receives the first Patient stored under "patient"
+    // receives the first Patient stored under "patient"
     .addAfter("encounter", "patient", Patient::class) { patient ->
         lookupEncounter(patient)
     }
-    // list injected — receives all Observation instances stored under "observations"
+    // receives all Observation instances stored under "observations"
     .addAfterAll("summary", "observations", Observation::class) { observations ->
         buildSummary(observations)
     }
@@ -236,7 +432,7 @@ val result: OperationResult<Base> = asyncResult.run()
 val result: OperationResult<Base> = asyncResult.runBlocking()
 ```
 
-The returned `OperationResult<Base>` supports all the same query, transformation, and serialisation methods as the synchronous builder.
+The returned `OperationResult<Base>` supports all the same query, transformation, serialisation, and reference-linking methods as the synchronous builder.
 
 ### Constraints
 
@@ -251,32 +447,35 @@ The returned `OperationResult<Base>` supports all the same query, transformation
 ### 1. Simple accumulation
 
 ```kotlin
-val result = OperationResult.of(patient, "patient")
+val result = OperationResult.of(patient)
     .add("appointment") { fetchAppointment() }
     .add("coverage") { fetchCoverage() }
 
-val params = result.toParameters()
+result.toParameters()
 // Parameters contains: patient, appointment, coverage
 ```
 
-### 2. Chaining steps with the previous result
+### 2. Type-safe chaining
 
 ```kotlin
 val result = OperationResult.of(patient)
-    .addUsing("encounter") { p -> lookupEncounter(p) }
-    .addUsing("coverage") { e -> lookupCoverageForEncounter(e) }
+    .addUsing("encounter") { p -> lookupEncounter(p) }   // p: Patient
+    .addUsing("coverage") { e -> lookupCoverage(e) }     // e: Encounter
+
+val coverage: Coverage = result.getResult()  // no cast
 ```
 
-### 3. Collecting a list
+### 3. Collecting a typed list
 
 ```kotlin
-val result = OperationResult.of(patient, "patient")
+val result = OperationResult.of(patient)
     .addAllUsing("history") { p -> fetchEncounterHistory(p) }
 
-result.count("history")   // number of encounters retrieved
+val history: List<Encounter> = result.getResultList()
+result.count("history")   // number of encounters
 ```
 
-### 4. Deriving a resource from previously accumulated inputs
+### 4. Deriving a resource from accumulated inputs
 
 ```kotlin
 val result = OperationResult.of(listOf(patient, appointment), "inputs")
@@ -284,30 +483,93 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
         buildClaimFor(patients.first())
     }
 
-result.getByType(Claim::class)   // [the derived Claim]
+result.getByType<Claim>()   // [the derived Claim]
 ```
 
-### 5. Filtering the accumulated state
+### 5. Resilient pipeline with error accumulation
 
 ```kotlin
-val patientsOnly  = result.filterByType(Patient::class)
-val patientEntry  = result.filterByName("patient")
-val allPatients   = result.getByType(Patient::class)
+val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+    .add("coverage") { fetchCoverage() }      // may throw
+    .addOrSkip("score") { computeScore() }    // failure → warning, pipeline continues
+
+if (result.hasErrors()) {
+    log.warn(result.toOperationOutcome().issueFirstRep.diagnostics)
+}
 ```
 
-### 6. Async DAG — parallel fetching with typed dependencies
+### 6. Automatic reference linking
+
+```kotlin
+val result = OperationResult.of(patient("p1"))
+    .add { encounter("e1") }
+    .add { observation("obs1") }
+    .linkReferences()   // wires subject/encounter references automatically
+
+// Produces new resources (originals unchanged):
+// encounter.subject     = Reference("Patient/p1")
+// observation.subject   = Reference("Patient/p1")
+// observation.encounter = Reference("Encounter/e1")
+```
+
+### 7. Explicit reference rules
+
+```kotlin
+val result = OperationResult.of(patient)
+    .add { encounter }
+    .linkReferences(
+        ReferenceLinkRule(Encounter::class, Patient::class) { enc, pat ->
+            enc.subject = Reference("Patient/${pat.idPart}")
+        }
+    )
+```
+
+### 8. Round-trip from Parameters
+
+```kotlin
+val incoming: Parameters = getParametersFromRequest()
+
+val result = OperationResult.fromParameters(incoming)
+    .add("derived") { deriveResource(result) }
+
+result.toParameters()   // nested part structure from `incoming` is preserved
+```
+
+### 9. Constructing from a Bundle
+
+```kotlin
+val bundle: Bundle = fetchBundle()
+
+val result = OperationResult.fromBundle(bundle)
+// or with a custom key per entry:
+val result = OperationResult.fromBundle(bundle) { entry -> entry.fullUrl }
+
+result.getByType<Patient>()
+result.toTransactionBundle()
+```
+
+### 10. Filtering and transforming
+
+```kotlin
+val patientsOnly = result.filterByType<Patient>()
+val patientEntry = result.filterByName("patient")
+val allPatients  = result.getByType<Patient>()
+val mapped       = result.mapValues { base -> normalize(base) }
+```
+
+### 11. Async DAG — parallel fetching with typed dependencies
 
 ```kotlin
 val result = AsyncOperationResult()
     // These three tasks have no dependencies and run in parallel
-    .add("patient")      { fetchPatient(patientId) }
-    .add("coverage")     { fetchCoverage(coverageId) }
-    .addList("history")  { fetchEncounterHistory(patientId) }
+    .add("patient")     { fetchPatient(patientId) }
+    .add("coverage")    { fetchCoverage(coverageId) }
+    .addList("history") { fetchEncounterHistory(patientId) }
     // Runs after "patient" resolves; receives a typed Patient directly
     .addAfter("encounter", "patient", Patient::class) { patient ->
         lookupEncounter(patient)
     }
-    // Runs after "coverage" and "encounter" both resolve; uses raw map for multi-dep
+    // Runs after "coverage" and "encounter" both resolve
     .addAfter("claim", "coverage", "encounter") { deps ->
         val coverage  = deps["coverage"]!!.filterIsInstance<Coverage>().first()
         val encounter = deps["encounter"]!!.filterIsInstance<Encounter>().first()
@@ -315,21 +577,20 @@ val result = AsyncOperationResult()
     }
     .runBlocking()
 
-result.toParameters()   // all five resources serialized
+result.toParameters()
 ```
 
-### 7. Using AsyncOperationResult from a coroutine
+### 12. Async from a coroutine
 
 ```kotlin
-suspend fun buildOperationOutput(): Parameters {
-    val result = AsyncOperationResult()
+suspend fun buildOutput(): Parameters {
+    return AsyncOperationResult()
         .add("patient") { fetchPatient() }
         .addAfter("summary", "patient", Patient::class) { patient ->
             generateSummary(patient)
         }
-        .run()   // suspend — no thread blocking
-
-    return result.toParameters()
+        .run()
+        .toParameters()
 }
 ```
 
@@ -342,21 +603,27 @@ suspend fun buildOperationOutput(): Parameters {
 | Language | Kotlin 1.9.20 (JVM 11) |
 | FHIR | HAPI FHIR 6.4.2 (R4) |
 | Async | Kotlin Coroutines 1.5.0 |
-| Build | Maven |
-| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest |
+| Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
+| Spring Boot | 2.7.18 (optional — `fhirmason-spring` module) |
+| Build | Maven (multi-module) |
+| Testing | JUnit Jupiter 5.9.1, Hamcrest 2.2, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
+
+---
+
+## Modules
+
+| Module | Artifact ID | Description |
+|---|---|---|
+| `fhirmason-core` | `fhirmason-core` | Core pipeline builders — no Spring dependency |
+| `fhirmason-spring` | `fhirmason-spring` | Spring Boot auto-configuration and base provider class |
 
 ---
 
 ## Building
 
 ```bash
-mvn clean install
-```
-
-## Running Tests
-
-```bash
-mvn test
+mvn clean test          # build and test all modules
+mvn clean install       # build, test, and install to local repo
 ```
 
 ---
@@ -364,23 +631,133 @@ mvn test
 ## Project Structure
 
 ```
-src/
-├── main/java/dev/ratkay/operation/
-│   ├── OperationResult.kt          # Synchronous accumulator builder
-│   └── AsyncOperationResult.kt     # Async/coroutine DAG-based builder
-└── test/java/dev/ratkay/operation/
-    ├── OperationResultTest.kt
-    └── AsyncOperationResultTest.kt
+fhirmason-core/
+└── src/
+    ├── main/java/dev/ratkay/operation/
+    │   ├── OperationResult.kt              # Synchronous accumulator builder
+    │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
+    │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
+    │   ├── StepMetrics.kt                  # Per-step timing and outcome data
+    │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+    │   └── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
+    └── test/java/dev/ratkay/operation/
+        ├── OperationResultTest.kt
+        ├── OperationResultFromTest.kt
+        ├── OperationResultLinkReferencesTest.kt
+        ├── OperationResultMetricsTest.kt
+        ├── AsyncOperationResultTest.kt
+        └── AsyncOperationResultMetricsTest.kt
+
+fhirmason-spring/
+└── src/
+    ├── main/java/dev/ratkay/spring/
+    │   ├── FhirMasonAutoConfiguration.kt   # Spring Boot auto-configuration
+    │   ├── FhirMasonProperties.kt          # @ConfigurationProperties (prefix=fhirmason)
+    │   ├── FhirMasonFactory.kt             # Spring @Bean — creates pipelines
+    │   └── FhirMasonOperationProvider.kt   # Abstract base for operation providers
+    ├── main/resources/META-INF/
+    │   ├── spring.factories                # Boot 2.x auto-config registration
+    │   └── spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
+    └── test/java/dev/ratkay/spring/
+        └── FhirMasonAutoConfigurationTest.kt
 ```
 
 ---
 
-## Artifact
+## Spring Boot Integration
+
+### Dependency
 
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason</artifactId>
+    <artifactId>fhirmason-spring</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+### Auto-configuration
+
+When `fhirmason-spring` is on the classpath in a Spring Boot application, a `FhirMasonFactory` bean is registered automatically. No explicit configuration is required.
+
+### Configuration Properties
+
+```yaml
+fhirmason:
+  error-strategy: ACCUMULATE   # FAIL_FAST | ACCUMULATE (default: ACCUMULATE)
+  metrics:
+    enabled: true               # enable per-step timing (default: false)
+```
+
+### Injecting the Factory
+
+```kotlin
+@Service
+class PatientService(private val fhirMason: FhirMasonFactory) {
+
+    fun buildBundle(patient: Patient): Parameters =
+        fhirMason.pipeline(patient)
+            .add("encounter") { fetchEncounter(patient.idElement.idPart) }
+            .add("coverage")  { fetchCoverage(patient.idElement.idPart) }
+            .toParameters()
+
+    fun buildAsync(): OperationResult<Base> =
+        fhirMason.asyncPipeline()
+            .add("patient") { fetchPatient() }
+            .add("coverage") { fetchCoverage() }
+            .runBlocking()
+}
+```
+
+### Operation Provider Base Class
+
+Extend `FhirMasonOperationProvider` to inherit pipeline helpers in your HAPI FHIR operation provider. Implement `IResourceProvider` in your subclass.
+
+```kotlin
+@Component
+class PatientOperationProvider(fhirMason: FhirMasonFactory) :
+    FhirMasonOperationProvider(fhirMason), IResourceProvider {
+
+    override fun getResourceType() = Patient::class.java
+
+    @Operation(name = "\$summary")
+    fun summary(@IdParam id: IdType): Parameters =
+        parameters {
+            pipeline(fetchPatient(id))
+                .add("encounter") { fetchEncounter(id) }
+                .add("coverage")  { fetchCoverage(id) }
+        }
+
+    @Operation(name = "\$bundle")
+    fun bundle(@IdParam id: IdType): Bundle =
+        bundle(Bundle.BundleType.COLLECTION) {
+            pipeline(fetchPatient(id))
+                .addAll("observations") { fetchObservations(id) }
+        }
+}
+```
+
+### Custom Factory Bean
+
+Override the auto-configured factory by declaring your own:
+
+```kotlin
+@Configuration
+class FhirMasonConfig {
+    @Bean
+    fun fhirMasonFactory(properties: FhirMasonProperties) =
+        FhirMasonFactory(properties)  // or a custom subclass
+}
+```
+
+---
+
+## Core Artifact
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-core</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
