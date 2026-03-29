@@ -22,18 +22,20 @@ class AsyncOperationResult {
 
     private sealed class TaskNode {
         abstract val key: String
+        abstract val deps: List<String>
+        abstract val block: suspend (Map<String, List<Base>>) -> List<Base>
 
-        class Root(override val key: String, val block: suspend () -> Base) : TaskNode()
-        class RootList(override val key: String, val block: suspend () -> List<Base>) : TaskNode()
+        class Independent(
+            override val key: String,
+            override val block: suspend (Map<String, List<Base>>) -> List<Base>
+        ) : TaskNode() {
+            override val deps: List<String> = emptyList()
+        }
+
         class Dependent(
             override val key: String,
-            val deps: List<String>,
-            val block: suspend (Map<String, List<Base>>) -> Base
-        ) : TaskNode()
-        class DependentList(
-            override val key: String,
-            val deps: List<String>,
-            val block: suspend (Map<String, List<Base>>) -> List<Base>
+            override val deps: List<String>,
+            override val block: suspend (Map<String, List<Base>>) -> List<Base>
         ) : TaskNode()
     }
 
@@ -48,14 +50,17 @@ class AsyncOperationResult {
     /** Returns total wall-clock DAG execution time in milliseconds. Zero before [run] completes. */
     fun getTotalDuration(): Long = totalDurationMs
 
-    fun add(key: String, block: suspend () -> Base): AsyncOperationResult = also {
+    private fun registerNode(key: String, node: TaskNode) {
         require(!nodes.containsKey(key)) { "Duplicate task key: '$key'" }
-        nodes[key] = TaskNode.Root(key, block)
+        nodes[key] = node
+    }
+
+    fun add(key: String, block: suspend () -> Base): AsyncOperationResult = also {
+        registerNode(key, TaskNode.Independent(key) { listOf(block()) })
     }
 
     fun addList(key: String, block: suspend () -> List<Base>): AsyncOperationResult = also {
-        require(!nodes.containsKey(key)) { "Duplicate task key: '$key'" }
-        nodes[key] = TaskNode.RootList(key, block)
+        registerNode(key, TaskNode.Independent(key) { block() })
     }
 
     fun addAfter(
@@ -63,11 +68,10 @@ class AsyncOperationResult {
         vararg deps: String,
         block: suspend (Map<String, List<Base>>) -> Base
     ): AsyncOperationResult = also {
-        require(!nodes.containsKey(key)) { "Duplicate task key: '$key'" }
         val depList = deps.toList()
         requireKeysExist(depList)
         requireNoCycle(key, depList)
-        nodes[key] = TaskNode.Dependent(key, depList, block)
+        registerNode(key, TaskNode.Dependent(key, depList) { map -> listOf(block(map)) })
     }
 
     fun addListAfter(
@@ -75,11 +79,10 @@ class AsyncOperationResult {
         vararg deps: String,
         block: suspend (Map<String, List<Base>>) -> List<Base>
     ): AsyncOperationResult = also {
-        require(!nodes.containsKey(key)) { "Duplicate task key: '$key'" }
         val depList = deps.toList()
         requireKeysExist(depList)
         requireNoCycle(key, depList)
-        nodes[key] = TaskNode.DependentList(key, depList, block)
+        registerNode(key, TaskNode.Dependent(key, depList, block))
     }
 
     // Type-safe single-dependency convenience methods
@@ -137,76 +140,26 @@ class AsyncOperationResult {
                     logger.debug("FHIRMason.async | task='{}' | status=STARTED", node.key)
                     val taskStart = System.currentTimeMillis()
 
-                    val taskResult: List<Base>? = when (node) {
-                        is TaskNode.Root -> try {
-                            listOf(node.block())
+                    val depResults = mutableMapOf<String, List<Base>>()
+                    var failedDep: String? = null
+                    for (depKey in node.deps) {
+                        val depResult = launchNode(nodes[depKey]!!).await()
+                        if (depResult == null) { failedDep = depKey; break }
+                        depResults[depKey] = depResult
+                    }
+
+                    val taskResult: List<Base>? = if (failedDep != null) {
+                        failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
+                        null
+                    } else {
+                        try {
+                            node.block(depResults)
                         } catch (e: BaseServerResponseException) {
                             failedTasks[node.key] = e.toOperationOutcome()
                             null
                         } catch (e: Exception) {
                             failedTasks[node.key] = e.toOperationOutcome()
                             null
-                        }
-                        is TaskNode.RootList -> try {
-                            node.block()
-                        } catch (e: BaseServerResponseException) {
-                            failedTasks[node.key] = e.toOperationOutcome()
-                            null
-                        } catch (e: Exception) {
-                            failedTasks[node.key] = e.toOperationOutcome()
-                            null
-                        }
-                        is TaskNode.Dependent -> {
-                            val depResults = mutableMapOf<String, List<Base>>()
-                            var failedDep: String? = null
-                            for (depKey in node.deps) {
-                                val depResult = launchNode(nodes[depKey]!!).await()
-                                if (depResult == null) {
-                                    failedDep = depKey
-                                    break
-                                }
-                                depResults[depKey] = depResult
-                            }
-                            if (failedDep != null) {
-                                failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
-                                null
-                            } else {
-                                try {
-                                    listOf(node.block(depResults))
-                                } catch (e: BaseServerResponseException) {
-                                    failedTasks[node.key] = e.toOperationOutcome()
-                                    null
-                                } catch (e: Exception) {
-                                    failedTasks[node.key] = e.toOperationOutcome()
-                                    null
-                                }
-                            }
-                        }
-                        is TaskNode.DependentList -> {
-                            val depResults = mutableMapOf<String, List<Base>>()
-                            var failedDep: String? = null
-                            for (depKey in node.deps) {
-                                val depResult = launchNode(nodes[depKey]!!).await()
-                                if (depResult == null) {
-                                    failedDep = depKey
-                                    break
-                                }
-                                depResults[depKey] = depResult
-                            }
-                            if (failedDep != null) {
-                                failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
-                                null
-                            } else {
-                                try {
-                                    node.block(depResults)
-                                } catch (e: BaseServerResponseException) {
-                                    failedTasks[node.key] = e.toOperationOutcome()
-                                    null
-                                } catch (e: Exception) {
-                                    failedTasks[node.key] = e.toOperationOutcome()
-                                    null
-                                }
-                            }
                         }
                     }
 
@@ -278,12 +231,7 @@ class AsyncOperationResult {
             if (from == target) return true
             if (!visited.add(from)) return false
             val node = nodes[from] ?: return false
-            val nodeDeps = when (node) {
-                is TaskNode.Dependent -> node.deps
-                is TaskNode.DependentList -> node.deps
-                else -> emptyList()
-            }
-            return nodeDeps.any { reachable(it, target, visited) }
+            return node.deps.any { reachable(it, target, visited) }
         }
         deps.forEach { dep ->
             require(!reachable(dep, newKey, mutableSetOf())) {
