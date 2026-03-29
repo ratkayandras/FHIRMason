@@ -375,12 +375,86 @@ class OperationResult<T> private constructor(
         return OperationResult(filtered, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
 
-    fun mapValues(transform: (Base) -> Base): OperationResult<T> {
+    fun <R : Base> mapValues(transform: (Base) -> R): OperationResult<R> {
         val transformed = parameters.mapValues { (_, values) ->
-            values.map(transform).toMutableList()
+            val newList = mutableListOf<Base>()
+            values.forEach { newList.add(transform(it)) }
+            newList
         }.toMutableMap()
-        return OperationResult(transformed, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        return OperationResult(transformed, null, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
     }
+
+    /**
+     * Chains an inner pipeline on the current typed result [T], merges all of its parameter map
+     * entries into the outer map, and returns an [OperationResult] whose head type and current
+     * result come from the inner pipeline.
+     *
+     * On key collision with the outer map the values are accumulated under the same key.
+     */
+    fun <R : Base> flatMap(transform: (T) -> OperationResult<R>): OperationResult<R> {
+        if (shouldSkip()) return skippedResult()
+        val inner = transform(getResult())
+        val newParams = parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
+        inner.parameters.forEach { (key, values) ->
+            newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+        }
+        return OperationResult(newParams, inner.result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+    }
+
+    /**
+     * Combines the parameter maps of this result and [other]. On key collision the values from
+     * both results are accumulated under the same key. The current typed result [T] is preserved.
+     */
+    fun merge(other: OperationResult<*>): OperationResult<T> {
+        val newParams = parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
+        other.parameters.forEach { (key, values) ->
+            newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+        }
+        return OperationResult(newParams, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+    }
+
+    /** Returns a new [OperationResult] without the entry for [name]. No-op if [name] is absent. */
+    fun remove(name: String): OperationResult<T> {
+        val newParams = parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
+        newParams.remove(name)
+        return OperationResult(newParams, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+    }
+
+    /**
+     * Returns a new [OperationResult] where all values stored under [oldName] are moved to
+     * [newName]. If [oldName] does not exist, the result is unchanged. If [newName] already
+     * exists, the moved values are accumulated alongside the existing ones.
+     */
+    fun rename(oldName: String, newName: String): OperationResult<T> {
+        val newParams = parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
+        val values = newParams.remove(oldName)
+        if (values != null) {
+            newParams.getOrPut(newName) { mutableListOf() }.addAll(values)
+        }
+        return OperationResult(newParams, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+    }
+
+    /**
+     * Invokes [block] with a snapshot of the current parameter map for side-effects (logging,
+     * debugging) and returns this [OperationResult] unchanged.
+     */
+    fun peek(block: (Map<String, List<Base>>) -> Unit): OperationResult<T> {
+        block(getAllParameters())
+        return this
+    }
+
+    /** Returns the first value stored under [name], or `null` if the key is absent or empty. */
+    fun takeFirst(name: String): Base? = parameters[name]?.firstOrNull()
+
+    /**
+     * Returns the first value stored under [name] that is an instance of [type], or `null`.
+     * Prefer the inline reified overload [takeFirstTyped] where the type can be inferred.
+     */
+    fun <R : Base> takeFirstTyped(name: String, type: KClass<R>): R? =
+        parameters[name]?.filterIsInstance(type.java)?.firstOrNull()
+
+    /** Reified overload — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> takeFirstTyped(name: String): R? = takeFirstTyped(name, R::class)
 
     // Reference linking
 

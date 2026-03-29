@@ -723,6 +723,295 @@ class OperationResultTest {
         assertThat(result.getResult(), instanceOf(Patient::class.java))
     }
 
+    // ── mapValues (type-safe) ─────────────────────────────────────────────────
+
+    @Test
+    fun `mapValues type-safe transforms every value and changes pipeline type`() {
+        val result: OperationResult<Appointment> = OperationResult.of(patient(), "p")
+            .mapValues { _ -> appointment() }
+
+        assertThat(result.getByType<Appointment>(), hasSize(1))
+        assertThat(result.getByType<Patient>(), empty())
+    }
+
+    @Test
+    fun `mapValues transforms values across multiple keys`() {
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+            .mapValues { _ -> Patient() }
+
+        // Both entries should now be Patients
+        assertThat(result.getByType<Patient>(), hasSize(2))
+        assertThat(result.getByType<Appointment>(), empty())
+    }
+
+    // ── flatMap ───────────────────────────────────────────────────────────────
+
+    @Test
+    fun `flatMap merges inner pipeline parameter entries into outer map`() {
+        val inner = OperationResult.of(appointment(), "inner-appt")
+
+        val result = OperationResult.of(patient(), "outer-patient")
+            .flatMap { _ -> inner }
+
+        assertTrue(result.containsKey("outer-patient"))
+        assertTrue(result.containsKey("inner-appt"))
+    }
+
+    @Test
+    fun `flatMap result type and getResult reflect inner pipeline head`() {
+        val appt = appointment()
+        val result: OperationResult<Appointment> = OperationResult.of(patient())
+            .flatMap { _ -> OperationResult.of(appt, "appt") }
+
+        assertThat(result.getResult(), sameInstance(appt))
+    }
+
+    @Test
+    fun `flatMap on key collision accumulates values under same key`() {
+        val inner = OperationResult.of(patient(), "patient")
+
+        val result = OperationResult.of(patient(), "patient")
+            .flatMap { _ -> inner }
+
+        assertEquals(2, result.count("patient"))
+    }
+
+    @Test
+    fun `flatMap chains sequentially — all inner keys visible in each step`() {
+        val result = OperationResult.of(patient(), "patient")
+            .flatMap { _ ->
+                OperationResult.of(appointment(), "appt")
+                    .add("coverage") { Coverage() }
+            }
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.containsKey("appt"))
+        assertTrue(result.containsKey("coverage"))
+    }
+
+    @Test
+    fun `flatMap skips transform when pipeline has errors in FAIL_FAST`() {
+        val result = OperationResult.of(patient())
+            .add { error("boom") }
+            .flatMap { _ -> OperationResult.of(appointment(), "appt") }
+
+        assertFalse(result.containsKey("appt"))
+        assertTrue(result.hasErrors())
+    }
+
+    // ── merge ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `merge combines two non-overlapping parameter maps`() {
+        val a = OperationResult.of(patient(), "patient")
+        val b = OperationResult.of(appointment(), "appt")
+
+        val merged = a.merge(b)
+
+        assertTrue(merged.containsKey("patient"))
+        assertTrue(merged.containsKey("appt"))
+    }
+
+    @Test
+    fun `merge accumulates values under the same key on collision`() {
+        val a = OperationResult.of(patient(), "resource")
+        val b = OperationResult.of(appointment(), "resource")
+
+        val merged = a.merge(b)
+
+        assertEquals(2, merged.count("resource"))
+    }
+
+    @Test
+    fun `merge preserves outer result type and current result`() {
+        val patient = patient()
+        val a: OperationResult<Patient> = OperationResult.of(patient, "patient")
+        val b = OperationResult.of(appointment(), "appt")
+
+        val merged: OperationResult<Patient> = a.merge(b)
+
+        assertThat(merged.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `merge does not modify original OperationResult`() {
+        val a = OperationResult.of(patient(), "patient")
+        val b = OperationResult.of(appointment(), "appt")
+
+        a.merge(b)
+
+        assertFalse(a.containsKey("appt"))
+    }
+
+    // ── remove ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `remove eliminates the specified key`() {
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+            .remove("appt")
+
+        assertFalse(result.containsKey("appt"))
+        assertTrue(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `remove nonexistent key is a no-op`() {
+        val result = OperationResult.of(patient(), "patient")
+            .remove("missing")
+
+        assertTrue(result.containsKey("patient"))
+        assertEquals(1, result.totalCount())
+    }
+
+    @Test
+    fun `remove preserves the current result`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient, "patient")
+            .addOrSkip("appt") { appointment() }
+            .remove("appt")
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    // ── rename ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `rename moves values from old key to new key`() {
+        val patient = patient()
+        val result = OperationResult.of(patient, "old")
+            .rename("old", "new")
+
+        assertFalse(result.containsKey("old"))
+        assertTrue(result.containsKey("new"))
+        assertThat(result.getAll("new").first(), sameInstance(patient))
+    }
+
+    @Test
+    fun `rename on nonexistent key is a no-op`() {
+        val result = OperationResult.of(patient(), "patient")
+            .rename("missing", "other")
+
+        assertTrue(result.containsKey("patient"))
+        assertFalse(result.containsKey("other"))
+    }
+
+    @Test
+    fun `rename to an existing key accumulates values`() {
+        val p1 = patient()
+        val p2 = patient()
+        val result = OperationResult.of(p1, "source")
+            .add("target") { p2 }
+            .rename("source", "target")
+
+        assertFalse(result.containsKey("source"))
+        assertEquals(2, result.count("target"))
+    }
+
+    // ── peek ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `peek invokes block with current parameter snapshot`() {
+        var capturedKeys: Set<String>? = null
+        OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+            .peek { map -> capturedKeys = map.keys }
+
+        assertThat(capturedKeys, containsInAnyOrder("patient", "appt"))
+    }
+
+    @Test
+    fun `peek does not modify the parameter map`() {
+        val base = OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+
+        val after = base.peek { map ->
+            // Attempt to cast and mutate — this is a snapshot so it won't affect state,
+            // but even if it were mutable this peek returns the same instance
+            @Suppress("UNUSED_VARIABLE")
+            val ignored = map
+        }
+
+        assertEquals(base.getAllParameters(), after.getAllParameters())
+    }
+
+    @Test
+    fun `peek returns the same OperationResult instance`() {
+        val before = OperationResult.of(patient(), "patient")
+        val after = before.peek { }
+
+        assertThat(after, sameInstance(before))
+    }
+
+    @Test
+    fun `peek preserves result type and getResult`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient, "patient")
+            .peek { }
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    // ── takeFirst / takeFirstTyped ────────────────────────────────────────────
+
+    @Test
+    fun `takeFirst returns first value for the given key`() {
+        val p = patient()
+        val result = OperationResult.of(p, "patient")
+
+        assertThat(result.takeFirst("patient"), sameInstance(p))
+    }
+
+    @Test
+    fun `takeFirst returns null for missing key`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        assertEquals(null, result.takeFirst("missing"))
+    }
+
+    @Test
+    fun `takeFirst returns first among multiple values`() {
+        val first = patient()
+        val result = OperationResult.of(first, "patient")
+            .add("patient") { patient() }
+
+        assertThat(result.takeFirst("patient"), sameInstance(first))
+    }
+
+    @Test
+    fun `takeFirstTyped returns first value matching the given type`() {
+        val appt = appointment()
+        val result = OperationResult.of(patient(), "entry")
+            .add("entry") { appt }
+
+        val found: Appointment? = result.takeFirstTyped("entry", Appointment::class)
+        assertThat(found, sameInstance(appt))
+    }
+
+    @Test
+    fun `takeFirstTyped returns null when no value matches the given type`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        assertEquals(null, result.takeFirstTyped("patient", Appointment::class))
+    }
+
+    @Test
+    fun `takeFirstTyped reified overload requires no KClass argument`() {
+        val p = patient()
+        val result = OperationResult.of(p, "patient")
+
+        val found: Patient? = result.takeFirstTyped<Patient>("patient")
+        assertThat(found, sameInstance(p))
+    }
+
+    @Test
+    fun `takeFirstTyped reified returns null for missing key`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        assertEquals(null, result.takeFirstTyped<Appointment>("missing"))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {
