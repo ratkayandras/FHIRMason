@@ -1151,6 +1151,30 @@ class OperationResultTest {
     }
 
     @Test
+    fun `addStringUsing - exception in lambda records WARNING outcome and preserves head`() {
+        val patient = patient()
+        val result = OperationResult.of(patient)
+            .addStringUsing("label") { error("bad label") }
+
+        assertTrue(result.hasErrors())
+        assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
+        assertFalse(result.containsKey("label"))
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `addString - pipeline continues in ACCUMULATE after exception and head is preserved`() {
+        val patient = patient()
+        val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+            .addStringUsing("label") { error("boom") }
+            .addString("other", "ok")
+
+        assertTrue(result.hasErrors())
+        assertTrue(result.containsKey("other"))
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
     fun `primitive values round-trip through toParameters and fromParameters`() {
         val original = OperationResult.of(patient())
             .addString("label", "hello")
