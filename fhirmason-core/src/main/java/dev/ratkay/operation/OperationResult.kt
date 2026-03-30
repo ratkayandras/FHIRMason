@@ -121,6 +121,39 @@ class OperationResult<T> private constructor(
         return copyWith(value)
     }
 
+    /**
+     * Shared try/catch shell for all primitive-value convenience methods.
+     *
+     * On success: stores the FHIR value, records a metric, and logs the step.
+     * On exception: logs a WARN, records a failed metric, and adds a WARNING-severity
+     * [OperationOutcome] — preserving the rich embedded outcome from a
+     * [BaseServerResponseException] rather than discarding it in favour of a plain message.
+     * The pipeline head type [T] is never changed; [shouldSkip] is checked first.
+     */
+    private fun runPrimitiveStep(name: String, build: () -> Base): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        return try {
+            val fhirValue = build()
+            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric(name, fhirValue.fhirType(), durationMs, true)
+            logStep(name, fhirValue.fhirType(), durationMs)
+            copyWith(result)
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
+            recordMetric(name, "", durationMs, false)
+            val outcome = when (e) {
+                is BaseServerResponseException -> e.toOperationOutcome()
+                else -> e.toOperationOutcome()
+            }
+            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+            outcomes.add(outcome)
+            copyWith(result)
+        }
+    }
+
     private fun <R : Base> storeListAndCopy(name: String?, values: List<R>, start: Long): OperationResult<List<R>> {
         val durationMs = System.currentTimeMillis() - start
         addToParameters(values, name)
@@ -208,347 +241,25 @@ class OperationResult<T> private constructor(
 
     // ── Primitive value convenience methods ──────────────────────────────────
 
-    fun addString(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = StringType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
+    fun addString(name: String, value: String): OperationResult<T>       = runPrimitiveStep(name) { StringType(value) }
+    fun addBoolean(name: String, value: Boolean): OperationResult<T>     = runPrimitiveStep(name) { BooleanType(value) }
+    fun addInteger(name: String, value: Int): OperationResult<T>         = runPrimitiveStep(name) { IntegerType(value) }
+    fun addDecimal(name: String, value: BigDecimal): OperationResult<T>  = runPrimitiveStep(name) { DecimalType(value) }
+    fun addCode(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { CodeType(value) }
+    fun addUri(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { UriType(value) }
+    fun addDate(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { DateType(value) }
+    fun addDateTime(name: String, value: String): OperationResult<T>     = runPrimitiveStep(name) { DateTimeType(value) }
+    fun addCanonical(name: String, value: String): OperationResult<T>    = runPrimitiveStep(name) { CanonicalType(value) }
 
-    fun addBoolean(name: String, value: Boolean): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = BooleanType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addInteger(name: String, value: Int): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = IntegerType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDecimal(name: String, value: BigDecimal): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DecimalType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addCode(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = CodeType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addUri(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = UriType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDate(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DateType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDateTime(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DateTimeType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addCanonical(name: String, value: String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = CanonicalType(value)
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = StringType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = BooleanType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = IntegerType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DecimalType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = CodeType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = UriType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDateUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DateType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = DateTimeType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
-
-    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = CanonicalType(builder(getResult()))
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
-        }
-    }
+    fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T>      = runPrimitiveStep(name) { StringType(builder(getResult())) }
+    fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T>    = runPrimitiveStep(name) { BooleanType(builder(getResult())) }
+    fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T>        = runPrimitiveStep(name) { IntegerType(builder(getResult())) }
+    fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T> = runPrimitiveStep(name) { DecimalType(builder(getResult())) }
+    fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { CodeType(builder(getResult())) }
+    fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T>         = runPrimitiveStep(name) { UriType(builder(getResult())) }
+    fun addDateUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { DateType(builder(getResult())) }
+    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
+    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
 
     // Query methods
 
