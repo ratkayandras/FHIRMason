@@ -40,6 +40,53 @@ src/test/java/dev/ratkay/operation/
 - Validate with `require()` and `error()` — no checked exceptions
 - `AsyncOperationResult` uses sealed classes for DAG task nodes with cycle detection at registration time
 
+## Exception Handling Rules
+
+Every builder method that catches exceptions must follow one of two established patterns. Do not invent new patterns.
+
+### Pattern A — head-changing steps (`runBuilderStep`)
+
+Used by `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `flatMap`.
+Records an **ERROR**-severity `OperationOutcome` and skips the head value (`skippedResult()`).
+
+```kotlin
+catch (e: Exception) {
+    val durationMs = System.currentTimeMillis() - start
+    recordMetric(name ?: "unknown", "", durationMs, false)
+    outcomes.add(when (e) {
+        is BaseServerResponseException -> e.toOperationOutcome()   // preserves embedded rich outcome
+        else                           -> e.toOperationOutcome()   // creates generic ERROR outcome
+    })
+    skippedResult()
+}
+```
+
+### Pattern B — head-preserving steps (`runPrimitiveStep`, `addOrSkip`, `addOrDefault`)
+
+Used by `addOrSkip`, `addOrDefault`, and all primitive-value convenience methods (`addString`, `addBoolean`, …).
+Records a **WARNING**-severity `OperationOutcome` and preserves the current head type `T`.
+
+```kotlin
+catch (e: Exception) {
+    val durationMs = System.currentTimeMillis() - start
+    logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
+    recordMetric(name, "", durationMs, false)
+    val outcome = when (e) {
+        is BaseServerResponseException -> e.toOperationOutcome()   // preserves embedded rich outcome
+        else                           -> e.toOperationOutcome()   // creates generic ERROR outcome
+    }
+    outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+    outcomes.add(outcome)
+    copyWith(result)
+}
+```
+
+**Key rules:**
+- Always dispatch on `BaseServerResponseException` first — this extracts the embedded `OperationOutcome` from the HAPI exception rather than discarding it.
+- Head-changing steps use `skippedResult()` (result becomes `null`); head-preserving steps use `copyWith(result)`.
+- Primitive convenience methods must delegate to `runPrimitiveStep` (Pattern B) — never duplicate the try/catch inline.
+- Do not add new catch patterns without updating this section.
+
 ## README Maintenance
 
 Keep `README.md` up to date on every branch. When a branch adds or changes a feature, update the relevant section(s) of the README before committing:
