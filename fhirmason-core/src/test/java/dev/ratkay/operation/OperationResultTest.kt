@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import java.math.BigDecimal
 
 class OperationResultTest {
 
@@ -1010,6 +1011,161 @@ class OperationResultTest {
         val result = OperationResult.of(patient(), "patient")
 
         assertEquals(null, result.takeFirstTyped<Appointment>("missing"))
+    }
+
+    // ── Primitive value convenience methods ──────────────────────────────────
+
+    @Test
+    fun `addString stores StringType under given name`() {
+        val result = OperationResult.of(patient())
+            .addString("label", "hello")
+
+        assertTrue(result.containsKey("label"))
+        val stored = result.getAll("label").first()
+        assertThat(stored, instanceOf(StringType::class.java))
+        assertEquals("hello", (stored as StringType).value)
+    }
+
+    @Test
+    fun `addBoolean stores BooleanType under given name`() {
+        val result = OperationResult.of(patient())
+            .addBoolean("active", true)
+
+        assertTrue(result.containsKey("active"))
+        val stored = result.getAll("active").first()
+        assertThat(stored, instanceOf(BooleanType::class.java))
+        assertEquals(true, (stored as BooleanType).value)
+    }
+
+    @Test
+    fun `addInteger stores IntegerType under given name`() {
+        val result = OperationResult.of(patient())
+            .addInteger("count", 42)
+
+        assertTrue(result.containsKey("count"))
+        val stored = result.getAll("count").first()
+        assertThat(stored, instanceOf(IntegerType::class.java))
+        assertEquals(42, (stored as IntegerType).value)
+    }
+
+    @Test
+    fun `addDecimal stores DecimalType under given name`() {
+        val result = OperationResult.of(patient())
+            .addDecimal("score", BigDecimal("3.14"))
+
+        assertTrue(result.containsKey("score"))
+        val stored = result.getAll("score").first()
+        assertThat(stored, instanceOf(DecimalType::class.java))
+        assertEquals(BigDecimal("3.14"), (stored as DecimalType).value)
+    }
+
+    @Test
+    fun `addCode stores CodeType under given name`() {
+        val result = OperationResult.of(patient())
+            .addCode("status", "active")
+
+        assertTrue(result.containsKey("status"))
+        val stored = result.getAll("status").first()
+        assertThat(stored, instanceOf(CodeType::class.java))
+        assertEquals("active", (stored as CodeType).value)
+    }
+
+    @Test
+    fun `addUri stores UriType under given name`() {
+        val result = OperationResult.of(patient())
+            .addUri("profile", "http://hl7.org/fhir/StructureDefinition/Patient")
+
+        assertTrue(result.containsKey("profile"))
+        val stored = result.getAll("profile").first()
+        assertThat(stored, instanceOf(UriType::class.java))
+        assertEquals("http://hl7.org/fhir/StructureDefinition/Patient", (stored as UriType).value)
+    }
+
+    @Test
+    fun `addDate stores DateType under given name`() {
+        val result = OperationResult.of(patient())
+            .addDate("dob", "2024-01-15")
+
+        assertTrue(result.containsKey("dob"))
+        val stored = result.getAll("dob").first()
+        assertThat(stored, instanceOf(DateType::class.java))
+        assertEquals("2024-01-15", (stored as DateType).valueAsString)
+    }
+
+    @Test
+    fun `addDateTime stores DateTimeType under given name`() {
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", "2024-01-15T10:30:00")
+
+        assertTrue(result.containsKey("recorded"))
+        val stored = result.getAll("recorded").first()
+        assertThat(stored, instanceOf(DateTimeType::class.java))
+    }
+
+    @Test
+    fun `addCanonical stores CanonicalType under given name`() {
+        val result = OperationResult.of(patient())
+            .addCanonical("questionnaire", "http://example.org/Questionnaire/q1")
+
+        assertTrue(result.containsKey("questionnaire"))
+        val stored = result.getAll("questionnaire").first()
+        assertThat(stored, instanceOf(CanonicalType::class.java))
+        assertEquals("http://example.org/Questionnaire/q1", (stored as CanonicalType).value)
+    }
+
+    @Test
+    fun `addString preserves pipeline head type T`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient)
+            .addString("label", "test")
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `addString accumulates alongside existing parameters`() {
+        val result = OperationResult.of(patient())
+            .addString("label", "test")
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.containsKey("label"))
+    }
+
+    @Test
+    fun `addStringUsing receives current result`() {
+        val result = OperationResult.of(Patient().apply { id = "p1" })
+            .addStringUsing("id") { p -> p.idElement.idPart }
+
+        assertTrue(result.containsKey("id"))
+        val stored = result.getAll("id").first()
+        assertEquals("p1", (stored as StringType).value)
+    }
+
+    @Test
+    fun `addString is skipped when pipeline has errors in FAIL_FAST`() {
+        val result = OperationResult.of(patient())
+            .add { error("boom") }
+            .addString("label", "test")
+
+        assertFalse(result.containsKey("label"))
+    }
+
+    @Test
+    fun `primitive values round-trip through toParameters and fromParameters`() {
+        val original = OperationResult.of(patient())
+            .addString("label", "hello")
+            .addBoolean("active", true)
+
+        val params = original.toParameters()
+        val restored = OperationResult.fromParameters(params)
+
+        val label = restored.getAll("label").first()
+        assertThat(label, instanceOf(StringType::class.java))
+        assertEquals("hello", (label as StringType).value)
+
+        val active = restored.getAll("active").first()
+        assertThat(active, instanceOf(BooleanType::class.java))
+        assertEquals(true, (active as BooleanType).value)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

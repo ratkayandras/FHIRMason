@@ -121,6 +121,34 @@ val result = OperationResult.of(patient)
     .addOrDefault("score", defaultScore) { computeRiskScore() }
 ```
 
+#### Primitive value helpers
+
+Store raw Kotlin/Java primitives as FHIR types without changing the pipeline head. These methods always return `OperationResult<T>` (the current head type is preserved) because primitives are metadata or configuration, not pipeline resources.
+
+| Method | Kotlin type | FHIR wrapper | Using variant |
+|---|---|---|---|
+| `addString(name, value)` | `String` | `StringType` | `addStringUsing(name) { t -> String }` |
+| `addBoolean(name, value)` | `Boolean` | `BooleanType` | `addBooleanUsing(name) { t -> Boolean }` |
+| `addInteger(name, value)` | `Int` | `IntegerType` | `addIntegerUsing(name) { t -> Int }` |
+| `addDecimal(name, value)` | `BigDecimal` | `DecimalType` | `addDecimalUsing(name) { t -> BigDecimal }` |
+| `addCode(name, value)` | `String` | `CodeType` | `addCodeUsing(name) { t -> String }` |
+| `addUri(name, value)` | `String` | `UriType` | `addUriUsing(name) { t -> String }` |
+| `addDate(name, value)` | `String` (FHIR date) | `DateType` | `addDateUsing(name) { t -> String }` |
+| `addDateTime(name, value)` | `String` (FHIR dateTime) | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` |
+| `addCanonical(name, value)` | `String` | `CanonicalType` | `addCanonicalUsing(name) { t -> String }` |
+
+`addDate` and `addDateTime` accept FHIR-format strings (e.g. `"2024-01-15"`, `"2024-01-15T10:30:00"`) — HAPI's `DateType(String)` and `DateTimeType(String)` constructors handle parsing. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addString("label", "priority")            // raw value — head stays Patient
+    .addBoolean("active", true)
+    .addStringUsing("patientId") { p -> p.idElement.idPart }  // derived from current result
+    .add("encounter") { fetchEncounter() }     // head changes to Encounter
+
+val encounter: Encounter = result.getResult()  // still typed correctly
+```
+
 ### Error Strategy
 
 `OperationResult` supports two strategies, set at construction time via `of()`:

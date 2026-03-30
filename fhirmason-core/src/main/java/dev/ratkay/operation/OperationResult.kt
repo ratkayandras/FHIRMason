@@ -4,6 +4,7 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
 import org.slf4j.LoggerFactory
+import java.math.BigDecimal
 import kotlin.reflect.KClass
 
 /**
@@ -203,6 +204,206 @@ class OperationResult<T> private constructor(
             parameters.getOrPut(key) { mutableListOf() }.add(default)
             copyWith(default)
         }
+    }
+
+    // ── Primitive value convenience methods ──────────────────────────────────
+
+    fun addString(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = StringType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addBoolean(name: String, value: Boolean): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = BooleanType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addInteger(name: String, value: Int): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = IntegerType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDecimal(name: String, value: BigDecimal): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DecimalType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addCode(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = CodeType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addUri(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = UriType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDate(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DateType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDateTime(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DateTimeType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addCanonical(name: String, value: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = CanonicalType(value)
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = StringType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = BooleanType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = IntegerType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DecimalType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = CodeType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = UriType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDateUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DateType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = DateTimeType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
+    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val fhirValue = CanonicalType(builder(getResult()))
+        parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, fhirValue.fhirType(), durationMs, true)
+        logStep(name, fhirValue.fhirType(), durationMs)
+        return copyWith(result)
     }
 
     // Query methods
