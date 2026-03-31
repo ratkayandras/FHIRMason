@@ -1192,6 +1192,135 @@ class OperationResultTest {
         assertEquals(true, (active as BooleanType).value)
     }
 
+    // ── Complex data type convenience methods ────────────────────────────────
+
+    @Test
+    fun `addCoding stores Coding with system, code, and display`() {
+        val result = OperationResult.of(patient())
+            .addCoding("status", "http://loinc.org", "8867-4", "Heart rate")
+
+        assertTrue(result.containsKey("status"))
+        val stored = result.getAll("status").first() as Coding
+        assertEquals("http://loinc.org", stored.system)
+        assertEquals("8867-4", stored.code)
+        assertEquals("Heart rate", stored.display)
+    }
+
+    @Test
+    fun `addCoding without display omits display`() {
+        val result = OperationResult.of(patient())
+            .addCoding("status", "http://loinc.org", "8867-4")
+
+        val stored = result.getAll("status").first() as Coding
+        assertEquals("http://loinc.org", stored.system)
+        assertEquals("8867-4", stored.code)
+        assertEquals(null, if (stored.hasDisplay()) stored.display else null)
+    }
+
+    @Test
+    fun `addReference stores Reference with reference string`() {
+        val result = OperationResult.of(patient())
+            .addReference("subject", "Patient/123")
+
+        assertTrue(result.containsKey("subject"))
+        val stored = result.getAll("subject").first() as Reference
+        assertEquals("Patient/123", stored.reference)
+    }
+
+    @Test
+    fun `addIdentifier stores Identifier with system and value`() {
+        val result = OperationResult.of(patient())
+            .addIdentifier("mrn", "http://hospital.org/mrn", "MRN-001")
+
+        assertTrue(result.containsKey("mrn"))
+        val stored = result.getAll("mrn").first() as Identifier
+        assertEquals("http://hospital.org/mrn", stored.system)
+        assertEquals("MRN-001", stored.value)
+    }
+
+    @Test
+    fun `addPeriod stores Period with start and end`() {
+        val result = OperationResult.of(patient())
+            .addPeriod("window", "2024-01-01", "2024-12-31")
+
+        assertTrue(result.containsKey("window"))
+        val stored = result.getAll("window").first() as Period
+        assertEquals("2024-01-01", stored.startElement.valueAsString)
+        assertEquals("2024-12-31", stored.endElement.valueAsString)
+    }
+
+    @Test
+    fun `addPeriod with null start stores Period with only end`() {
+        val result = OperationResult.of(patient())
+            .addPeriod("window", null, "2024-12-31")
+
+        val stored = result.getAll("window").first() as Period
+        assertFalse(stored.hasStart())
+        assertEquals("2024-12-31", stored.endElement.valueAsString)
+    }
+
+    @Test
+    fun `addQuantity stores Quantity with all fields`() {
+        val result = OperationResult.of(patient())
+            .addQuantity("weight", BigDecimal("70.5"), "kg", "http://unitsofmeasure.org", "kg")
+
+        assertTrue(result.containsKey("weight"))
+        val stored = result.getAll("weight").first() as Quantity
+        assertEquals(BigDecimal("70.5"), stored.value)
+        assertEquals("kg", stored.unit)
+        assertEquals("http://unitsofmeasure.org", stored.system)
+        assertEquals("kg", stored.code)
+    }
+
+    @Test
+    fun `addQuantity without system and code omits them`() {
+        val result = OperationResult.of(patient())
+            .addQuantity("weight", BigDecimal("70.5"), "kg")
+
+        val stored = result.getAll("weight").first() as Quantity
+        assertEquals(BigDecimal("70.5"), stored.value)
+        assertEquals("kg", stored.unit)
+        assertEquals(null, if (stored.hasSystem()) stored.system else null)
+        assertEquals(null, if (stored.hasCode()) stored.code else null)
+    }
+
+    @Test
+    fun `addCodeableConcept stores CodeableConcept with coding and text`() {
+        val result = OperationResult.of(patient())
+            .addCodeableConcept("category", "http://snomed.info/sct", "413839001", "Chronic lung disease", "Chronic lung disease (disorder)")
+
+        assertTrue(result.containsKey("category"))
+        val stored = result.getAll("category").first() as CodeableConcept
+        val coding = stored.codingFirstRep
+        assertEquals("http://snomed.info/sct", coding.system)
+        assertEquals("413839001", coding.code)
+        assertEquals("Chronic lung disease", coding.display)
+        assertEquals("Chronic lung disease (disorder)", stored.text)
+    }
+
+    @Test
+    fun `addCoding preserves pipeline head type T`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient)
+            .addCoding("status", "http://loinc.org", "8867-4", "Heart rate")
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `complex types round-trip through toParameters and fromParameters`() {
+        val original = OperationResult.of(patient())
+            .addCoding("obs-code", "http://loinc.org", "8867-4", "Heart rate")
+
+        val params = original.toParameters()
+        val restored = OperationResult.fromParameters(params)
+
+        val stored = restored.getAll("obs-code").first()
+        assertThat(stored, instanceOf(Coding::class.java))
+        assertEquals("http://loinc.org", (stored as Coding).system)
+        assertEquals("8867-4", stored.code)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {
