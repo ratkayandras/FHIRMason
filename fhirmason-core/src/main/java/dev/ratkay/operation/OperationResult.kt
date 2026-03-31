@@ -261,6 +261,58 @@ class OperationResult<T> private constructor(
     fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
     fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
 
+    // ── Complex data type convenience methods ────────────────────────────────
+
+    fun addCoding(name: String, system: String, code: String, display: String? = null): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Coding().apply {
+                this.system = system
+                this.code = code
+                if (display != null) this.display = display
+            }
+        }
+
+    fun addReference(name: String, reference: String): OperationResult<T> =
+        runPrimitiveStep(name) { Reference(reference) }
+
+    fun addIdentifier(name: String, system: String, value: String): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Identifier().apply {
+                this.system = system
+                this.value = value
+            }
+        }
+
+    fun addPeriod(name: String, start: String?, end: String?): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Period().apply {
+                if (start != null) this.startElement = DateTimeType(start)
+                if (end != null) this.endElement = DateTimeType(end)
+            }
+        }
+
+    fun addQuantity(name: String, value: BigDecimal, unit: String, system: String? = null, code: String? = null): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Quantity().apply {
+                this.value = value
+                this.unit = unit
+                if (system != null) this.system = system
+                if (code != null) this.code = code
+            }
+        }
+
+    fun addCodeableConcept(name: String, system: String, code: String, display: String? = null, text: String? = null): OperationResult<T> =
+        runPrimitiveStep(name) {
+            CodeableConcept().apply {
+                addCoding().apply {
+                    this.system = system
+                    this.code = code
+                    if (display != null) this.display = display
+                }
+                if (text != null) this.text = text
+            }
+        }
+
     // Query methods
 
     fun getAllParameters(): Map<String, List<Base>> =

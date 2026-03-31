@@ -149,6 +149,31 @@ val result = OperationResult.of(patient)
 val encounter: Encounter = result.getResult()  // still typed correctly
 ```
 
+#### Complex data type helpers
+
+Construct and store common FHIR complex types without manually building HAPI objects. Like primitive helpers, these methods preserve the pipeline head type `T` and use Pattern B error handling (WARNING outcome, head preserved).
+
+| Method | FHIR type | Key parameters |
+|---|---|---|
+| `addCoding(name, system, code, display?)` | `Coding` | `system`, `code`, optional `display` |
+| `addReference(name, reference)` | `Reference` | `reference` string (e.g. `"Patient/123"`) |
+| `addIdentifier(name, system, value)` | `Identifier` | `system`, `value` |
+| `addPeriod(name, start?, end?)` | `Period` | nullable FHIR dateTime strings |
+| `addQuantity(name, value, unit, system?, code?)` | `Quantity` | `BigDecimal` value, UCUM unit, optional system/code |
+| `addCodeableConcept(name, system, code, display?, text?)` | `CodeableConcept` | coding fields plus optional free-text |
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addCoding("obs-code", "http://loinc.org", "8867-4", "Heart rate")
+    .addReference("subject", "Patient/123")
+    .addIdentifier("mrn", "http://hospital.org/mrn", "MRN-001")
+    .addPeriod("admission", "2024-01-15", "2024-01-20")
+    .addQuantity("weight", BigDecimal("70.5"), "kg", "http://unitsofmeasure.org", "kg")
+    .addCodeableConcept("category", "http://snomed.info/sct", "413839001", "Chronic lung disease")
+
+val p: Patient = result.getResult()  // head type unchanged
+```
+
 ### Error Strategy
 
 `OperationResult` supports two strategies, set at construction time via `of()`:
