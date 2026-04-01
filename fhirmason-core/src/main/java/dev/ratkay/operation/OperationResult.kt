@@ -313,6 +313,41 @@ class OperationResult<T> private constructor(
             }
         }
 
+    // ── Nested parameter construction (parts) ───────────────────────────────
+
+    /**
+     * Builds a nested FHIR `Parameters.part` structure using a sub-pipeline builder lambda,
+     * without relying on dot-delimited key names.
+     *
+     * The sub-pipeline receives its own empty parameter map so the parent map is not polluted.
+     * Entries produced by the builder are prefixed with `"name."` and stored in the parent map.
+     * [toParameters] then reconstructs the nested `part` structure automatically from these
+     * dot-delimited keys.
+     *
+     * The sub-pipeline's outcomes/errors are NOT merged into the parent — only parameter map
+     * entries are merged. The pipeline head type [T] is preserved.
+     */
+    fun addPart(name: String, builder: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+
+        val subPipeline = OperationResult<T>(
+            mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
+        )
+
+        val built = builder(subPipeline)
+
+        built.getAllParameters().forEach { (childKey, values) ->
+            val prefixedKey = "$name.$childKey"
+            parameters.getOrPut(prefixedKey) { mutableListOf() }.addAll(values)
+        }
+
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, "part", durationMs, true)
+        logStep(name, "part", durationMs)
+        return copyWith(result)
+    }
+
     // Query methods
 
     fun getAllParameters(): Map<String, List<Base>> =

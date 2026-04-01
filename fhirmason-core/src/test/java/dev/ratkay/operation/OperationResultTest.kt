@@ -1321,6 +1321,108 @@ class OperationResultTest {
         assertEquals("8867-4", stored.code)
     }
 
+    // ── addPart (nested parameter construction) ──────────────────────────────
+
+    @Test
+    fun `addPart creates dot-prefixed keys in parameter map`() {
+        val result = OperationResult.of(patient())
+            .addPart("address") { addString("city", "Springfield").addString("country", "US") }
+
+        assertTrue(result.containsKey("address.city"))
+        assertTrue(result.containsKey("address.country"))
+        assertEquals("Springfield", (result.getAll("address.city").first() as StringType).value)
+        assertEquals("US", (result.getAll("address.country").first() as StringType).value)
+    }
+
+    @Test
+    fun `addPart produces nested parts in toParameters output`() {
+        val result = OperationResult.of(patient())
+            .addPart("address") { addString("city", "Springfield").addString("country", "US") }
+
+        val params = result.toParameters()
+
+        val addressParam = params.parameter.filter { it.name == "address" }
+        assertEquals(1, addressParam.size, "Expected exactly one 'address' parameter")
+        assertFalse(params.parameter.any { it.name == "address.city" }, "Flat dot-key should not appear at top level")
+
+        val parts = addressParam.first().part
+        assertEquals(2, parts.size)
+        val cityPart = parts.first { it.name == "city" }
+        val countryPart = parts.first { it.name == "country" }
+        assertEquals("Springfield", (cityPart.value as StringType).value)
+        assertEquals("US", (countryPart.value as StringType).value)
+    }
+
+    @Test
+    fun `addPart preserves pipeline head type T`() {
+        val result: OperationResult<Patient> = OperationResult.of(patient())
+            .addPart("address") { addString("city", "Springfield") }
+
+        assertThat(result.getResult(), instanceOf(Patient::class.java))
+    }
+
+    @Test
+    fun `addPart with deeply nested sub-parts`() {
+        val result = OperationResult.of(patient())
+            .addPart("outer") { addPart("inner") { addString("leaf", "deep") } }
+
+        assertTrue(result.containsKey("outer.inner.leaf"))
+        assertEquals("deep", (result.getAll("outer.inner.leaf").first() as StringType).value)
+
+        val params = result.toParameters()
+        val outerParam = params.parameter.first { it.name == "outer" }
+        val innerPart = outerParam.part.first { it.name == "inner" }
+        val leafPart = innerPart.part.first { it.name == "leaf" }
+        assertEquals("deep", (leafPart.value as StringType).value)
+    }
+
+    @Test
+    fun `addPart round-trips through fromParameters toParameters`() {
+        val original = OperationResult.of(patient())
+            .addPart("address") { addString("city", "Springfield").addString("country", "US") }
+
+        val params1 = original.toParameters()
+        val restored = OperationResult.fromParameters(params1)
+        val params2 = restored.toParameters()
+
+        val addressParam1 = params1.parameter.first { it.name == "address" }
+        val addressParam2 = params2.parameter.first { it.name == "address" }
+        assertEquals(addressParam1.part.size, addressParam2.part.size)
+        assertEquals(
+            addressParam1.part.first { it.name == "city" }.value.primitiveValue(),
+            addressParam2.part.first { it.name == "city" }.value.primitiveValue()
+        )
+        assertEquals(
+            addressParam1.part.first { it.name == "country" }.value.primitiveValue(),
+            addressParam2.part.first { it.name == "country" }.value.primitiveValue()
+        )
+    }
+
+    @Test
+    fun `addPart is skipped when pipeline has errors in FAIL_FAST`() {
+        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.FAIL_FAST)
+            .add { throw RuntimeException("induced failure") }
+            .addPart("address") { addString("city", "Springfield") }
+
+        assertFalse(result.containsKey("address.city"))
+    }
+
+    @Test
+    fun `addPart alongside flat parameters`() {
+        val p = patient()
+        val result = OperationResult.of(p)
+            .addPart("meta") { addString("tag", "test") }
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.containsKey("meta.tag"))
+
+        val params = result.toParameters()
+        assertTrue(params.parameter.any { it.name == "patient" })
+        val metaParam = params.parameter.first { it.name == "meta" }
+        assertEquals(1, metaParam.part.size)
+        assertEquals("test", (metaParam.part.first().value as StringType).value)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {
