@@ -174,6 +174,47 @@ val result = OperationResult.of(patient)
 val p: Patient = result.getResult()  // head type unchanged
 ```
 
+#### Nested parameters (parts)
+
+`addPart` builds nested FHIR `Parameters.part` structures using a sub-pipeline builder lambda, without relying on dot-delimited key names in the parameter map.
+
+```kotlin
+fun addPart(name: String, builder: OperationResult<T>.() -> OperationResult<*>): OperationResult<T>
+```
+
+The sub-pipeline receives its own empty parameter map so the parent map is not polluted. Entries produced by the builder are prefixed with `"name."` and stored in the parent map, where `toParameters()` reconstructs the nested `part` structure automatically. The pipeline head type `T` is preserved. Outcomes/errors from the sub-pipeline are not propagated to the parent.
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addPart("address") {
+        addString("city", "Springfield")
+            .addString("country", "US")
+    }
+
+// toParameters() produces:
+// Parameters
+//   parameter: name="address"
+//     part: name="city",    valueString="Springfield"
+//     part: name="country", valueString="US"
+```
+
+Parts can be nested arbitrarily deep:
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addPart("outer") {
+        addPart("inner") {
+            addString("leaf", "deep")
+        }
+    }
+
+// toParameters() produces:
+// Parameters
+//   parameter: name="outer"
+//     part: name="inner"
+//       part: name="leaf", valueString="deep"
+```
+
 ### Error Strategy
 
 `OperationResult` supports two strategies, set at construction time via `of()`:
