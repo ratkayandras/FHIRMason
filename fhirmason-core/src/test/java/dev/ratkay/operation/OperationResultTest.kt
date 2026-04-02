@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import java.math.BigDecimal
 
 class OperationResultTest {
@@ -1421,6 +1422,80 @@ class OperationResultTest {
         val metaParam = params.parameter.first { it.name == "meta" }
         assertEquals(1, metaParam.part.size)
         assertEquals("test", (metaParam.part.first().value as StringType).value)
+    }
+
+    // ── Factory: empty() ─────────────────────────────────────────────────────
+
+    @Test
+    fun `empty creates result with no parameters`() {
+        val result = OperationResult.empty()
+
+        assertTrue(result.isEmpty())
+        assertEquals(0, result.totalCount())
+    }
+
+    @Test
+    fun `empty result is successful`() {
+        val result = OperationResult.empty()
+
+        assertTrue(result.isSuccessful())
+        assertFalse(result.hasErrors())
+    }
+
+    @Test
+    fun `empty toParameters returns valid empty Parameters`() {
+        val params = OperationResult.empty().toParameters()
+
+        assertTrue(params.parameter.isEmpty())
+    }
+
+    @Test
+    fun `empty getResult throws IllegalStateException`() {
+        val result = OperationResult.empty()
+
+        assertThrows(IllegalStateException::class.java) { result.getResult() }
+    }
+
+    @Test
+    fun `empty allows subsequent add calls`() {
+        val result = OperationResult.empty()
+            .add("patient") { patient() }
+
+        assertTrue(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `empty with ACCUMULATE error strategy`() {
+        val result = OperationResult.empty(ErrorStrategy.ACCUMULATE)
+            .add { throw RuntimeException("induced failure") }
+            .add("patient") { patient() }
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.hasErrors())
+    }
+
+    @Test
+    fun `empty can be used as merge target`() {
+        val result = OperationResult.empty()
+            .merge(OperationResult.of(patient()))
+
+        assertTrue(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `empty toTransactionBundle returns empty bundle`() {
+        val bundle = OperationResult.empty().toTransactionBundle()
+
+        assertTrue(bundle.entry.isEmpty())
+    }
+
+    @Test
+    fun `empty with timed returns metrics`() {
+        val result = OperationResult.empty()
+            .timed()
+            .add("p") { patient() }
+
+        assertEquals(1, result.getMetrics().size)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -895,6 +895,26 @@ class OperationResult<T> private constructor(
             return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
         }
 
+        /**
+         * Creates an empty [OperationResult] with no parameters and no pipeline head.
+         *
+         * Useful for:
+         * - Starting a pipeline that conditionally adds parameters
+         * - Building a [Parameters] resource that may legitimately have zero entries
+         * - Serving as a merge target
+         *
+         * [getResult] will throw [IllegalStateException] until a value is added via [add] or similar.
+         * [toParameters] returns a valid empty [Parameters] resource.
+         */
+        fun empty(errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<Base> =
+            OperationResult(
+                mutableMapOf(),
+                null,
+                mutableListOf(),
+                errorStrategy,
+                mutableMapOf()
+            )
+
         // ── Private helpers ───────────────────────────────────────────────────
 
         private fun buildParamsFrom(parameters: Parameters): MutableMap<String, MutableList<Base>> {
