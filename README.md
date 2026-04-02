@@ -58,6 +58,20 @@ OperationResult.fromParametersTyped<Patient>(parameters, primaryKey = "patient")
 // From a FHIR Bundle
 OperationResult.fromBundle(bundle)
 OperationResult.fromBundle(bundle) { entry -> entry.fullUrl }   // custom key strategy
+
+// Empty — no values, no typed head; useful for conditional pipelines or merge targets
+OperationResult.empty()
+OperationResult.empty(errorStrategy = ErrorStrategy.ACCUMULATE)
+```
+
+```kotlin
+// Start empty, conditionally add
+val result = OperationResult.empty()
+    .add("patient") { fetchPatient() }
+    .addOrSkip("coverage") { fetchCoverage() }
+
+// Valid even with no parameters
+OperationResult.empty().toParameters()  // empty Parameters resource
 ```
 
 ### Builder Methods
