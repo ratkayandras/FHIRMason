@@ -488,6 +488,135 @@ class OperationResultFromTest {
         assertEquals(2, roundTripped.totalCount())
     }
 
+    // ── extractParam / extractParamList ──────────────────────────────────────
+
+    @Test
+    fun `extractParam sets first matching value as pipeline head`() {
+        val params = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = patient() }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParam("patient", Patient::class)
+
+        assertNotNull(result.getResult())
+        assertInstanceOf(Patient::class.java, result.getResult())
+    }
+
+    @Test
+    fun `extractParam with reified overload requires no KClass`() {
+        val params = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = patient() }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParam<Patient>("patient")
+
+        assertNotNull(result.getResult())
+        assertInstanceOf(Patient::class.java, result.getResult())
+    }
+
+    @Test
+    fun `extractParam throws when key does not exist`() {
+        val params = Parameters()
+        val or = OperationResult.fromParameters(params)
+
+        assertThrows<IllegalArgumentException> {
+            or.extractParam<Patient>("patient")
+        }
+    }
+
+    @Test
+    fun `extractParam throws when key exists but type does not match`() {
+        val params = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = appointment() }
+        }
+        val or = OperationResult.fromParameters(params)
+
+        assertThrows<IllegalArgumentException> {
+            or.extractParam<Patient>("patient")
+        }
+    }
+
+    @Test
+    fun `extractParam preserves all parameters in the map`() {
+        val params = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = patient() }
+            addParameter().apply { name = "appt"; resource = appointment() }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParam<Patient>("patient")
+
+        assertTrue(result.containsKey("patient"))
+        assertTrue(result.containsKey("appt"))
+        assertEquals(2, result.totalCount())
+    }
+
+    @Test
+    fun `extractParamList sets typed list as pipeline head`() {
+        val params = Parameters().apply {
+            repeat(3) { addParameter().apply { name = "patients"; resource = patient() } }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParamList<Patient>("patients")
+
+        val list = result.getResult()
+        assertNotNull(list)
+        assertEquals(3, list!!.size)
+    }
+
+    @Test
+    fun `extractParamList returns empty list when key is absent`() {
+        val params = Parameters()
+        val result = OperationResult.fromParameters(params)
+            .extractParamList<Patient>("patients")
+
+        val list = result.getResult()
+        assertNotNull(list)
+        assertEquals(0, list!!.size)
+    }
+
+    @Test
+    fun `extractParamList returns empty list when type does not match`() {
+        val params = Parameters().apply {
+            addParameter().apply { name = "patients"; resource = appointment() }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParamList<Patient>("patients")
+
+        val list = result.getResult()
+        assertNotNull(list)
+        assertEquals(0, list!!.size)
+    }
+
+    @Test
+    fun `extractParam enables downstream addUsing`() {
+        val date = DateType("2024-01-15")
+        val params = Parameters().apply {
+            addParameter().apply { name = "date"; value = date }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParam<DateType>("date")
+            .addUsing("label") { d -> StringType(d.valueAsString) }
+
+        assertNotNull(result.getResult())
+        assertEquals("2024-01-15", (result.getResult() as StringType).value)
+        assertTrue(result.containsKey("label"))
+    }
+
+    @Test
+    fun `extractParam on nested parameter key`() {
+        val params = Parameters().apply {
+            addParameter().apply {
+                name = "address"
+                addPart().apply { name = "city"; value = StringType("Springfield") }
+            }
+        }
+        val result = OperationResult.fromParameters(params)
+            .extractParam<StringType>("address.city")
+
+        assertNotNull(result.getResult())
+        assertEquals("Springfield", (result.getResult() as StringType).value)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {

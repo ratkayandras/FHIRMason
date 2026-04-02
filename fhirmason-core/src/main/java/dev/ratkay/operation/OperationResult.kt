@@ -493,6 +493,39 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> takeFirstTyped(name: String): R? = takeFirstTyped(name, R::class)
 
+    /**
+     * Extracts the first value of type [R] stored under [name] and sets it as the pipeline head.
+     * Throws [IllegalArgumentException] if no value of [R] exists under [name].
+     */
+    fun <R : Base> extractParam(name: String, type: KClass<R>): OperationResult<R> {
+        val value = parameters[name]
+            ?.filterIsInstance(type.java)
+            ?.firstOrNull()
+            ?: throw IllegalArgumentException(
+                "No value of type '${type.simpleName}' found under key '$name'"
+            )
+        return copyWith(value)
+    }
+
+    /** Reified overload — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> extractParam(name: String): OperationResult<R> =
+        extractParam(name, R::class)
+
+    /**
+     * Extracts all values of type [R] stored under [name] and sets the list as the pipeline head.
+     * Returns an empty list (not an error) if no values match.
+     */
+    fun <R : Base> extractParamList(name: String, type: KClass<R>): OperationResult<List<R>> {
+        val values = parameters[name]
+            ?.filterIsInstance(type.java)
+            ?: emptyList()
+        return copyWith(values)
+    }
+
+    /** Reified overload — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> extractParamList(name: String): OperationResult<List<R>> =
+        extractParamList(name, R::class)
+
     // Reference linking
 
     /**

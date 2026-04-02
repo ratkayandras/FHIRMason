@@ -87,6 +87,10 @@ catch (e: Exception) {
 - Primitive convenience methods must delegate to `runPrimitiveStep` (Pattern B) — never duplicate the try/catch inline.
 - Do not add new catch patterns without updating this section.
 
+## Pre-Push Requirement
+
+Run the full test suite (`mvn test`) before every push. All tests across all modules must be green — fix any failure, even if it appears unrelated to your changes, before committing and pushing.
+
 ## README Maintenance
 
 Keep `README.md` up to date on every branch. When a branch adds or changes a feature, update the relevant section(s) of the README before committing:

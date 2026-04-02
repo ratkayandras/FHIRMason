@@ -500,6 +500,30 @@ val result = OperationResult.fromBundle(bundle) { entry ->
 }
 ```
 
+#### Extracting typed values from parameters
+
+After loading a `Parameters` resource with `fromParameters`, use `extractParam` or `extractParamList` to pull a named value out of the internal map and set it as the new pipeline head for downstream processing.
+
+| Method | Signature | Behaviour on missing / wrong type |
+|---|---|---|
+| `extractParam` | `extractParam<R>(name)` | Throws `IllegalArgumentException` |
+| `extractParamList` | `extractParamList<R>(name)` | Returns empty list |
+
+```kotlin
+// Pull a single typed value and continue the pipeline
+val result = OperationResult.fromParameters(input)
+    .extractParam<Patient>("patient")
+    .addUsing("encounter") { patient -> lookupEncounter(patient) }
+
+// Pull all values of a given type stored under one key
+val result = OperationResult.fromParameters(input)
+    .extractParamList<Observation>("observations")
+
+// Both preserve the full parameters map — only the pipeline head changes
+result.containsKey("patient")       // true
+result.containsKey("observations")  // true
+```
+
 ---
 
 ## AsyncOperationResult (Async / DAG)
