@@ -1567,20 +1567,47 @@ class OperationResultTest {
     }
 
     @Test
-    fun `extensions survive round-trip serialization`() {
+    fun `extensions survive full round-trip via fromParameters`() {
         val value = StringType("hello")
         val ext = Extension("http://example.com/ext", StringType("extValue"))
 
-        val params = OperationResult.of(patient())
+        val params1 = OperationResult.of(patient())
             .addWithExtension("greeting", value, ext)
             .toParameters()
 
-        // Verify extension is present in the serialized Parameters
-        val param = params.parameter.first { it.name == "greeting" }
+        val params2 = OperationResult.fromParameters(params1).toParameters()
+
+        val param = params2.parameter.first { it.name == "greeting" }
         assertEquals(1, param.extension.size)
         assertEquals("http://example.com/ext", param.extension.first().url)
-        // Note: extensions are serialized but not deserialized by fromParameters;
-        // a round-trip via fromParameters loses extension metadata on the parameter components.
+        assertEquals("extValue", (param.extension.first().value as StringType).value)
+    }
+
+    @Test
+    fun `fromParameters preserves existing extensions and addWithExtension adds new ones`() {
+        // Build an initial Parameters with one extension on "greeting"
+        val original = Extension("http://example.com/original", StringType("orig"))
+        val params1 = OperationResult.of(patient())
+            .addWithExtension("greeting", StringType("hello"), original)
+            .toParameters()
+
+        // Round-trip through fromParameters, then attach an additional extension on a new key
+        val added = Extension("http://example.com/added", StringType("new"))
+        val params2 = OperationResult.fromParameters(params1)
+            .addWithExtension("status", StringType("active"), added)
+            .toParameters()
+
+        // Original extension on "greeting" is preserved
+        val greetingParam = params2.parameter.first { it.name == "greeting" }
+        assertEquals(1, greetingParam.extension.size)
+        assertEquals("http://example.com/original", greetingParam.extension.first().url)
+        assertEquals("orig", (greetingParam.extension.first().value as StringType).value)
+
+        // Newly added extension on "status" is present
+        val statusParam = params2.parameter.first { it.name == "status" }
+        assertEquals(1, statusParam.extension.size)
+        assertEquals("http://example.com/added", statusParam.extension.first().url)
+        assertEquals("new", (statusParam.extension.first().value as StringType).value)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

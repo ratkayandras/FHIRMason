@@ -269,7 +269,7 @@ val result = OperationResult.of(patient)
 
 Extensions on dot-delimited (nested) keys work correctly — `buildParameterComponents` tracks the full key path during recursion and attaches extensions to the appropriate nested part.
 
-> **Note:** Extensions are serialized by `toParameters()` but are **not** deserialized by `fromParameters()`. A round-trip via `fromParameters` will lose the extension metadata on the parameter components.
+> **Note:** Extensions on resource parameters (where `setResource` is used instead of `setValue`) are not captured by `fromParameters()` — the resource already carries its own extension list natively. Extensions on value parameters round-trip correctly.
 
 ### Error Strategy
 
