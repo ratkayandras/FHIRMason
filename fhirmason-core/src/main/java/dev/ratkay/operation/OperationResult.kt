@@ -5,6 +5,16 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.Year
+import java.time.YearMonth
+import java.time.ZonedDateTime
+import java.util.Calendar
+import java.util.Date
 import java.util.IdentityHashMap
 import kotlin.reflect.KClass
 
@@ -256,7 +266,27 @@ class OperationResult<T> private constructor(
     fun addCode(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { CodeType(value) }
     fun addUri(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { UriType(value) }
     fun addDate(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { DateType(value) }
-    fun addDateTime(name: String, value: String): OperationResult<T>     = runPrimitiveStep(name) { DateTimeType(value) }
+    fun addDate(name: String, value: LocalDate): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: YearMonth): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: Year): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: Date): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+
+    fun addDateTime(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { DateTimeType(value) }
+    fun addDateTime(name: String, value: LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addDateTime(name: String, value: ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addDateTime(name: String, value: OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addDateTime(name: String, value: Date): OperationResult<T>            = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addDateTime(name: String, value: Calendar): OperationResult<T>        = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+
+    fun addInstant(name: String, value: String): OperationResult<T>           = runPrimitiveStep(name) { InstantType(value) }
+    fun addInstant(name: String, value: Instant): OperationResult<T>          = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+    fun addInstant(name: String, value: ZonedDateTime): OperationResult<T>    = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+    fun addInstant(name: String, value: OffsetDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+    fun addInstant(name: String, value: Date): OperationResult<T>             = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+
+    fun addTime(name: String, value: String): OperationResult<T>              = runPrimitiveStep(name) { TimeType(value) }
+    fun addTime(name: String, value: LocalTime): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(value) }
+
     fun addCanonical(name: String, value: String): OperationResult<T>    = runPrimitiveStep(name) { CanonicalType(value) }
 
     fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T>      = runPrimitiveStep(name) { StringType(builder(getResult())) }
@@ -266,7 +296,9 @@ class OperationResult<T> private constructor(
     fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { CodeType(builder(getResult())) }
     fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T>         = runPrimitiveStep(name) { UriType(builder(getResult())) }
     fun addDateUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { DateType(builder(getResult())) }
-    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
+    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
+    fun addInstantUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { InstantType(builder(getResult())) }
+    fun addTimeUsing(name: String, builder: (T) -> String): OperationResult<T>       = runPrimitiveStep(name) { TimeType(builder(getResult())) }
     fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
 
     // ── Complex data type convenience methods ────────────────────────────────
@@ -296,6 +328,30 @@ class OperationResult<T> private constructor(
             Period().apply {
                 if (start != null) this.startElement = DateTimeType(start)
                 if (end != null) this.endElement = DateTimeType(end)
+            }
+        }
+
+    fun addPeriod(name: String, start: LocalDateTime?, end: LocalDateTime?): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Period().apply {
+                if (start != null) this.startElement = FhirDateTimeConverter.toFhirDateTime(start)
+                if (end != null) this.endElement = FhirDateTimeConverter.toFhirDateTime(end)
+            }
+        }
+
+    fun addPeriod(name: String, start: ZonedDateTime?, end: ZonedDateTime?): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Period().apply {
+                if (start != null) this.startElement = FhirDateTimeConverter.toFhirDateTime(start)
+                if (end != null) this.endElement = FhirDateTimeConverter.toFhirDateTime(end)
+            }
+        }
+
+    fun addPeriod(name: String, start: OffsetDateTime?, end: OffsetDateTime?): OperationResult<T> =
+        runPrimitiveStep(name) {
+            Period().apply {
+                if (start != null) this.startElement = FhirDateTimeConverter.toFhirDateTime(start)
+                if (end != null) this.endElement = FhirDateTimeConverter.toFhirDateTime(end)
             }
         }
 
