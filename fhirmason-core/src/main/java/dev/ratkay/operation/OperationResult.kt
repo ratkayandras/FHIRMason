@@ -5,6 +5,7 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.*
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
+import java.util.IdentityHashMap
 import kotlin.reflect.KClass
 
 /**
@@ -23,7 +24,8 @@ class OperationResult<T> private constructor(
     private val errorStrategy: ErrorStrategy,
     private val failedTasks: MutableMap<String, OperationOutcome>,
     private val timingEnabled: Boolean = false,
-    private val metrics: MutableList<StepMetrics> = mutableListOf()
+    private val metrics: MutableList<StepMetrics> = mutableListOf(),
+    private val extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = mutableMapOf()
 ) {
 
     // Error state
@@ -66,11 +68,17 @@ class OperationResult<T> private constructor(
     private fun <R> copyWith(
         result: R?,
         params: MutableMap<String, MutableList<Base>> = parameters,
-        timingEnabled: Boolean = this.timingEnabled
-    ): OperationResult<R> = OperationResult(params, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics)
+        timingEnabled: Boolean = this.timingEnabled,
+        extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = this.extensions
+    ): OperationResult<R> = OperationResult(params, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics, extensions)
 
     private fun shallowCopyParams(): MutableMap<String, MutableList<Base>> =
         parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
+
+    private fun shallowCopyExtensions(): MutableMap<String, MutableMap<Base, List<Extension>>> =
+        extensions.mapValues { (_, inner) ->
+            IdentityHashMap<Base, List<Extension>>(inner)
+        }.toMutableMap()
 
     // Metrics and timing
 
@@ -348,6 +356,37 @@ class OperationResult<T> private constructor(
         return copyWith(result)
     }
 
+    // ── Extension support ──────────────────────────────────────────────
+
+    /**
+     * Adds [value] to the parameter map under [name] with FHIR [exts] attached.
+     * When serialized via [toParameters], the extensions are added to the emitted
+     * [Parameters.ParametersParameterComponent].
+     *
+     * Uses an [IdentityHashMap] for the inner extension lookup so that two different
+     * instances that are `.equals()` but not the same object each keep independent
+     * extension lists.
+     *
+     * Returns [OperationResult<T>] (unchanged head), like [addOrSkip].
+     */
+    fun <R : Base> addWithExtension(
+        name: String,
+        value: R,
+        vararg exts: Extension
+    ): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val start = System.currentTimeMillis()
+        parameters.getOrPut(name) { mutableListOf() }.add(value)
+        if (exts.isNotEmpty()) {
+            val innerMap = extensions.getOrPut(name) { IdentityHashMap() }
+            innerMap[value] = exts.toList()
+        }
+        val durationMs = System.currentTimeMillis() - start
+        recordMetric(name, value.fhirType(), durationMs, true)
+        logStep(name, value.fhirType(), durationMs)
+        return copyWith(result)
+    }
+
     // Query methods
 
     fun getAllParameters(): Map<String, List<Base>> =
@@ -435,7 +474,7 @@ class OperationResult<T> private constructor(
         inner.parameters.forEach { (key, values) ->
             newParams.getOrPut(key) { mutableListOf() }.addAll(values)
         }
-        return copyWith(inner.result, params = newParams)
+        return copyWith(inner.result, params = newParams, extensions = shallowCopyExtensions())
     }
 
     /**
@@ -447,14 +486,14 @@ class OperationResult<T> private constructor(
         other.parameters.forEach { (key, values) ->
             newParams.getOrPut(key) { mutableListOf() }.addAll(values)
         }
-        return copyWith(result, params = newParams)
+        return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
 
     /** Returns a new [OperationResult] without the entry for [name]. No-op if [name] is absent. */
     fun remove(name: String): OperationResult<T> {
         val newParams = shallowCopyParams()
         newParams.remove(name)
-        return copyWith(result, params = newParams)
+        return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
 
     /**
@@ -468,7 +507,7 @@ class OperationResult<T> private constructor(
         if (values != null) {
             newParams.getOrPut(newName) { mutableListOf() }.addAll(values)
         }
-        return copyWith(result, params = newParams)
+        return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
 
     /**
@@ -712,6 +751,7 @@ class OperationResult<T> private constructor(
      */
     private fun buildParameterComponents(
         entries: Map<String, List<Base>>,
+        keyPrefix: String = "",
         addComponent: (String) -> Parameters.ParametersParameterComponent
     ) {
         // Unique top-level segments in insertion order
@@ -724,6 +764,8 @@ class OperationResult<T> private constructor(
                 .filterKeys { it.startsWith("$segment.") }
                 .mapKeys { (key, _) -> key.removePrefix("$segment.") }
 
+            val fullKey = if (keyPrefix.isEmpty()) segment else "$keyPrefix.$segment"
+
             if (childEntries.isEmpty()) {
                 // Leaf: one component per value
                 directValues?.forEach { value ->
@@ -732,12 +774,14 @@ class OperationResult<T> private constructor(
                             is Type     -> setValue(value)
                             is Resource -> setResource(value)
                         }
+                        val valueExts = extensions[fullKey]?.get(value)
+                        valueExts?.forEach { ext -> addExtension(ext) }
                     }
                 }
             } else {
                 // Branch: single parent component whose children are built recursively
                 val parent = addComponent(segment)
-                buildParameterComponents(childEntries) { childName ->
+                buildParameterComponents(childEntries, fullKey) { childName ->
                     parent.addPart().also { it.name = childName }
                 }
             }

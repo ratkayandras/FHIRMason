@@ -229,6 +229,48 @@ val result = OperationResult.of(patient)
 //       part: name="leaf", valueString="deep"
 ```
 
+#### Extensions on parameters
+
+`addWithExtension` attaches one or more FHIR `Extension` objects to an individual parameter entry. When serialized via `toParameters()`, the extensions are emitted on the corresponding `ParametersParameterComponent`.
+
+```kotlin
+fun <R : Base> addWithExtension(
+    name: String,
+    value: R,
+    vararg exts: Extension
+): OperationResult<T>
+```
+
+The pipeline head type `T` is preserved (behaves like `addOrSkip`). An `IdentityHashMap` is used internally so that two distinct instances that are `.equals()` each keep independent extension lists.
+
+```kotlin
+val flagExt = Extension("http://example.com/flag", BooleanType(true))
+
+val result = OperationResult.of(patient)
+    .addWithExtension("status", StringType("active"), flagExt)
+
+// toParameters() produces:
+// Parameters
+//   parameter: name="status", valueString="active"
+//     extension: url="http://example.com/flag", valueBoolean=true
+```
+
+Multiple extensions are supported:
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addWithExtension(
+        "obs",
+        CodeType("8867-4"),
+        Extension("http://example.com/ext1", StringType("v1")),
+        Extension("http://example.com/ext2", StringType("v2"))
+    )
+```
+
+Extensions on dot-delimited (nested) keys work correctly — `buildParameterComponents` tracks the full key path during recursion and attaches extensions to the appropriate nested part.
+
+> **Note:** Extensions are serialized by `toParameters()` but are **not** deserialized by `fromParameters()`. A round-trip via `fromParameters` will lose the extension metadata on the parameter components.
+
 ### Error Strategy
 
 `OperationResult` supports two strategies, set at construction time via `of()`:
