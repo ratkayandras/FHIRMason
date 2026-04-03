@@ -147,11 +147,13 @@ Store raw Kotlin/Java primitives as FHIR types without changing the pipeline hea
 | `addDecimal(name, value)` | `BigDecimal` | `DecimalType` | `addDecimalUsing(name) { t -> BigDecimal }` |
 | `addCode(name, value)` | `String` | `CodeType` | `addCodeUsing(name) { t -> String }` |
 | `addUri(name, value)` | `String` | `UriType` | `addUriUsing(name) { t -> String }` |
-| `addDate(name, value)` | `String` (FHIR date) | `DateType` | `addDateUsing(name) { t -> String }` |
-| `addDateTime(name, value)` | `String` (FHIR dateTime) | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` |
+| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` | `DateType` | `addDateUsing(name) { t -> String }` |
+| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` |
+| `addInstant(name, value)` | `String` · `Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` | `addInstantUsing(name) { t -> String }` |
+| `addTime(name, value)` | `String` · `LocalTime` | `TimeType` | `addTimeUsing(name) { t -> String }` |
 | `addCanonical(name, value)` | `String` | `CanonicalType` | `addCanonicalUsing(name) { t -> String }` |
 
-`addDate` and `addDateTime` accept FHIR-format strings (e.g. `"2024-01-15"`, `"2024-01-15T10:30:00"`) — HAPI's `DateType(String)` and `DateTimeType(String)` constructors handle parsing. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
+`addDate` and `addDateTime` accept either FHIR-format strings (e.g. `"2024-01-15"`, `"2024-01-15T10:30:00"`) or common Java/Kotlin date-time types — see [`FhirDateTimeConverter`](#fhirdatetimeconverter) for how each type is mapped. `addInstant` and `addTime` follow the same pattern. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
 
 ```kotlin
 val result = OperationResult.of(patient)
@@ -172,7 +174,7 @@ Construct and store common FHIR complex types without manually building HAPI obj
 | `addCoding(name, system, code, display?)` | `Coding` | `system`, `code`, optional `display` |
 | `addReference(name, reference)` | `Reference` | `reference` string (e.g. `"Patient/123"`) |
 | `addIdentifier(name, system, value)` | `Identifier` | `system`, `value` |
-| `addPeriod(name, start?, end?)` | `Period` | nullable FHIR dateTime strings |
+| `addPeriod(name, start?, end?)` | `Period` | nullable FHIR dateTime strings, or `LocalDateTime?` / `ZonedDateTime?` / `OffsetDateTime?` |
 | `addQuantity(name, value, unit, system?, code?)` | `Quantity` | `BigDecimal` value, UCUM unit, optional system/code |
 | `addCodeableConcept(name, system, code, display?, text?)` | `CodeableConcept` | coding fields plus optional free-text |
 
@@ -186,6 +188,45 @@ val result = OperationResult.of(patient)
     .addCodeableConcept("category", "http://snomed.info/sct", "413839001", "Chronic lung disease")
 
 val p: Patient = result.getResult()  // head type unchanged
+```
+
+#### FhirDateTimeConverter
+
+`FhirDateTimeConverter` is a public Kotlin `object` in `dev.ratkay.operation` that maps common Java/Kotlin date-time types to their HAPI FHIR R4 equivalents. All functions are pure and stateless — they can be used directly without an `OperationResult` pipeline.
+
+| Function | Input type(s) | HAPI FHIR result |
+|---|---|---|
+| `toFhirDate(value)` | `LocalDate` · `YearMonth` · `Year` · `java.util.Date` | `DateType` |
+| `toFhirDateTime(value)` | `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` |
+| `toFhirInstant(value)` | `java.time.Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` |
+| `toFhirTime(value)` | `LocalTime` | `TimeType` |
+
+**Timezone behaviour:**
+- `LocalDate`, `YearMonth`, `Year` → no timezone (FHIR date is zone-agnostic)
+- `LocalDateTime` → no timezone (FHIR allows zone-less dateTime)
+- `ZonedDateTime` / `OffsetDateTime` → timezone offset preserved in the FHIR string
+- `Instant` / `java.util.Date` → converted to milliseconds, HAPI renders as UTC
+
+```kotlin
+import dev.ratkay.operation.FhirDateTimeConverter
+
+// Standalone usage
+val fhirDate    = FhirDateTimeConverter.toFhirDate(LocalDate.of(1990, 6, 15))   // DateType "1990-06-15"
+val fhirDt      = FhirDateTimeConverter.toFhirDateTime(ZonedDateTime.now())      // DateTimeType with offset
+val fhirInstant = FhirDateTimeConverter.toFhirInstant(Instant.now())             // InstantType UTC
+val fhirTime    = FhirDateTimeConverter.toFhirTime(LocalTime.of(10, 30))         // TimeType "10:30"
+
+// Inside an OperationResult pipeline — overloads accept Java types directly
+val result = OperationResult.of(patient)
+    .addDate("dob", LocalDate.of(1990, 6, 15))
+    .addDateTime("recorded", ZonedDateTime.now())
+    .addInstant("ts", Instant.now())
+    .addTime("appt", LocalTime.of(10, 30))
+    .addPeriod("coverage", ZonedDateTime.now(), ZonedDateTime.now().plusYears(1))
+
+// For builder lambdas (Using variants) with Java types, call the converter inline:
+val result2 = OperationResult.of(patient)
+    .addDateUsing("dob") { FhirDateTimeConverter.toFhirDate(it.getBirthDateElement().value).valueAsString }
 ```
 
 #### Nested parameters (parts)

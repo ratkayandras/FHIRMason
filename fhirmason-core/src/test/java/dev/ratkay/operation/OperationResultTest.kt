@@ -9,6 +9,18 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.Year
+import java.time.YearMonth
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.util.Calendar
+import java.util.Date
+import java.util.TimeZone
 
 class OperationResultTest {
 
@@ -1101,6 +1113,225 @@ class OperationResultTest {
         assertTrue(result.containsKey("recorded"))
         val stored = result.getAll("recorded").first()
         assertThat(stored, instanceOf(DateTimeType::class.java))
+    }
+
+    @Test
+    fun `addDate with LocalDate stores DateType with correct ISO value`() {
+        val result = OperationResult.of(patient())
+            .addDate("dob", LocalDate.of(1990, 6, 15))
+
+        assertTrue(result.containsKey("dob"))
+        val stored = result.getAll("dob").first() as DateType
+        assertEquals("1990-06-15", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDate with YearMonth stores DateType with month precision`() {
+        val result = OperationResult.of(patient())
+            .addDate("period", YearMonth.of(2024, 3))
+
+        val stored = result.getAll("period").first() as DateType
+        assertEquals("2024-03", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDate with Year stores DateType with year precision`() {
+        val result = OperationResult.of(patient())
+            .addDate("year", Year.of(2024))
+
+        val stored = result.getAll("year").first() as DateType
+        assertEquals("2024", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDate with java util Date stores DateType`() {
+        val result = OperationResult.of(patient())
+            .addDate("dob", Date(0))
+
+        assertTrue(result.containsKey("dob"))
+        assertThat(result.getAll("dob").first(), instanceOf(DateType::class.java))
+    }
+
+    @Test
+    fun `addDateTime with LocalDateTime stores zone-less DateTimeType with seconds`() {
+        val ldt = LocalDateTime.of(2024, 3, 15, 10, 30, 0)
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", ldt)
+
+        val stored = result.getAll("recorded").first() as DateTimeType
+        assertEquals("2024-03-15T10:30:00", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateTime with ZonedDateTime stores offset-aware DateTimeType`() {
+        val zdt = ZonedDateTime.of(2024, 3, 15, 10, 30, 15, 0, ZoneOffset.UTC)
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", zdt)
+
+        val stored = result.getAll("recorded").first() as DateTimeType
+        assertTrue(stored.valueAsString.contains("+00:00") || stored.valueAsString.endsWith("Z"),
+            "Should contain UTC offset: ${stored.valueAsString}")
+    }
+
+    @Test
+    fun `addDateTime with OffsetDateTime stores correct DateTimeType`() {
+        val odt = OffsetDateTime.of(2024, 3, 15, 10, 30, 30, 0, ZoneOffset.ofHours(2))
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", odt)
+
+        val stored = result.getAll("recorded").first() as DateTimeType
+        assertTrue(stored.valueAsString.contains("+02:00"),
+            "Should contain +02:00 offset: ${stored.valueAsString}")
+    }
+
+    @Test
+    fun `addDateTime with java util Date stores DateTimeType`() {
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", Date())
+
+        assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
+    }
+
+    @Test
+    fun `addDateTime with Calendar stores DateTimeType`() {
+        val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+        val result = OperationResult.of(patient())
+            .addDateTime("recorded", cal)
+
+        assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
+    }
+
+    @Test
+    fun `addInstant with String stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstant("ts", "2024-03-15T10:30:00.000Z")
+
+        assertTrue(result.containsKey("ts"))
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstant with java time Instant stores InstantType`() {
+        val instant = Instant.parse("2024-03-15T10:30:00.000Z")
+        val result = OperationResult.of(patient())
+            .addInstant("ts", instant)
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstant with ZonedDateTime stores InstantType`() {
+        val zdt = ZonedDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)
+        val result = OperationResult.of(patient())
+            .addInstant("ts", zdt)
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstant with OffsetDateTime stores InstantType`() {
+        val odt = OffsetDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)
+        val result = OperationResult.of(patient())
+            .addInstant("ts", odt)
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstant with java util Date stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstant("ts", Date())
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addTime with String stores TimeType`() {
+        val result = OperationResult.of(patient())
+            .addTime("appt", "10:30:00")
+
+        assertTrue(result.containsKey("appt"))
+        val stored = result.getAll("appt").first() as TimeType
+        assertEquals("10:30:00", stored.valueAsString)
+    }
+
+    @Test
+    fun `addTime with LocalTime stores TimeType`() {
+        val result = OperationResult.of(patient())
+            .addTime("appt", LocalTime.of(14, 45, 30))
+
+        val stored = result.getAll("appt").first() as TimeType
+        assertEquals("14:45:30", stored.valueAsString)
+    }
+
+    @Test
+    fun `addInstantUsing with String builder stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstantUsing("ts") { "2024-03-15T10:30:00.000Z" }
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addTimeUsing with String builder stores TimeType`() {
+        val result = OperationResult.of(patient())
+            .addTimeUsing("appt") { "09:00:00" }
+
+        val stored = result.getAll("appt").first() as TimeType
+        assertEquals("09:00:00", stored.valueAsString)
+    }
+
+    @Test
+    fun `addPeriod with ZonedDateTime start and end stores Period with correct offsets`() {
+        val start = ZonedDateTime.of(2024, 1, 1, 8, 0, 0, 0, ZoneOffset.UTC)
+        val end = ZonedDateTime.of(2024, 12, 31, 23, 59, 59, 0, ZoneOffset.UTC)
+        val result = OperationResult.of(patient())
+            .addPeriod("coverage", start, end)
+
+        assertTrue(result.containsKey("coverage"))
+        val period = result.getAll("coverage").first() as Period
+        assertTrue(period.hasStart())
+        assertTrue(period.hasEnd())
+    }
+
+    @Test
+    fun `addPeriod with OffsetDateTime stores Period`() {
+        val start = OffsetDateTime.of(2024, 1, 1, 8, 0, 0, 0, ZoneOffset.UTC)
+        val end = OffsetDateTime.of(2024, 12, 31, 23, 59, 59, 0, ZoneOffset.UTC)
+        val result = OperationResult.of(patient())
+            .addPeriod("coverage", start, end)
+
+        val period = result.getAll("coverage").first() as Period
+        assertTrue(period.hasStart() && period.hasEnd())
+    }
+
+    @Test
+    fun `addPeriod with LocalDateTime stores Period`() {
+        val start = LocalDateTime.of(2024, 1, 1, 8, 0, 0)
+        val end = LocalDateTime.of(2024, 12, 31, 23, 59, 59)
+        val result = OperationResult.of(patient())
+            .addPeriod("coverage", start, end)
+
+        val period = result.getAll("coverage").first() as Period
+        assertTrue(period.hasStart() && period.hasEnd())
+    }
+
+    @Test
+    fun `addDate with LocalDate preserves pipeline head type`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient)
+            .addDate("dob", LocalDate.of(1990, 1, 1))
+
+        assertThat(result.getResult(), sameInstance(patient))
+    }
+
+    @Test
+    fun `addInstant with Instant preserves pipeline head type`() {
+        val patient = patient()
+        val result: OperationResult<Patient> = OperationResult.of(patient)
+            .addInstant("ts", Instant.now())
+
+        assertThat(result.getResult(), sameInstance(patient))
     }
 
     @Test
