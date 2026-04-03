@@ -865,8 +865,8 @@ class OperationResult<T> private constructor(
          * [fromParametersTyped] when a typed head is required.
          */
         fun fromParameters(parameters: Parameters): OperationResult<Base> {
-            val params = buildParamsFrom(parameters)
-            return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+            val (params, exts) = buildParamsFrom(parameters)
+            return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
         }
 
         /**
@@ -880,14 +880,14 @@ class OperationResult<T> private constructor(
             primaryKey: String,
             type: KClass<T>
         ): OperationResult<T> {
-            val params = buildParamsFrom(parameters)
+            val (params, exts) = buildParamsFrom(parameters)
             val primary = params[primaryKey]
                 ?.filterIsInstance(type.java)
                 ?.firstOrNull()
                 ?: throw IllegalArgumentException(
                     "No value of type '${type.simpleName}' found under key '$primaryKey'"
                 )
-            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
         }
 
         /** Reified overload of [fromParametersTyped] — no [KClass] argument needed at call sites. */
@@ -961,30 +961,46 @@ class OperationResult<T> private constructor(
 
         // ── Private helpers ───────────────────────────────────────────────────
 
-        private fun buildParamsFrom(parameters: Parameters): MutableMap<String, MutableList<Base>> {
+        private fun buildParamsFrom(
+            parameters: Parameters
+        ): Pair<MutableMap<String, MutableList<Base>>, MutableMap<String, MutableMap<Base, List<Extension>>>> {
             val params = mutableMapOf<String, MutableList<Base>>()
-            parameters.parameter.forEach { param -> populateFromParam(params, param) }
-            return params
+            val exts = mutableMapOf<String, MutableMap<Base, List<Extension>>>()
+            parameters.parameter.forEach { param -> populateFromParam(params, exts, param) }
+            return params to exts
         }
 
         /**
-         * Recursively populates [params] from a single [Parameters.ParametersParameterComponent].
+         * Recursively populates [params] and [exts] from a single [Parameters.ParametersParameterComponent].
          *
-         * - Resource parameter  → stored under [keyPrefix]`.<name>` (or just `<name>` at root)
-         * - Value parameter     → stored under [keyPrefix]`.<name>`
+         * - Resource parameter  → stored under [keyPrefix]`.<name>` (or just `<name>` at root);
+         *                         component-level extensions on resource parameters are not captured
+         *                         because the resource already carries its own extension list.
+         * - Value parameter     → stored under [keyPrefix]`.<name>`; any component-level extensions
+         *                         (i.e. [Parameters.ParametersParameterComponent.extension]) are
+         *                         preserved in [exts] so that a subsequent [toParameters] call
+         *                         re-emits them on the same component.
          * - Parts-only entry    → each part is processed recursively with the current key as prefix
          */
         private fun populateFromParam(
             params: MutableMap<String, MutableList<Base>>,
+            exts: MutableMap<String, MutableMap<Base, List<Extension>>>,
             param: Parameters.ParametersParameterComponent,
             keyPrefix: String = ""
         ) {
             val key = if (keyPrefix.isEmpty()) param.name else "$keyPrefix.${param.name}"
             when {
                 param.hasResource() -> params.getOrPut(key) { mutableListOf() }.add(param.resource)
-                param.hasValue()    -> params.getOrPut(key) { mutableListOf() }.add(param.value)
-                param.hasPart()     -> param.part.forEach { part ->
-                    populateFromParam(params, part, key)
+                param.hasValue() -> {
+                    val value = param.value
+                    params.getOrPut(key) { mutableListOf() }.add(value)
+                    if (param.hasExtension()) {
+                        val innerMap = exts.getOrPut(key) { IdentityHashMap() }
+                        innerMap[value] = param.extension.toList()
+                    }
+                }
+                param.hasPart() -> param.part.forEach { part ->
+                    populateFromParam(params, exts, part, key)
                 }
             }
         }
