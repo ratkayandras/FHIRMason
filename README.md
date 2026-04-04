@@ -234,6 +234,61 @@ val result2 = OperationResult.of(patient)
     .addTimeUsingLocalTime("appt") { LocalTime.of(9, 0) }
 ```
 
+#### FhirExtensionHelper
+
+`FhirExtensionHelper` is a public Kotlin `object` in `dev.ratkay.operation` for retrieving FHIR extensions from any object that can carry them. All methods search **at every level** of the FHIR object graph — not just the top-level `.extension` list of the source — by recursively traversing FHIR child elements.
+
+Any object implementing `IBaseHasExtensions` is a valid source: FHIR resources (`Patient`, `Observation`, …), all primitive types (`StringType`, `BooleanType`, …), all complex datatypes (`Coding`, `Reference`, …), and `Extension` itself (for nested sub-extensions).
+
+Each retrieval method has two flavours:
+- **Kotlin nullable** — returns `T?`; idiomatic for Kotlin callers.
+- **Java Optional / `Class<T>`** — returns `Optional<T>` or takes a `Class<T>` parameter; idiomatic for Java callers.
+
+| Method | Returns | Description |
+|---|---|---|
+| `hasExtension(source, url)` | `Boolean` | Deep presence check |
+| `getByUrl(source, url)` | `Extension?` | First match at any depth |
+| `getByUrlOptional(source, url)` | `Optional<Extension>` | Java-friendly alias for `getByUrl` |
+| `getAllByUrl(source, url)` | `List<Extension>` | All matches at any depth |
+| `getValueAs<T>(source, url)` | `T?` | Typed value of first match; Kotlin reified |
+| `getValueAsOptional(source, url, Class<T>)` | `Optional<T>` | Java-friendly; pass `StringType::class.java` |
+| `getAllValuesAs<T>(source, url)` | `List<T>` | All typed values; Kotlin reified |
+| `getAllValuesAs(source, url, Class<T>)` | `List<T>` | Java-friendly overload |
+| `getNested(source, url, nestedUrl)` | `Extension?` | First nested sub-extension at any depth |
+| `getNestedOptional(source, url, nestedUrl)` | `Optional<Extension>` | Java-friendly alias for `getNested` |
+| `getAllNested(source, url, nestedUrl)` | `List<Extension>` | All nested sub-extensions at any depth |
+
+```kotlin
+import dev.ratkay.operation.FhirExtensionHelper
+
+val patient = Patient().apply {
+    // Extension lives on the nested HumanName element, not on Patient directly
+    addName().addExtension("http://example.com/nid", StringType("12345"))
+    // Complex nested extension (sub-extensions instead of a single value)
+    addExtension(Extension("http://example.com/address-info").apply {
+        addExtension("http://example.com/city",    StringType("Oslo"))
+        addExtension("http://example.com/country", StringType("NO"))
+    })
+}
+
+// Deep retrieval — finds extension on the nested HumanName
+val nid: StringType? = FhirExtensionHelper.getValueAs<StringType>(patient, "http://example.com/nid")
+// nid?.value == "12345"
+
+// Nested sub-extension
+val city: StringType? = FhirExtensionHelper.getValueAs<StringType>(
+    FhirExtensionHelper.getNested(patient, "http://example.com/address-info", "http://example.com/city")!!,
+    "http://example.com/city"
+)
+
+// Java-friendly Optional variants
+val nidOpt: Optional<StringType> =
+    FhirExtensionHelper.getValueAsOptional(patient, "http://example.com/nid", StringType::class.java)
+
+val cityExt: Optional<Extension> =
+    FhirExtensionHelper.getNestedOptional(patient, "http://example.com/address-info", "http://example.com/city")
+```
+
 #### Nested parameters (parts)
 
 `addPart` builds nested FHIR `Parameters.part` structures using a sub-pipeline builder lambda, without relying on dot-delimited key names in the parameter map.
@@ -925,14 +980,16 @@ fhirmason-core/
     │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
     │   ├── StepMetrics.kt                  # Per-step timing and outcome data
     │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-    │   └── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
+    │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
+    │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
     └── test/java/dev/ratkay/operation/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
         ├── OperationResultLinkReferencesTest.kt
         ├── OperationResultMetricsTest.kt
         ├── AsyncOperationResultTest.kt
-        └── AsyncOperationResultMetricsTest.kt
+        ├── AsyncOperationResultMetricsTest.kt
+        └── FhirExtensionHelperTest.kt
 
 fhirmason-spring/
 └── src/
