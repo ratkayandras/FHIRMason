@@ -59,6 +59,30 @@ class FhirDateTimeConverterTest {
         assertTrue(result.valueAsString.isNotBlank())
     }
 
+    @Test
+    fun `toFhirDate with LocalDateTime extracts date part`() {
+        val ldt = LocalDateTime.of(2024, 3, 15, 22, 45, 0)
+        val result = FhirDateTimeConverter.toFhirDate(ldt)
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
+    @Test
+    fun `toFhirDate with ZonedDateTime extracts date part in given zone`() {
+        val zdt = ZonedDateTime.of(2024, 3, 15, 22, 45, 0, 0, ZoneOffset.ofHours(5))
+        val result = FhirDateTimeConverter.toFhirDate(zdt)
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
+    @Test
+    fun `toFhirDate with OffsetDateTime extracts date part`() {
+        val odt = OffsetDateTime.of(2024, 3, 15, 22, 45, 0, 0, ZoneOffset.ofHours(5))
+        val result = FhirDateTimeConverter.toFhirDate(odt)
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
     // ── toFhirDateTime ────────────────────────────────────────────────────────
 
     @Test
@@ -106,6 +130,16 @@ class FhirDateTimeConverterTest {
         assertThat(result, instanceOf(DateTimeType::class.java))
         assertTrue(result.valueAsString.startsWith("2024-03-15"),
             "Value should start with date: ${result.valueAsString}")
+    }
+
+    @Test
+    fun `toFhirDateTime with Instant produces DateTimeType in UTC`() {
+        val instant = Instant.parse("2024-03-15T10:30:00.000Z")
+        val result = FhirDateTimeConverter.toFhirDateTime(instant)
+        assertThat(result, instanceOf(DateTimeType::class.java))
+        assertTrue(result.valueAsString.isNotBlank())
+        assertTrue(result.valueAsString.contains("2024-03-15"),
+            "Value should contain the date: ${result.valueAsString}")
     }
 
     // ── toFhirInstant ─────────────────────────────────────────────────────────

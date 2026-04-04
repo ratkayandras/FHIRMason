@@ -43,7 +43,7 @@ src/test/java/dev/ratkay/operation/
 ## Import Rules
 
 - **No wildcard imports** (`import foo.*`) anywhere in source or test files. Import every symbol individually.
-- If two overloads would be identical after JVM type erasure (e.g. `fun f(builder: (T) -> LocalDate)` and `fun f(builder: (T) -> ZonedDateTime)` both erase to `Function1`), Kotlin's overload resolution also cannot pick between them at call sites. Do **not** use `@JvmName` as a workaround — instead, give each overload a distinct, descriptive name that encodes the type (e.g. `addDateUsingLocalDate`, `addDateTimeUsingZonedDateTime`). Update CLAUDE.md and README when adding such methods.
+- If two overloads would be identical after JVM type erasure (e.g. lambdas differing only in return type both erase to `Function1`), Kotlin's overload resolution cannot pick between them at call sites. Do **not** use `@JvmName` as a workaround — instead, give each overload a distinct, descriptive name that encodes the input type. Update README when adding such methods.
 
 ## Exception Handling Rules
 

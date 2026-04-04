@@ -60,6 +60,15 @@ object FhirDateTimeConverter {
     /** FHIR date from a legacy [Date]. HAPI infers day precision from the epoch value. */
     fun toFhirDate(value: Date): DateType = DateType(value)
 
+    /** FHIR date from a local date-time — extracts the date part, discards time. */
+    fun toFhirDate(value: LocalDateTime): DateType = DateType(value.toLocalDate().toString())
+
+    /** FHIR date from a zoned date-time — extracts the date part in the given zone, discards time. */
+    fun toFhirDate(value: ZonedDateTime): DateType = DateType(value.toLocalDate().toString())
+
+    /** FHIR date from an offset date-time — extracts the date part, discards time. */
+    fun toFhirDate(value: OffsetDateTime): DateType = DateType(value.toLocalDate().toString())
+
     // ── DateTimeType ──────────────────────────────────────────────────────────
 
     /** FHIR dateTime from a local date-time (no timezone). Result: `"YYYY-MM-DDTHH:MM:SS"`. */
@@ -76,6 +85,12 @@ object FhirDateTimeConverter {
 
     /** FHIR dateTime from a legacy [Calendar]. Timezone from the Calendar instance is used. */
     fun toFhirDateTime(value: Calendar): DateTimeType = DateTimeType(value)
+
+    /**
+     * FHIR dateTime from a [java.time.Instant] — rendered as UTC.
+     * Use [toFhirInstant] when millisecond precision is required.
+     */
+    fun toFhirDateTime(value: Instant): DateTimeType = DateTimeType(Date.from(value))
 
     // ── InstantType ───────────────────────────────────────────────────────────
 

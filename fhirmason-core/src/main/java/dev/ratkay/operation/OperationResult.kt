@@ -292,12 +292,16 @@ class OperationResult<T> private constructor(
     fun addDate(name: String, value: LocalDate): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
     fun addDate(name: String, value: YearMonth): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
     fun addDate(name: String, value: Year): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: Date): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: Date): OperationResult<T>            = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: LocalDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: ZonedDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDate(name: String, value: OffsetDateTime): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
 
     fun addDateTime(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { DateTimeType(value) }
     fun addDateTime(name: String, value: LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
     fun addDateTime(name: String, value: ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
     fun addDateTime(name: String, value: OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addDateTime(name: String, value: Instant): OperationResult<T>         = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
     fun addDateTime(name: String, value: Date): OperationResult<T>            = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
     fun addDateTime(name: String, value: Calendar): OperationResult<T>        = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
 
@@ -332,9 +336,13 @@ class OperationResult<T> private constructor(
     fun addDateUsingLocalDate(name: String, builder: (T) -> LocalDate): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
     fun addDateUsingYearMonth(name: String, builder: (T) -> YearMonth): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
     fun addDateUsingYear(name: String, builder: (T) -> Year): OperationResult<T>                         = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateUsingLocalDateTime(name: String, builder: (T) -> LocalDateTime): OperationResult<T>       = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>       = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
     fun addDateTimeUsingLocalDateTime(name: String, builder: (T) -> LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
     fun addDateTimeUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
     fun addDateTimeUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+    fun addDateTimeUsingInstant(name: String, builder: (T) -> Instant): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
     fun addInstantUsingInstant(name: String, builder: (T) -> Instant): OperationResult<T>                = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
     fun addInstantUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>    = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
     fun addInstantUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
