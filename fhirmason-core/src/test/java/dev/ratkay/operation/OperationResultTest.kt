@@ -1,13 +1,48 @@
 package dev.ratkay.operation
 
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-import org.hl7.fhir.r4.model.*
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assertions.assertFalse
+import org.hamcrest.Matchers.both
+import org.hamcrest.Matchers.contains
+import org.hamcrest.Matchers.containsInAnyOrder
+import org.hamcrest.Matchers.empty
+import org.hamcrest.Matchers.endsWith
+import org.hamcrest.Matchers.hasSize
+import org.hamcrest.Matchers.instanceOf
+import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.notNullValue
+import org.hamcrest.Matchers.sameInstance
+import org.hl7.fhir.r4.model.Appointment
+import org.hl7.fhir.r4.model.Base
+import org.hl7.fhir.r4.model.BooleanType
+import org.hl7.fhir.r4.model.Bundle
+import org.hl7.fhir.r4.model.CanonicalType
+import org.hl7.fhir.r4.model.CodeType
+import org.hl7.fhir.r4.model.CodeableConcept
+import org.hl7.fhir.r4.model.Coding
+import org.hl7.fhir.r4.model.Coverage
+import org.hl7.fhir.r4.model.DateTimeType
+import org.hl7.fhir.r4.model.DateType
+import org.hl7.fhir.r4.model.DecimalType
+import org.hl7.fhir.r4.model.Extension
+import org.hl7.fhir.r4.model.Identifier
+import org.hl7.fhir.r4.model.InstantType
+import org.hl7.fhir.r4.model.IntegerType
+import org.hl7.fhir.r4.model.OperationOutcome
+import org.hl7.fhir.r4.model.Parameters
+import org.hl7.fhir.r4.model.Patient
+import org.hl7.fhir.r4.model.Period
+import org.hl7.fhir.r4.model.Quantity
+import org.hl7.fhir.r4.model.Reference
+import org.hl7.fhir.r4.model.Resource
+import org.hl7.fhir.r4.model.StringType
+import org.hl7.fhir.r4.model.TimeType
+import org.hl7.fhir.r4.model.UriType
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
@@ -1279,6 +1314,92 @@ class OperationResultTest {
 
         val stored = result.getAll("appt").first() as TimeType
         assertEquals("09:00:00", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateUsingLocalDate builder stores DateType with correct value`() {
+        val result = OperationResult.of(patient())
+            .addDateUsingLocalDate("dob") { LocalDate.of(1990, 6, 15) }
+
+        val stored = result.getAll("dob").first() as DateType
+        assertEquals("1990-06-15", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateUsingYearMonth builder stores DateType with month precision`() {
+        val result = OperationResult.of(patient())
+            .addDateUsingYearMonth("period") { YearMonth.of(2024, 3) }
+
+        val stored = result.getAll("period").first() as DateType
+        assertEquals("2024-03", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateUsingYear builder stores DateType with year precision`() {
+        val result = OperationResult.of(patient())
+            .addDateUsingYear("year") { Year.of(2024) }
+
+        val stored = result.getAll("year").first() as DateType
+        assertEquals("2024", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateTimeUsingLocalDateTime builder stores zone-less DateTimeType`() {
+        val result = OperationResult.of(patient())
+            .addDateTimeUsingLocalDateTime("recorded") { LocalDateTime.of(2024, 3, 15, 10, 30, 0) }
+
+        val stored = result.getAll("recorded").first() as DateTimeType
+        assertEquals("2024-03-15T10:30:00", stored.valueAsString)
+    }
+
+    @Test
+    fun `addDateTimeUsingZonedDateTime builder stores offset-aware DateTimeType`() {
+        val result = OperationResult.of(patient())
+            .addDateTimeUsingZonedDateTime("recorded") { ZonedDateTime.of(2024, 3, 15, 10, 30, 15, 0, ZoneOffset.UTC) }
+
+        assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
+    }
+
+    @Test
+    fun `addDateTimeUsingOffsetDateTime builder stores offset-aware DateTimeType`() {
+        val result = OperationResult.of(patient())
+            .addDateTimeUsingOffsetDateTime("recorded") { OffsetDateTime.of(2024, 3, 15, 10, 30, 30, 0, ZoneOffset.ofHours(2)) }
+
+        val stored = result.getAll("recorded").first() as DateTimeType
+        assertTrue(stored.valueAsString.contains("+02:00"))
+    }
+
+    @Test
+    fun `addInstantUsingInstant builder stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstantUsingInstant("ts") { Instant.parse("2024-03-15T10:30:00.000Z") }
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstantUsingZonedDateTime builder stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstantUsingZonedDateTime("ts") { ZonedDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC) }
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addInstantUsingOffsetDateTime builder stores InstantType`() {
+        val result = OperationResult.of(patient())
+            .addInstantUsingOffsetDateTime("ts") { OffsetDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC) }
+
+        assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
+    }
+
+    @Test
+    fun `addTimeUsingLocalTime builder stores TimeType`() {
+        val result = OperationResult.of(patient())
+            .addTimeUsingLocalTime("appt") { LocalTime.of(9, 0) }
+
+        val stored = result.getAll("appt").first() as TimeType
+        assertEquals("09:00", stored.valueAsString)
     }
 
     @Test

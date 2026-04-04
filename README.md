@@ -147,13 +147,15 @@ Store raw Kotlin/Java primitives as FHIR types without changing the pipeline hea
 | `addDecimal(name, value)` | `BigDecimal` | `DecimalType` | `addDecimalUsing(name) { t -> BigDecimal }` |
 | `addCode(name, value)` | `String` | `CodeType` | `addCodeUsing(name) { t -> String }` |
 | `addUri(name, value)` | `String` | `UriType` | `addUriUsing(name) { t -> String }` |
-| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` | `DateType` | `addDateUsing(name) { t -> String }` |
-| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` |
-| `addInstant(name, value)` | `String` · `Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` | `addInstantUsing(name) { t -> String }` |
-| `addTime(name, value)` | `String` · `LocalTime` | `TimeType` | `addTimeUsing(name) { t -> String }` |
+| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` | `DateType` | `addDateUsing(name) { t -> String }` · `addDateUsingLocalDate` · `addDateUsingYearMonth` · `addDateUsingYear` |
+| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` · `addDateTimeUsingLocalDateTime` · `addDateTimeUsingZonedDateTime` · `addDateTimeUsingOffsetDateTime` |
+| `addInstant(name, value)` | `String` · `Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` | `addInstantUsing(name) { t -> String }` · `addInstantUsingInstant` · `addInstantUsingZonedDateTime` · `addInstantUsingOffsetDateTime` |
+| `addTime(name, value)` | `String` · `LocalTime` | `TimeType` | `addTimeUsing(name) { t -> String }` · `addTimeUsingLocalTime` |
 | `addCanonical(name, value)` | `String` | `CanonicalType` | `addCanonicalUsing(name) { t -> String }` |
 
 `addDate` and `addDateTime` accept either FHIR-format strings (e.g. `"2024-01-15"`, `"2024-01-15T10:30:00"`) or common Java/Kotlin date-time types — see [`FhirDateTimeConverter`](#fhirdatetimeconverter) for how each type is mapped. `addInstant` and `addTime` follow the same pattern. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
+
+The `Using` builder variants for Java date-time types use type-encoded names (e.g. `addDateUsingLocalDate`, `addDateTimeUsingZonedDateTime`) because Kotlin cannot resolve overloads that differ only in the lambda return type after JVM erasure.
 
 ```kotlin
 val result = OperationResult.of(patient)
@@ -224,9 +226,12 @@ val result = OperationResult.of(patient)
     .addTime("appt", LocalTime.of(10, 30))
     .addPeriod("coverage", ZonedDateTime.now(), ZonedDateTime.now().plusYears(1))
 
-// For builder lambdas (Using variants) with Java types, call the converter inline:
+// Builder (Using) variants with Java types use type-encoded names
 val result2 = OperationResult.of(patient)
-    .addDateUsing("dob") { FhirDateTimeConverter.toFhirDate(it.getBirthDateElement().value).valueAsString }
+    .addDateUsingLocalDate("dob") { it.birthDate.toInstant().atZone(ZoneOffset.UTC).toLocalDate() }
+    .addDateTimeUsingZonedDateTime("recorded") { ZonedDateTime.now() }
+    .addInstantUsingInstant("ts") { Instant.now() }
+    .addTimeUsingLocalTime("appt") { LocalTime.of(9, 0) }
 ```
 
 #### Nested parameters (parts)
