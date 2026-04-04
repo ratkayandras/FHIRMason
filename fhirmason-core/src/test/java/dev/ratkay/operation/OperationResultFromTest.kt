@@ -1,10 +1,30 @@
 package dev.ratkay.operation
 
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-import org.hl7.fhir.r4.model.*
+import org.hamcrest.Matchers.containsInAnyOrder
+import org.hamcrest.Matchers.empty
+import org.hamcrest.Matchers.hasSize
+import org.hamcrest.Matchers.instanceOf
+import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.sameInstance
+import org.hl7.fhir.r4.model.Appointment
+import org.hl7.fhir.r4.model.BooleanType
+import org.hl7.fhir.r4.model.Bundle
+import org.hl7.fhir.r4.model.DateType
+import org.hl7.fhir.r4.model.IntegerType
+import org.hl7.fhir.r4.model.Observation
+import org.hl7.fhir.r4.model.OperationOutcome
+import org.hl7.fhir.r4.model.Parameters
+import org.hl7.fhir.r4.model.Patient
+import org.hl7.fhir.r4.model.StringType
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.assertThrows
 
 class OperationResultFromTest {

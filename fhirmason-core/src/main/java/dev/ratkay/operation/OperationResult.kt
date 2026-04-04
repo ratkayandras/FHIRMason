@@ -2,7 +2,30 @@ package dev.ratkay.operation
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
-import org.hl7.fhir.r4.model.*
+import org.hl7.fhir.r4.model.Base
+import org.hl7.fhir.r4.model.BooleanType
+import org.hl7.fhir.r4.model.Extension
+import org.hl7.fhir.r4.model.Bundle
+import org.hl7.fhir.r4.model.CanonicalType
+import org.hl7.fhir.r4.model.CodeType
+import org.hl7.fhir.r4.model.CodeableConcept
+import org.hl7.fhir.r4.model.Coding
+import org.hl7.fhir.r4.model.DateTimeType
+import org.hl7.fhir.r4.model.DateType
+import org.hl7.fhir.r4.model.DecimalType
+import org.hl7.fhir.r4.model.Identifier
+import org.hl7.fhir.r4.model.InstantType
+import org.hl7.fhir.r4.model.IntegerType
+import org.hl7.fhir.r4.model.OperationOutcome
+import org.hl7.fhir.r4.model.Parameters
+import org.hl7.fhir.r4.model.Period
+import org.hl7.fhir.r4.model.Quantity
+import org.hl7.fhir.r4.model.Reference
+import org.hl7.fhir.r4.model.Resource
+import org.hl7.fhir.r4.model.StringType
+import org.hl7.fhir.r4.model.TimeType
+import org.hl7.fhir.r4.model.Type
+import org.hl7.fhir.r4.model.UriType
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.Instant
@@ -299,7 +322,23 @@ class OperationResult<T> private constructor(
     fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
     fun addInstantUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { InstantType(builder(getResult())) }
     fun addTimeUsing(name: String, builder: (T) -> String): OperationResult<T>       = runPrimitiveStep(name) { TimeType(builder(getResult())) }
-    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
+    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>  = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
+
+    // ── Java date/time Using variants (named to avoid JVM erasure clash) ─────
+    // Lambda overloads that differ only in the lambda return type share the same JVM
+    // signature after erasure and also cause Kotlin overload-resolution ambiguity at
+    // call sites. Each variant is given a distinct name encoding the input type.
+
+    fun addDateUsingLocalDate(name: String, builder: (T) -> LocalDate): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateUsingYearMonth(name: String, builder: (T) -> YearMonth): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateUsingYear(name: String, builder: (T) -> Year): OperationResult<T>                         = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateTimeUsingLocalDateTime(name: String, builder: (T) -> LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+    fun addDateTimeUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+    fun addDateTimeUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+    fun addInstantUsingInstant(name: String, builder: (T) -> Instant): OperationResult<T>                = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
+    fun addInstantUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>    = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
+    fun addInstantUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
+    fun addTimeUsingLocalTime(name: String, builder: (T) -> LocalTime): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(builder(getResult())) }
 
     // ── Complex data type convenience methods ────────────────────────────────
 

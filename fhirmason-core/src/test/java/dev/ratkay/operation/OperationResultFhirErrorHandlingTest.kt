@@ -4,9 +4,21 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
-import org.hl7.fhir.r4.model.*
-import org.junit.jupiter.api.Assertions.*
+import org.hamcrest.Matchers.containsString
+import org.hamcrest.Matchers.equalTo
+import org.hamcrest.Matchers.hasSize
+import org.hamcrest.Matchers.`is`
+import org.hamcrest.Matchers.not
+import org.hl7.fhir.r4.model.Coverage
+import org.hl7.fhir.r4.model.Encounter
+import org.hl7.fhir.r4.model.OperationOutcome
+import org.hl7.fhir.r4.model.Patient
+import org.hl7.fhir.r4.model.Resource
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 

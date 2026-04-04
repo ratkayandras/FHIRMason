@@ -40,6 +40,11 @@ src/test/java/dev/ratkay/operation/
 - Validate with `require()` and `error()` — no checked exceptions
 - `AsyncOperationResult` uses sealed classes for DAG task nodes with cycle detection at registration time
 
+## Import Rules
+
+- **No wildcard imports** (`import foo.*`) anywhere in source or test files. Import every symbol individually.
+- If two overloads would be identical after JVM type erasure (e.g. `fun f(builder: (T) -> LocalDate)` and `fun f(builder: (T) -> ZonedDateTime)` both erase to `Function1`), Kotlin's overload resolution also cannot pick between them at call sites. Do **not** use `@JvmName` as a workaround — instead, give each overload a distinct, descriptive name that encodes the type (e.g. `addDateUsingLocalDate`, `addDateTimeUsingZonedDateTime`). Update CLAUDE.md and README when adding such methods.
+
 ## Exception Handling Rules
 
 Every builder method that catches exceptions must follow one of two established patterns. Do not invent new patterns.
