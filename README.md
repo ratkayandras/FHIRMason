@@ -147,8 +147,8 @@ Store raw Kotlin/Java primitives as FHIR types without changing the pipeline hea
 | `addDecimal(name, value)` | `BigDecimal` | `DecimalType` | `addDecimalUsing(name) { t -> BigDecimal }` |
 | `addCode(name, value)` | `String` | `CodeType` | `addCodeUsing(name) { t -> String }` |
 | `addUri(name, value)` | `String` | `UriType` | `addUriUsing(name) { t -> String }` |
-| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` | `DateType` | `addDateUsing(name) { t -> String }` · `addDateUsingLocalDate` · `addDateUsingYearMonth` · `addDateUsingYear` |
-| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` · `addDateTimeUsingLocalDateTime` · `addDateTimeUsingZonedDateTime` · `addDateTimeUsingOffsetDateTime` |
+| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` | `DateType` | `addDateUsing(name) { t -> String }` · `addDateUsingLocalDate` · `addDateUsingYearMonth` · `addDateUsingYear` · `addDateUsingLocalDateTime` · `addDateUsingZonedDateTime` · `addDateUsingOffsetDateTime` |
+| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Instant` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` · `addDateTimeUsingLocalDateTime` · `addDateTimeUsingZonedDateTime` · `addDateTimeUsingOffsetDateTime` · `addDateTimeUsingInstant` |
 | `addInstant(name, value)` | `String` · `Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` | `addInstantUsing(name) { t -> String }` · `addInstantUsingInstant` · `addInstantUsingZonedDateTime` · `addInstantUsingOffsetDateTime` |
 | `addTime(name, value)` | `String` · `LocalTime` | `TimeType` | `addTimeUsing(name) { t -> String }` · `addTimeUsingLocalTime` |
 | `addCanonical(name, value)` | `String` | `CanonicalType` | `addCanonicalUsing(name) { t -> String }` |
@@ -198,16 +198,16 @@ val p: Patient = result.getResult()  // head type unchanged
 
 | Function | Input type(s) | HAPI FHIR result |
 |---|---|---|
-| `toFhirDate(value)` | `LocalDate` · `YearMonth` · `Year` · `java.util.Date` | `DateType` |
-| `toFhirDateTime(value)` | `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `Calendar` | `DateTimeType` |
+| `toFhirDate(value)` | `LocalDate` · `YearMonth` · `Year` · `java.util.Date` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` | `DateType` |
+| `toFhirDateTime(value)` | `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Instant` · `Date` · `Calendar` | `DateTimeType` |
 | `toFhirInstant(value)` | `java.time.Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` |
 | `toFhirTime(value)` | `LocalTime` | `TimeType` |
 
-**Timezone behaviour:**
+**Conversion notes:**
 - `LocalDate`, `YearMonth`, `Year` → no timezone (FHIR date is zone-agnostic)
-- `LocalDateTime` → no timezone (FHIR allows zone-less dateTime)
-- `ZonedDateTime` / `OffsetDateTime` → timezone offset preserved in the FHIR string
-- `Instant` / `java.util.Date` → converted to milliseconds, HAPI renders as UTC
+- `LocalDateTime` → no timezone (FHIR allows zone-less dateTime); `toFhirDate` extracts the date part
+- `ZonedDateTime` / `OffsetDateTime` → timezone offset preserved for dateTime/instant; `toFhirDate` extracts the local date in the given zone
+- `Instant` / `java.util.Date` → converted to milliseconds, HAPI renders as UTC; `toFhirDateTime(Instant)` is UTC dateTime, `toFhirInstant(Instant)` is UTC instant
 
 ```kotlin
 import dev.ratkay.operation.FhirDateTimeConverter
