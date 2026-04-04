@@ -250,6 +250,144 @@ class OperationResultTest {
         assertThat(result.getByType<OperationOutcome>(), hasSize(1))
     }
 
+    // ── addFromFiltered / addAllFromFiltered ──────────────────────────────────
+
+    @Test
+    fun `addFromFiltered returns only resources that have the matching extension URL`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val notEnrolled = patient()
+        val result = OperationResult.of(listOf(enrolled, notEnrolled), "patients")
+            .addFromFiltered(Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        val outcome = result.getResult()
+        assertEquals("count=1", outcome.issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered with multiple URLs uses AND logic - resource must have all urls`() {
+        val both = patient().apply {
+            addExtension("http://example.org/url1", StringType("a"))
+            addExtension("http://example.org/url2", StringType("b"))
+        }
+        val onlyFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val result = OperationResult.of(listOf(both, onlyFirst), "patients")
+            .addFromFiltered(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered with no extUrls returns all resources of that type`() {
+        val p1 = patient()
+        val p2 = patient()
+        val result = OperationResult.of(listOf(p1, p2, appointment()), "items")
+            .addFromFiltered(Patient::class) { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=2", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered produces empty list when no resources match extension`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "patients")
+            .addFromFiltered(Patient::class, "http://example.org/nonexistent") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=0", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered searches across all parameter keys not just one`() {
+        val enrolled1 = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val enrolled2 = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(enrolled1, "group-a")
+            .add("group-b") { enrolled2 }
+            .addFromFiltered(Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=2", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addAllFromFiltered returns list result built from filtered input`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val notEnrolled = patient()
+        val result = OperationResult.of(listOf(enrolled, notEnrolled), "patients")
+            .addAllFromFiltered(Patient::class, "http://example.org/enrolled") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getResult(), hasSize(1))
+        assertThat(result.getByType<OperationOutcome>(), hasSize(1))
+    }
+
+    @Test
+    fun `addFromFiltered reified overload works correctly`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromFiltered<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered records error outcome when builder throws`() {
+        val result = OperationResult.of(patient(), "patients")
+            .addFromFiltered(Patient::class) { _ ->
+                throw RuntimeException("builder failed")
+            }
+
+        assertTrue(result.hasErrors())
+        assertThat(result.getOutcomes(), hasSize(1))
+    }
+
+    @Test
+    fun `addFromFiltered named overload stores result under explicit name`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromFiltered("enrolled-summary", Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertTrue(result.containsKey("enrolled-summary"))
+        val summary = result.takeFirstTyped("enrolled-summary", OperationOutcome::class)
+        assertEquals("count=1", summary!!.issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addAllFromFiltered reified overload returns list result from filtered input`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient(), patient()), "patients")
+            .addAllFromFiltered<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getResult(), hasSize(1))
+    }
+
     // ── Query methods ─────────────────────────────────────────────────────────
 
     @Test

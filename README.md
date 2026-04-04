@@ -122,6 +122,39 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
     }
 ```
 
+#### From all parameters, filtered by type and extension URLs
+
+These methods search **all** accumulated parameters (regardless of key), keep only resources of the given type, and — if extension URLs are supplied — further keep only those that carry **all** of the specified URLs (AND semantics). The filtered list is then passed to the builder.
+
+| Method | Description |
+|---|---|
+| `addFromFiltered(type, extUrls...) { list -> R }` | Filters all params by type + extensions; builder returns a single `R` stored under the type's simple name |
+| `addFromFiltered(name, type, extUrls...) { list -> R }` | Same but stores the result under an explicit `name` |
+| `addAllFromFiltered(type, extUrls...) { list -> List<R> }` | Builder returns a list; otherwise identical to the unnamed `addFromFiltered` variant |
+| `addAllFromFiltered(name, type, extUrls...) { list -> List<R> }` | Named variant of `addAllFromFiltered` |
+
+The unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified `addFromFiltered(name, extUrls…)` would be ambiguous with the unnamed reified overload when the first argument is a `String`. Pass `KClass` explicitly when an output key is required.
+
+```kotlin
+// Collect all Patients that carry the enrollment extension, then build an outcome
+val result = OperationResult.of(listOf(enrolledPatient, unenrolledPatient, appointment), "inputs")
+    .addFromFiltered(Patient::class, "http://example.org/enrolled") { enrolled ->
+        OperationOutcome().apply { addIssue().diagnostics = "Enrolled: ${enrolled.size}" }
+    }
+
+// Reified — no KClass needed
+val result2 = OperationResult.of(patients, "patients")
+    .addFromFiltered<Patient, OperationOutcome>("http://example.org/enrolled") { enrolled ->
+        buildSummary(enrolled)
+    }
+
+// Named output key, multiple extension URLs (AND logic)
+val result3 = OperationResult.of(patients, "patients")
+    .addFromFiltered("enrolled-summary", Patient::class, "http://ext/url1", "http://ext/url2") { filtered ->
+        buildSummary(filtered)
+    }
+```
+
 #### Error-resilient variants
 
 | Method | On exception | Returns |

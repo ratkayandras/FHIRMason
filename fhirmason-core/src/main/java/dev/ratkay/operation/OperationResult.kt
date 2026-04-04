@@ -2,6 +2,7 @@ package dev.ratkay.operation
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
+import org.hl7.fhir.instance.model.api.IBaseHasExtensions
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.BooleanType
 import org.hl7.fhir.r4.model.Extension
@@ -205,6 +206,22 @@ class OperationResult<T> private constructor(
         return copyWith(values)
     }
 
+    // Extension-filtered collection helper
+
+    /**
+     * Collects all values across every accumulated parameter, keeps only instances of [type],
+     * and — if [extUrls] is non-empty — further keeps only those that implement
+     * [IBaseHasExtensions] and carry **all** of the supplied extension URLs (AND logic).
+     */
+    private fun <I : Base> collectFiltered(type: KClass<I>, extUrls: Array<out String>): List<I> {
+        val allOfType = parameters.values.flatten().filterIsInstance(type.java)
+        return if (extUrls.isEmpty()) allOfType
+        else allOfType.filter { resource ->
+            resource is IBaseHasExtensions &&
+                extUrls.all { url -> FhirExtensionHelper.hasExtension(resource, url) }
+        }
+    }
+
     // Builder methods - single item
 
     fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> =
@@ -236,6 +253,90 @@ class OperationResult<T> private constructor(
             val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
             storeListAndCopy(name, builder(filtered), start)
         }
+
+    // Builder methods - from all parameters, filtered by type and extension URLs
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type], optionally filtered
+     * by one or more extension URLs (AND logic), passes the filtered list to [builder],
+     * and stores the single result under [type]'s simple name (lowercase).
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     */
+    fun <I : Base, R : Base> addFromFiltered(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeAndCopy(stepName, builder(collectFiltered(type, extUrls)), start)
+        }
+    }
+
+    /**
+     * Like [addFromFiltered] but stores the result under the explicit [name].
+     * Placing [name] before the [extUrls] vararg keeps the Java call-site clean.
+     */
+    fun <I : Base, R : Base> addFromFiltered(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) { start ->
+            storeAndCopy(name, builder(collectFiltered(type, extUrls)), start)
+        }
+
+    /**
+     * Like [addFromFiltered] but [builder] returns a `List<R>` which is stored as a
+     * parameter list. The output name defaults to [type]'s simple name (lowercase).
+     */
+    fun <I : Base, R : Base> addAllFromFiltered(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeListAndCopy(stepName, builder(collectFiltered(type, extUrls)), start)
+        }
+    }
+
+    /**
+     * Like [addAllFromFiltered] but stores the result list under the explicit [name].
+     */
+    fun <I : Base, R : Base> addAllFromFiltered(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) { start ->
+            storeListAndCopy(name, builder(collectFiltered(type, extUrls)), start)
+        }
+
+    /**
+     * Reified overload of [addFromFiltered] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified `addFromFiltered(name, extUrls…,
+     * builder)` would be ambiguous with this overload whenever the caller passes a single `String`
+     * as the first argument (Kotlin cannot determine whether it is `name` or the first vararg
+     * element). Use the KClass overload when an explicit output key is required:
+     * `addFromFiltered("my-key", Patient::class, "http://ext/url") { … }`.
+     */
+    inline fun <reified I : Base, R : Base> addFromFiltered(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromFiltered(I::class, *extUrls, builder = builder)
+
+    /** Reified overload of [addAllFromFiltered] (unnamed output key). See [addFromFiltered] for
+     *  why a named reified variant is not provided. */
+    inline fun <reified I : Base, R : Base> addAllFromFiltered(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromFiltered(I::class, *extUrls, builder = builder)
 
     // Builder variants with explicit error handling
 
