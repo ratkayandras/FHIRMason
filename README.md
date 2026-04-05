@@ -124,33 +124,45 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
 
 #### From all parameters, filtered by type and extension URLs
 
-These methods search **all** accumulated parameters (regardless of key), keep only resources of the given type, and — if extension URLs are supplied — further keep only those that carry **all** of the specified URLs (AND semantics). The filtered list is then passed to the builder.
+These methods search **all** accumulated parameters (regardless of key), keep only resources of the given type, and — if extension URLs are supplied — further filter by extension-URL presence. Two matching strategies are available, encoded directly in the method name:
 
-| Method | Description |
-|---|---|
-| `addFromFiltered(type, extUrls...) { list -> R }` | Filters all params by type + extensions; builder returns a single `R` stored under the type's simple name |
-| `addFromFiltered(name, type, extUrls...) { list -> R }` | Same but stores the result under an explicit `name` |
-| `addAllFromFiltered(type, extUrls...) { list -> List<R> }` | Builder returns a list; otherwise identical to the unnamed `addFromFiltered` variant |
-| `addAllFromFiltered(name, type, extUrls...) { list -> List<R> }` | Named variant of `addAllFromFiltered` |
+| Method | Semantics | Description |
+|---|---|---|
+| `addFromHavingAllExtensions(type, extUrls...) { list -> R }` | AND | Resource must carry **every** supplied URL; builder returns a single `R` stored under the type's simple name |
+| `addFromHavingAllExtensions(name, type, extUrls...) { list -> R }` | AND | Same, explicit output `name` |
+| `addFromHavingAnyExtension(type, extUrls...) { list -> R }` | OR | Resource must carry **at least one** of the URLs; single `R` result |
+| `addFromHavingAnyExtension(name, type, extUrls...) { list -> R }` | OR | Same, explicit output `name` |
+| `addAllFromHavingAllExtensions(type, extUrls...) { list -> List<R> }` | AND | Builder returns a list |
+| `addAllFromHavingAllExtensions(name, type, extUrls...) { list -> List<R> }` | AND | Named list variant |
+| `addAllFromHavingAnyExtension(type, extUrls...) { list -> List<R> }` | OR | Builder returns a list |
+| `addAllFromHavingAnyExtension(name, type, extUrls...) { list -> List<R> }` | OR | Named list variant |
 
-The unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified `addFromFiltered(name, extUrls…)` would be ambiguous with the unnamed reified overload when the first argument is a `String`. Pass `KClass` explicitly when an output key is required.
+When no URLs are supplied, all resources of the given type are passed to the builder regardless of which variant is used.
+
+All unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified `addFromHavingAllExtensions(name, extUrls…)` would be ambiguous with the unnamed reified overload when the first argument is a `String`. Use the KClass overload when an explicit output key is needed.
 
 ```kotlin
-// Collect all Patients that carry the enrollment extension, then build an outcome
-val result = OperationResult.of(listOf(enrolledPatient, unenrolledPatient, appointment), "inputs")
-    .addFromFiltered(Patient::class, "http://example.org/enrolled") { enrolled ->
-        OperationOutcome().apply { addIssue().diagnostics = "Enrolled: ${enrolled.size}" }
+// AND — Patients that carry both extensions
+val result = OperationResult.of(patients, "patients")
+    .addFromHavingAllExtensions(Patient::class, "http://ext/enrolled", "http://ext/consented") { filtered ->
+        OperationOutcome().apply { addIssue().diagnostics = "Eligible: ${filtered.size}" }
+    }
+
+// OR — Patients that carry at least one of the extensions
+val result2 = OperationResult.of(patients, "patients")
+    .addFromHavingAnyExtension(Patient::class, "http://ext/high-priority", "http://ext/urgent") { filtered ->
+        buildAlertFor(filtered)
     }
 
 // Reified — no KClass needed
-val result2 = OperationResult.of(patients, "patients")
-    .addFromFiltered<Patient, OperationOutcome>("http://example.org/enrolled") { enrolled ->
-        buildSummary(enrolled)
+val result3 = OperationResult.of(patients, "patients")
+    .addFromHavingAllExtensions<Patient, OperationOutcome>("http://ext/enrolled") { filtered ->
+        buildSummary(filtered)
     }
 
-// Named output key, multiple extension URLs (AND logic)
-val result3 = OperationResult.of(patients, "patients")
-    .addFromFiltered("enrolled-summary", Patient::class, "http://ext/url1", "http://ext/url2") { filtered ->
+// Named output key
+val result4 = OperationResult.of(patients, "patients")
+    .addFromHavingAllExtensions("enrolled-summary", Patient::class, "http://ext/enrolled") { filtered ->
         buildSummary(filtered)
     }
 ```
