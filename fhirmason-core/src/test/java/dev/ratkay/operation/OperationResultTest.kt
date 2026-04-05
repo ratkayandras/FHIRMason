@@ -250,6 +250,205 @@ class OperationResultTest {
         assertThat(result.getByType<OperationOutcome>(), hasSize(1))
     }
 
+    // ── addFromHavingAllExtensions / addFromHavingAnyExtension ────────────────
+
+    @Test
+    fun `addFromHavingAllExtensions returns only resources that have the matching extension URL`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val notEnrolled = patient()
+        val result = OperationResult.of(listOf(enrolled, notEnrolled), "patients")
+            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions with multiple URLs requires resource to carry every URL`() {
+        val both = patient().apply {
+            addExtension("http://example.org/url1", StringType("a"))
+            addExtension("http://example.org/url2", StringType("b"))
+        }
+        val onlyFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val result = OperationResult.of(listOf(both, onlyFirst), "patients")
+            .addFromHavingAllExtensions(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAnyExtension returns resources carrying at least one of the URLs`() {
+        val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
+        val hasBoth = patient().apply {
+            addExtension("http://example.org/url1", StringType("a"))
+            addExtension("http://example.org/url2", StringType("b"))
+        }
+        val hasNeither = patient()
+        val result = OperationResult.of(listOf(hasFirst, hasSecond, hasBoth, hasNeither), "patients")
+            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=3", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAnyExtension with single URL behaves like addFromHavingAllExtensions`() {
+        val hasIt = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val hasNot = patient()
+        val result = OperationResult.of(listOf(hasIt, hasNot), "patients")
+            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1") { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions with no extUrls returns all resources of that type`() {
+        val result = OperationResult.of(listOf(patient(), patient(), appointment()), "items")
+            .addFromHavingAllExtensions(Patient::class) { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=2", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions produces empty list when no resources match`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "patients")
+            .addFromHavingAllExtensions(Patient::class, "http://example.org/nonexistent") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=0", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAnyExtension produces empty list when no resources match any URL`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "patients")
+            .addFromHavingAnyExtension(Patient::class, "http://example.org/nonexistent") { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertEquals("count=0", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions searches across all parameter keys not just one`() {
+        val enrolled1 = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val enrolled2 = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(enrolled1, "group-a")
+            .add("group-b") { enrolled2 }
+            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=2", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addAllFromHavingAllExtensions returns list result built from AND-filtered input`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addAllFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getResult(), hasSize(1))
+        assertThat(result.getByType<OperationOutcome>(), hasSize(1))
+    }
+
+    @Test
+    fun `addAllFromHavingAnyExtension returns list result built from OR-filtered input`() {
+        val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
+        val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
+            .addAllFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getResult(), hasSize(2))
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions reified overload works correctly`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromHavingAllExtensions<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAnyExtension reified overload works correctly`() {
+        val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
+        val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
+            .addFromHavingAnyExtension<Patient, OperationOutcome>("http://example.org/url1", "http://example.org/url2") { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertEquals("count=2", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions records error outcome when builder throws`() {
+        val result = OperationResult.of(patient(), "patients")
+            .addFromHavingAllExtensions(Patient::class) { _ ->
+                throw RuntimeException("builder failed")
+            }
+
+        assertTrue(result.hasErrors())
+        assertThat(result.getOutcomes(), hasSize(1))
+    }
+
+    @Test
+    fun `addFromHavingAllExtensions named overload stores result under explicit name`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromHavingAllExtensions("enrolled-summary", Patient::class, "http://example.org/enrolled") { filtered ->
+                OperationOutcome().apply {
+                    addIssue().diagnostics = "count=${filtered.size}"
+                }
+            }
+
+        assertTrue(result.containsKey("enrolled-summary"))
+        val summary = result.takeFirstTyped("enrolled-summary", OperationOutcome::class)
+        assertEquals("count=1", summary!!.issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addAllFromHavingAllExtensions reified overload returns list result`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient(), patient()), "patients")
+            .addAllFromHavingAllExtensions<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getResult(), hasSize(1))
+    }
+
     // ── Query methods ─────────────────────────────────────────────────────────
 
     @Test

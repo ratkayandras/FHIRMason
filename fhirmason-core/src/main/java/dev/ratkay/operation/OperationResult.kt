@@ -2,6 +2,7 @@ package dev.ratkay.operation
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
+import org.hl7.fhir.instance.model.api.IBaseHasExtensions
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.BooleanType
 import org.hl7.fhir.r4.model.Extension
@@ -204,6 +205,183 @@ class OperationResult<T> private constructor(
         logStep(key, typeDesc, durationMs)
         return copyWith(values)
     }
+
+    // Builder methods — filter all accumulated parameters by type and extension URLs
+
+    /**
+     * Collects all values across every accumulated parameter, keeps only instances of [type],
+     * and — if [extUrls] is non-empty — further filters by extension-URL presence.
+     *
+     * When [matchAll] is `true` (AND): a resource must carry **every** supplied URL.
+     * When [matchAll] is `false` (OR): a resource must carry **at least one** of the URLs.
+     * When [extUrls] is empty, all instances of [type] are returned regardless of [matchAll].
+     */
+    private fun <I : Base> collectByExtension(
+        type: KClass<I>,
+        extUrls: Array<out String>,
+        matchAll: Boolean
+    ): List<I> {
+        val allOfType = parameters.values.flatten().filterIsInstance(type.java)
+        return if (extUrls.isEmpty()) allOfType
+        else allOfType.filter { resource ->
+            resource is IBaseHasExtensions && if (matchAll) {
+                extUrls.all { url -> FhirExtensionHelper.hasExtension(resource, url) }
+            } else {
+                extUrls.any { url -> FhirExtensionHelper.hasExtension(resource, url) }
+            }
+        }
+    }
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that carry **every** one of
+     * the supplied [extUrls] (AND semantics), passes the typed list to [builder], and stores the
+     * single result under [type]'s simple name (lowercase).
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addFromHavingAnyExtension] when OR semantics are needed instead.
+     */
+    fun <I : Base, R : Base> addFromHavingAllExtensions(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        }
+    }
+
+    /**
+     * Like [addFromHavingAllExtensions] but stores the result under the explicit [name].
+     * Placing [name] before the [extUrls] vararg keeps the Java call-site clean.
+     */
+    fun <I : Base, R : Base> addFromHavingAllExtensions(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) { start ->
+            storeAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        }
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that carry **at least one**
+     * of the supplied [extUrls] (OR semantics), passes the typed list to [builder], and stores the
+     * single result under [type]'s simple name (lowercase).
+     *
+     * Use [addFromHavingAllExtensions] when AND semantics are needed instead.
+     */
+    fun <I : Base, R : Base> addFromHavingAnyExtension(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        }
+    }
+
+    /**
+     * Like [addFromHavingAnyExtension] but stores the result under the explicit [name].
+     */
+    fun <I : Base, R : Base> addFromHavingAnyExtension(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) { start ->
+            storeAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        }
+
+    /**
+     * Like [addFromHavingAllExtensions] but [builder] returns a `List<R>`.
+     * The output name defaults to [type]'s simple name (lowercase).
+     */
+    fun <I : Base, R : Base> addAllFromHavingAllExtensions(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        }
+    }
+
+    /** Like [addAllFromHavingAllExtensions] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingAllExtensions(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) { start ->
+            storeListAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        }
+
+    /**
+     * Like [addFromHavingAnyExtension] but [builder] returns a `List<R>`.
+     * The output name defaults to [type]'s simple name (lowercase).
+     */
+    fun <I : Base, R : Base> addAllFromHavingAnyExtension(
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        }
+    }
+
+    /** Like [addAllFromHavingAnyExtension] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingAnyExtension(
+        name: String,
+        type: KClass<I>,
+        vararg extUrls: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) { start ->
+            storeListAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        }
+
+    /**
+     * Reified overload of [addFromHavingAllExtensions] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified `addFromHavingAllExtensions(name,
+     * extUrls…, builder)` would be ambiguous with this overload when the first argument is a
+     * `String` (Kotlin cannot determine whether it is `name` or the first vararg element).
+     * Use the KClass overload when an explicit output key is required:
+     * `addFromHavingAllExtensions("my-key", Patient::class, "http://ext/url") { … }`.
+     */
+    inline fun <reified I : Base, R : Base> addFromHavingAllExtensions(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingAllExtensions(I::class, *extUrls, builder = builder)
+
+    /** Reified overload of [addFromHavingAnyExtension] (unnamed output key). See
+     *  [addFromHavingAllExtensions] for why a named reified variant is not provided. */
+    inline fun <reified I : Base, R : Base> addFromHavingAnyExtension(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingAnyExtension(I::class, *extUrls, builder = builder)
+
+    /** Reified overload of [addAllFromHavingAllExtensions] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingAllExtensions(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingAllExtensions(I::class, *extUrls, builder = builder)
+
+    /** Reified overload of [addAllFromHavingAnyExtension] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingAnyExtension(
+        vararg extUrls: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingAnyExtension(I::class, *extUrls, builder = builder)
 
     // Builder methods - single item
 
