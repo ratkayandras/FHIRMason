@@ -233,6 +233,28 @@ class OperationResult<T> private constructor(
     }
 
     /**
+     * Searches **all** accumulated parameters for instances of [type] that have an [Extension] at
+     * [url] whose value is an instance of [valueType] and satisfies [predicate].
+     *
+     * Resources that do not implement [IBaseHasExtensions], have no extension at [url], or whose
+     * extension value is not an instance of [valueType] are silently excluded.
+     * When the extension appears multiple times at [url], the resource passes if **any** value
+     * satisfies [predicate].
+     */
+    private fun <I : Base, V : Type> collectByExtensionAndValueType(
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean
+    ): List<I> =
+        parameters.values.flatten()
+            .filterIsInstance(type.java)
+            .filter { resource ->
+                resource is IBaseHasExtensions &&
+                    FhirExtensionHelper.getAllValuesAs(resource, url, valueType.java).any(predicate)
+            }
+
+    /**
      * Searches **all** accumulated parameters for instances of [type] that carry **every** one of
      * the supplied [extUrls] (AND semantics), passes the typed list to [builder], and stores the
      * single result under [type]'s simple name (lowercase).
@@ -382,6 +404,166 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromHavingAnyExtension(I::class, *extUrls, builder = builder)
+
+    // ── Extension URL + value-type / value-predicate filters ─────────────────
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have an extension at
+     * [url] with a value of [valueType], passes the typed list to [builder], and stores the single
+     * result under [type]'s simple name (lowercase).
+     *
+     * This is a convenience shorthand for [addFromHavingExtensionValueMatching] with a trivially
+     * true predicate — use that method when you also need to inspect the value itself.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     */
+    fun <I : Base, V : Type, R : Base> addFromHavingExtensionWithValueType(
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingExtensionValueMatching(type, url, valueType, { true }, builder)
+
+    /**
+     * Like [addFromHavingExtensionWithValueType] but stores the result under the explicit [name].
+     */
+    fun <I : Base, V : Type, R : Base> addFromHavingExtensionWithValueType(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingExtensionValueMatching(name, type, url, valueType, { true }, builder)
+
+    /**
+     * Like [addFromHavingExtensionWithValueType] but [builder] returns a `List<R>`.
+     * The output name defaults to [type]'s simple name (lowercase).
+     */
+    fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionWithValueType(
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingExtensionValueMatching(type, url, valueType, { true }, builder)
+
+    /** Like [addAllFromHavingExtensionWithValueType] but stores the result list under the explicit [name]. */
+    fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionWithValueType(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingExtensionValueMatching(name, type, url, valueType, { true }, builder)
+
+    /**
+     * Reified overload of [addFromHavingExtensionWithValueType] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified overload whose first argument
+     * is a `String` would be ambiguous with this one. Use the KClass overload when an explicit
+     * output key is required.
+     */
+    inline fun <reified I : Base, reified V : Type, R : Base> addFromHavingExtensionWithValueType(
+        url: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingExtensionWithValueType(I::class, url, V::class, builder)
+
+    /** Reified overload of [addAllFromHavingExtensionWithValueType] (unnamed output key). */
+    inline fun <reified I : Base, reified V : Type, R : Base> addAllFromHavingExtensionWithValueType(
+        url: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingExtensionWithValueType(I::class, url, V::class, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have an extension at
+     * [url] with a value of [valueType] satisfying [predicate], passes the typed list to [builder],
+     * and stores the single result under [type]'s simple name (lowercase).
+     *
+     * The resource is included when **any** of its extension values at [url] satisfies [predicate].
+     * Resources with no extension at [url], or whose value is not of [valueType], are excluded.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addFromHavingExtensionWithValueType] when only a type check (no value inspection) is needed.
+     */
+    fun <I : Base, V : Type, R : Base> addFromHavingExtensionValueMatching(
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean,
+        builder: (List<I>) -> R
+    ): OperationResult<R> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        }
+    }
+
+    /**
+     * Like [addFromHavingExtensionValueMatching] but stores the result under the explicit [name].
+     */
+    fun <I : Base, V : Type, R : Base> addFromHavingExtensionValueMatching(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) { start ->
+            storeAndCopy(name, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        }
+
+    /**
+     * Like [addFromHavingExtensionValueMatching] but [builder] returns a `List<R>`.
+     * The output name defaults to [type]'s simple name (lowercase).
+     */
+    fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionValueMatching(
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> {
+        val stepName = type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeListAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        }
+    }
+
+    /** Like [addAllFromHavingExtensionValueMatching] but stores the result list under the explicit [name]. */
+    fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionValueMatching(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) { start ->
+            storeListAndCopy(name, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        }
+
+    /**
+     * Reified overload of [addFromHavingExtensionValueMatching] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified overload whose first argument
+     * is a `String` would be ambiguous with this one. Use the KClass overload when an explicit
+     * output key is required.
+     */
+    inline fun <reified I : Base, reified V : Type, R : Base> addFromHavingExtensionValueMatching(
+        url: String,
+        noinline predicate: (V) -> Boolean,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingExtensionValueMatching(I::class, url, V::class, predicate, builder)
+
+    /** Reified overload of [addAllFromHavingExtensionValueMatching] (unnamed output key). */
+    inline fun <reified I : Base, reified V : Type, R : Base> addAllFromHavingExtensionValueMatching(
+        url: String,
+        noinline predicate: (V) -> Boolean,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingExtensionValueMatching(I::class, url, V::class, predicate, builder)
 
     // Builder methods - single item
 

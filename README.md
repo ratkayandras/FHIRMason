@@ -167,6 +167,51 @@ val result4 = OperationResult.of(patients, "patients")
     }
 ```
 
+#### From all parameters, filtered by extension URL + value type or value predicate
+
+These methods extend the URL-presence filters above by also inspecting the **value** of the matched extension. Two sub-families are available:
+
+| Method | Filters by | Description |
+|---|---|---|
+| `addFromHavingExtensionWithValueType(type, url, valueType) { list -> R }` | URL + value type | Resource must have an extension at `url` with a value of `valueType`; single `R` result |
+| `addFromHavingExtensionWithValueType(name, type, url, valueType) { list -> R }` | URL + value type | Same, explicit output `name` |
+| `addAllFromHavingExtensionWithValueType(type, url, valueType) { list -> List<R> }` | URL + value type | Builder returns a list |
+| `addAllFromHavingExtensionWithValueType(name, type, url, valueType) { list -> List<R> }` | URL + value type | Named list variant |
+| `addFromHavingExtensionValueMatching(type, url, valueType, predicate) { list -> R }` | URL + typed predicate | Resource must have an extension at `url` with a value of `valueType` satisfying `predicate`; single `R` result |
+| `addFromHavingExtensionValueMatching(name, type, url, valueType, predicate) { list -> R }` | URL + typed predicate | Same, explicit output `name` |
+| `addAllFromHavingExtensionValueMatching(type, url, valueType, predicate) { list -> List<R> }` | URL + typed predicate | Builder returns a list |
+| `addAllFromHavingExtensionValueMatching(name, type, url, valueType, predicate) { list -> List<R> }` | URL + typed predicate | Named list variant |
+
+When the extension appears more than once at a URL, the resource is included if **any** of its values satisfies the condition. All unnamed variants have reified inline overloads. Named variants intentionally have no reified overload for the same reason as above.
+
+`addFromHavingExtensionWithValueType` is a convenience shorthand for `addFromHavingExtensionValueMatching` with a trivially true predicate — prefer the latter when you need to inspect the value itself.
+
+```kotlin
+// Type check — Patients whose "enrolled" extension carries a StringType value
+val result = OperationResult.of(patients, "patients")
+    .addFromHavingExtensionWithValueType(Patient::class, "http://ext/enrolled", StringType::class) { filtered ->
+        buildSummary(filtered)
+    }
+
+// Reified type check
+val result2 = OperationResult.of(patients, "patients")
+    .addFromHavingExtensionWithValueType<Patient, StringType, OperationOutcome>("http://ext/enrolled") { filtered ->
+        buildSummary(filtered)
+    }
+
+// Value predicate — only Patients enrolled (StringType "true")
+val result3 = OperationResult.of(patients, "patients")
+    .addFromHavingExtensionValueMatching(Patient::class, "http://ext/enrolled", StringType::class, { it.value == "true" }) { filtered ->
+        buildEnrolledSummary(filtered)
+    }
+
+// Reified predicate
+val result4 = OperationResult.of(patients, "patients")
+    .addFromHavingExtensionValueMatching<Patient, BooleanType, OperationOutcome>("http://ext/active", { it.booleanValue() }) { filtered ->
+        buildActiveSummary(filtered)
+    }
+```
+
 #### Error-resilient variants
 
 | Method | On exception | Returns |
