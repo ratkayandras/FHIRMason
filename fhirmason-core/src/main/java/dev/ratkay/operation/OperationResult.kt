@@ -941,6 +941,31 @@ class OperationResult<T> private constructor(
     }
 
     /**
+     * Transforms the pipeline head from [T] to [R] using [transform], without adding any entry to
+     * the parameter map.
+     *
+     * This is the lightweight alternative to [flatMap] when you only need to change the working
+     * type mid-pipeline and do not want an intermediate value to appear in the output parameters.
+     *
+     * On exception: records an ERROR-severity [OperationOutcome] and skips the head (Pattern A).
+     */
+    fun <R : Base> mapHead(transform: (T) -> R): OperationResult<R> =
+        runBuilderStep("mapHead") { start ->
+            val r = transform(getResult())
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric("mapHead", r.fhirType(), durationMs, true)
+            logStep("mapHead", r.fhirType(), durationMs)
+            copyWith(r)
+        }
+
+    /**
+     * Receiver-lambda overload of [mapHead] — [transform] is called with the head as `this`.
+     *
+     * On exception: records an ERROR-severity [OperationOutcome] and skips the head (Pattern A).
+     */
+    fun <R : Base> mapHeadUsing(transform: T.() -> R): OperationResult<R> = mapHead { it.transform() }
+
+    /**
      * Combines the parameter maps of this result and [other]. On key collision the values from
      * both results are accumulated under the same key. The current typed result [T] is preserved.
      */

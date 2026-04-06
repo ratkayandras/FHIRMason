@@ -530,6 +530,15 @@ val combined: OperationResult<Coverage> = OperationResult.of(patient)
     }
 // outer map now contains: patient, coverage, encounter
 
+// mapHead — change the pipeline head type WITHOUT adding an entry to the parameter map
+val withCoverage: OperationResult<Coverage> = OperationResult.of(patient, "patient")
+    .mapHead { p -> resolveCoverage(p) }   // head is now Coverage; "patient" key unchanged
+    .add("coverage") { it }                 // now store it explicitly if desired
+
+// mapHeadUsing — same but with the head exposed as `this` in the lambda
+val withAppt: OperationResult<Appointment> = OperationResult.of(patient, "patient")
+    .mapHeadUsing { buildAppointment(this) }
+
 // merge — combine two OperationResults; overlapping keys accumulate their values
 val merged = resultA.merge(resultB)   // OperationResult<T> — A's head type preserved
 ```
@@ -1002,13 +1011,30 @@ val renamed  = result.rename("old", "new")
 val merged = resultA.merge(resultB)
 
 // flatMap — chain an inner pipeline and merge all of its entries into the outer map
-val result = OperationResult.of(patient)
+val combined = OperationResult.of(patient)
     .flatMap { p ->
         OperationResult.of(encounter(p), "encounter")
             .add("coverage") { fetchCoverage(p) }
     }
 // map now contains: patient, encounter, coverage
+
+// mapHead — transform the pipeline head WITHOUT adding a parameter entry
+// useful for intermediate type conversions that should not appear in the output map
+val withEncounter: OperationResult<Encounter> = OperationResult.of(patient, "patient")
+    .mapHead { p -> buildEncounter(p) }    // head → Encounter, no new map entry
+    .add("encounter") { it }               // explicitly store when ready
+
+// mapHeadUsing — same, with head available as `this`
+val withAppt: OperationResult<Appointment> = OperationResult.of(patient, "patient")
+    .mapHeadUsing { buildAppointment(this) }
 ```
+
+| Method | Head changes | Map entry added | On exception |
+|--------|-------------|-----------------|--------------|
+| `add` | yes | yes | ERROR outcome, head skipped |
+| `flatMap` | yes (inner head) | yes (inner map merged) | no catch — throws |
+| `mapHead` | yes | **no** | ERROR outcome, head skipped |
+| `mapHeadUsing` | yes | **no** | ERROR outcome, head skipped |
 
 ### 11. Async DAG — parallel fetching with typed dependencies
 
