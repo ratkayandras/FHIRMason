@@ -982,6 +982,114 @@ class OperationResult<T> private constructor(
         return this
     }
 
+    // ── Conditional chaining ────────────────────────────────────────────
+
+    /**
+     * Runs [block] on this result only when [condition] is true, merges all accumulated
+     * parameters and outcomes from the block result into the current map, and returns an
+     * [OperationResult] with the original head type [T] preserved.
+     *
+     * When [condition] is false the result is returned unchanged.
+     *
+     * On exception inside [block]: records a WARNING-severity [OperationOutcome] and returns
+     * the current result unchanged (Pattern B — head-preserving).
+     */
+    fun whenTrue(condition: Boolean, block: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        if (!condition) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val subPipeline = OperationResult<T>(
+            mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
+        )
+        return try {
+            val inner = block(subPipeline)
+            val newParams = shallowCopyParams()
+            inner.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            outcomes.addAll(inner.outcomes)
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric("whenTrue", "", durationMs, true)
+            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            logger.warn("FHIRMason | step='whenTrue' | WARN: {}", e.message)
+            recordMetric("whenTrue", "", durationMs, false)
+            val outcome = when (e) {
+                is BaseServerResponseException -> e.toOperationOutcome()
+                else -> e.toOperationOutcome()
+            }
+            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+            outcomes.add(outcome)
+            copyWith(result)
+        }
+    }
+
+    /**
+     * Runs [block] with the current head value only when it is non-null, merges the block's
+     * accumulated parameters and outcomes, and returns [OperationResult<T>] with the original
+     * head preserved.
+     *
+     * When the head is null the result is returned unchanged.
+     *
+     * On exception inside [block]: records a WARNING-severity [OperationOutcome] and returns
+     * the current result unchanged (Pattern B — head-preserving).
+     */
+    fun ifPresent(block: (T) -> OperationResult<*>): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val current = result ?: return copyWith(result)
+        val start = System.currentTimeMillis()
+        return try {
+            val inner = block(current)
+            val newParams = shallowCopyParams()
+            inner.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            outcomes.addAll(inner.outcomes)
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric("ifPresent", "", durationMs, true)
+            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            logger.warn("FHIRMason | step='ifPresent' | WARN: {}", e.message)
+            recordMetric("ifPresent", "", durationMs, false)
+            val outcome = when (e) {
+                is BaseServerResponseException -> e.toOperationOutcome()
+                else -> e.toOperationOutcome()
+            }
+            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+            outcomes.add(outcome)
+            copyWith(result)
+        }
+    }
+
+    /**
+     * Returns this result unchanged when [condition] is true.
+     *
+     * When [condition] is false, records a WARNING-severity [OperationOutcome] with the
+     * supplied [message] as diagnostics and returns the result unchanged. Does NOT skip
+     * the head or throw.
+     *
+     * Intended for precondition checks inline in a pipeline, e.g.:
+     * ```
+     * result.guardFalse(patient.active, "Patient is not active")
+     *       .add { buildEncounter(patient) }
+     * ```
+     */
+    fun guardFalse(condition: Boolean, message: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        if (condition) return copyWith(result)
+        val outcome = OperationOutcome().apply {
+            addIssue().apply {
+                severity = OperationOutcome.IssueSeverity.WARNING
+                code = OperationOutcome.IssueType.BUSINESSRULE
+                diagnostics = message
+            }
+        }
+        outcomes.add(outcome)
+        return copyWith(result)
+    }
+
     /** Returns the first value stored under [name], or `null` if the key is absent or empty. */
     fun takeFirst(name: String): Base? = parameters[name]?.firstOrNull()
 

@@ -549,6 +549,28 @@ result.peek { map ->                  // inspect the map without modifying the p
 }
 ```
 
+#### Conditional chaining
+
+| Method | Condition | On exception |
+|--------|-----------|--------------|
+| `whenTrue(condition) { ... }` | Runs block and merges its parameters when `condition` is `true`; returns `OperationResult<T>` unchanged otherwise | WARNING outcome, state preserved |
+| `ifPresent { t -> ... }` | Runs block with the typed head value when it is non-null; skips when head is `null` | WARNING outcome, state preserved |
+| `guardFalse(condition, message)` | When `condition` is `false`, records a WARNING `OperationOutcome` with `IssueType.BUSINESSRULE` and the given `message`; pipeline continues | n/a — no block |
+
+```kotlin
+// Only add an encounter if the patient is active
+OperationResult.of(patient)
+    .guardFalse(patient.active, "Patient is not active — skipping encounter")
+    .whenTrue(patient.hasGeneralPractitioner()) {
+        add("gp") { resolveGp(patient) }
+    }
+    .ifPresent { p ->
+        OperationResult.of(buildEncounter(p), "encounter")
+    }
+```
+
+All three methods preserve the head type `T`. The block passed to `whenTrue` and `ifPresent` may contain any pipeline operations including head-changing ones — the outer head is always restored after the block completes.
+
 #### Convenience lookups
 
 ```kotlin
