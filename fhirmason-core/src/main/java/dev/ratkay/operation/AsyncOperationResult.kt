@@ -129,6 +129,57 @@ class AsyncOperationResult {
         block(values)
     }
 
+    // ── DAG inspection ───────────────────────────────────────────────────────
+
+    /**
+     * Returns a human-readable multi-line string describing the registered DAG structure —
+     * tasks grouped into execution tiers, with each tier's dependency set listed.
+     *
+     * Tasks within the same tier have no ordering constraint between them and can run in
+     * parallel. Tier assignment is computed as:
+     * ```
+     *   tier(task) = 1                              // no dependencies
+     *   tier(task) = 1 + max(tier(dep) for each dep) // has dependencies
+     * ```
+     *
+     * Example:
+     * ```
+     * AsyncOperationResult DAG:
+     *   Tier 1 (parallel): [patient, coverage]
+     *   Tier 2 (parallel): [appointment] → depends on [patient]
+     *   Tier 3 (parallel): [claim] → depends on [appointment, coverage]
+     * ```
+     *
+     * Returns `"AsyncOperationResult DAG: (empty)"` when no tasks have been registered.
+     */
+    fun describe(): String {
+        if (nodes.isEmpty()) return "AsyncOperationResult DAG: (empty)"
+
+        val tierOf = mutableMapOf<String, Int>()
+        fun computeTier(key: String): Int = tierOf.getOrPut(key) {
+            val node = nodes[key]!!
+            if (node.deps.isEmpty()) 1
+            else 1 + node.deps.maxOf { computeTier(it) }
+        }
+        nodes.keys.forEach { computeTier(it) }
+
+        val byTier: Map<Int, List<TaskNode>> = nodes.values
+            .groupBy { tierOf[it.key]!! }
+            .toSortedMap()
+
+        val sb = StringBuilder("AsyncOperationResult DAG:\n")
+        byTier.forEach { (tier, tasks) ->
+            val keysStr = tasks.joinToString(", ") { it.key }
+            val allDeps = tasks.flatMap { it.deps }.distinct()
+            sb.append("  Tier $tier (parallel): [$keysStr]")
+            if (allDeps.isNotEmpty()) {
+                sb.append(" → depends on [${allDeps.joinToString(", ")}]")
+            }
+            sb.append("\n")
+        }
+        return sb.toString().trimEnd()
+    }
+
     suspend fun run(): OperationResult<Base> = coroutineScope {
         val dagStart = System.currentTimeMillis()
         val resolved = mutableMapOf<String, Deferred<List<Base>?>>()

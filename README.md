@@ -872,6 +872,32 @@ val result: OperationResult<Base> = asyncResult.runBlocking()
 
 The returned `OperationResult<Base>` supports all the same query, transformation, serialisation, and reference-linking methods as the synchronous builder.
 
+### DAG inspection (`describe`)
+
+Before executing, call `describe()` to get a human-readable snapshot of the registered task graph — tasks grouped into parallel execution tiers, with each tier's dependency set listed.
+
+```kotlin
+val dag = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .add("coverage") { fetchCoverage() }
+    .addAfter("appointment", "patient") { _ -> buildAppointment() }
+    .addAfter("claim", "appointment", "coverage") { _ -> buildClaim() }
+
+println(dag.describe())
+```
+
+Output:
+```
+AsyncOperationResult DAG:
+  Tier 1 (parallel): [patient, coverage]
+  Tier 2 (parallel): [appointment] → depends on [patient]
+  Tier 3 (parallel): [claim] → depends on [appointment, coverage]
+```
+
+Tier assignment: `tier(task) = 1` for root tasks; `tier(task) = 1 + max(tier(dep))` for dependent tasks. All tasks in the same tier can execute in parallel.
+
+Returns `"AsyncOperationResult DAG: (empty)"` when no tasks have been registered.
+
 ### Constraints
 
 - Task keys must be unique — duplicate registration throws `IllegalArgumentException`
