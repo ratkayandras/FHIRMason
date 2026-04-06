@@ -138,30 +138,41 @@ class OperationResult<T> private constructor(
         if (timingEnabled) metrics.add(StepMetrics(key, resourceType, durationMs, success))
     }
 
-    private fun <R> runBuilderStep(name: String?, block: (Long) -> OperationResult<R>): OperationResult<R> {
-        if (shouldSkip()) return skippedResult()
+    /**
+     * Common try/catch skeleton shared by [runBuilderStep] and [runPrimitiveStep].
+     *
+     * Checks [shouldSkip] and delegates to [onSkip] for the early return, records the wall-clock
+     * start time, invokes [block] with it, and on any exception delegates to [onError] with the
+     * exception and elapsed milliseconds.  All three lambda parameters are inlined.
+     */
+    private inline fun <R> runStep(
+        onSkip: () -> OperationResult<R>,
+        onError: (Exception, Long) -> OperationResult<R>,
+        block: (Long) -> OperationResult<R>
+    ): OperationResult<R> {
+        if (shouldSkip()) return onSkip()
         val start = System.currentTimeMillis()
         return try {
             block(start)
         } catch (e: Exception) {
             val durationMs = System.currentTimeMillis() - start
-            recordMetric(name ?: "unknown", "", durationMs, false)
-            outcomes.add(when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
-            })
-            skippedResult()
+            onError(e, durationMs)
         }
     }
 
-    private fun <R : Base> storeAndCopy(name: String?, value: R, start: Long): OperationResult<R> {
-        val durationMs = System.currentTimeMillis() - start
-        val key = name ?: value.fhirType().lowercase()
-        parameters.getOrPut(key) { mutableListOf() }.add(value)
-        recordMetric(key, value.fhirType(), durationMs, true)
-        logStep(key, value.fhirType(), durationMs)
-        return copyWith(value)
-    }
+    private fun <R> runBuilderStep(name: String?, block: (Long) -> OperationResult<R>): OperationResult<R> =
+        runStep(
+            onSkip = { skippedResult() },
+            onError = { e, durationMs ->
+                recordMetric(name ?: "unknown", "", durationMs, false)
+                outcomes.add(when (e) {
+                    is BaseServerResponseException -> e.toOperationOutcome()
+                    else -> e.toOperationOutcome()
+                })
+                skippedResult()
+            },
+            block = block
+        )
 
     /**
      * Shared try/catch shell for all primitive-value convenience methods.
@@ -171,29 +182,39 @@ class OperationResult<T> private constructor(
      * [OperationOutcome] — preserving the rich embedded outcome from a
      * [BaseServerResponseException] rather than discarding it in favour of a plain message.
      * The pipeline head type [T] is never changed; [shouldSkip] is checked first.
+     * Delegates to [runStep] for the shared try/catch skeleton.
      */
-    private fun runPrimitiveStep(name: String, build: () -> Base): OperationResult<T> {
-        if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val fhirValue = build()
-            parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric(name, fhirValue.fhirType(), durationMs, true)
-            logStep(name, fhirValue.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-            recordMetric(name, "", durationMs, false)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
+    private fun runPrimitiveStep(name: String, build: () -> Base): OperationResult<T> =
+        runStep(
+            onSkip = { copyWith(result) },
+            onError = { e, durationMs ->
+                logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
+                recordMetric(name, "", durationMs, false)
+                val outcome = when (e) {
+                    is BaseServerResponseException -> e.toOperationOutcome()
+                    else -> e.toOperationOutcome()
+                }
+                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+                outcomes.add(outcome)
+                copyWith(result)
+            },
+            block = { start ->
+                val fhirValue = build()
+                parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
+                val durationMs = System.currentTimeMillis() - start
+                recordMetric(name, fhirValue.fhirType(), durationMs, true)
+                logStep(name, fhirValue.fhirType(), durationMs)
+                copyWith(result)
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
-        }
+        )
+
+    private fun <R : Base> storeAndCopy(name: String?, value: R, start: Long): OperationResult<R> {
+        val durationMs = System.currentTimeMillis() - start
+        val key = name ?: value.fhirType().lowercase()
+        parameters.getOrPut(key) { mutableListOf() }.add(value)
+        recordMetric(key, value.fhirType(), durationMs, true)
+        logStep(key, value.fhirType(), durationMs)
+        return copyWith(value)
     }
 
     private fun <R : Base> storeListAndCopy(name: String?, values: List<R>, start: Long): OperationResult<List<R>> {
