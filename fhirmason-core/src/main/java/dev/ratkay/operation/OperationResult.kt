@@ -48,7 +48,7 @@ import kotlin.reflect.KClass
  * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
  * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
- * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault` |
+ * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault`, `addWithRetry`, `addWithRetryUsing` |
  * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate([DateTimeInput])`, `addDateTime([DateTimeInput])`, `addInstant([DateTimeInput])`, `addTime([DateTimeInput])`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
@@ -627,6 +627,113 @@ class OperationResult<T> private constructor(
             outcomes.add(warningOutcome(e))
             parameters.getOrPut(key) { mutableListOf() }.add(default)
             copyWith(default)
+        }
+    }
+
+    // ── Builder variant with retry ────────────────────────────────────────────
+
+    /**
+     * Calls [builder] up to [maxAttempts] times, retrying on transient failures with
+     * exponential backoff between attempts.
+     *
+     * The backoff schedule (no delay before attempt 1):
+     * ```
+     * Before attempt 2 → sleep initialDelayMs
+     * Before attempt 3 → sleep initialDelayMs × 2
+     * Before attempt k → sleep initialDelayMs × 2^(k-2)
+     * ```
+     *
+     * On each failure [retryOn] is consulted — if it returns `false` the failure is recorded
+     * immediately without further retries. If all [maxAttempts] are exhausted, the last
+     * exception is recorded as an ERROR-severity [OperationOutcome] and the pipeline head is
+     * skipped (Pattern A — identical to [add]).
+     *
+     * Thread interruption during a backoff sleep re-interrupts the current thread and
+     * causes immediate Pattern A failure.
+     *
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs sleep duration before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying
+     * @param builder the lambda to invoke; invoked up to [maxAttempts] times
+     */
+    fun <R : Base> addWithRetry(
+        name: String? = null,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        builder: () -> R
+    ): OperationResult<R> {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        return runBuilderStep(name) { start ->
+            var lastException: Exception? = null
+            var delayMs = initialDelayMs
+            var success: OperationResult<R>? = null
+            for (attempt in 1..maxAttempts) {
+                try {
+                    success = storeAndCopy(name, builder(), start)
+                    break
+                } catch (e: Exception) {
+                    lastException = e
+                    if (!retryOn(e) || attempt == maxAttempts) break
+                    try {
+                        Thread.sleep(delayMs)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        lastException = interrupted
+                        break
+                    }
+                    delayMs *= 2
+                }
+            }
+            success ?: throw lastException!!
+        }
+    }
+
+    /**
+     * Like [addWithRetry] but the builder receives the current pipeline head value [T].
+     * Useful when the resource to fetch depends on data already in the pipeline.
+     *
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs sleep duration before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying
+     * @param builder the lambda to invoke with the current head; invoked up to [maxAttempts] times
+     */
+    fun <R : Base> addWithRetryUsing(
+        name: String? = null,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        builder: (T) -> R
+    ): OperationResult<R> {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        return runBuilderStep(name) { start ->
+            // Resolve head once, before the retry loop. If result is null this throws
+            // IllegalStateException here — caught by runBuilderStep's outer try/catch
+            // (Pattern A, one attempt), not inside the retry loop.
+            val head = getResult()
+            var lastException: Exception? = null
+            var delayMs = initialDelayMs
+            var success: OperationResult<R>? = null
+            for (attempt in 1..maxAttempts) {
+                try {
+                    success = storeAndCopy(name, builder(head), start)
+                    break
+                } catch (e: Exception) {
+                    lastException = e
+                    if (!retryOn(e) || attempt == maxAttempts) break
+                    try {
+                        Thread.sleep(delayMs)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        lastException = interrupted
+                        break
+                    }
+                    delayMs *= 2
+                }
+            }
+            success ?: throw lastException!!
         }
     }
 

@@ -4,6 +4,7 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.OperationOutcome
@@ -127,6 +128,58 @@ class AsyncOperationResult {
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
+    }
+
+    // ── Independent task with retry ──────────────────────────────────────────
+
+    /**
+     * Registers an independent DAG task that calls [block] up to [maxAttempts] times,
+     * retrying on transient failures with exponential backoff using [kotlinx.coroutines.delay].
+     *
+     * The backoff schedule (no delay before the first attempt):
+     * ```
+     * Before attempt 2 → delay initialDelayMs
+     * Before attempt 3 → delay initialDelayMs × 2
+     * Before attempt k → delay initialDelayMs × 2^(k-2)
+     * ```
+     *
+     * On each failure [retryOn] is consulted — if it returns `false` the failure is recorded
+     * immediately without further retries. If all [maxAttempts] are exhausted, the last
+     * exception propagates and the task is recorded as failed (identical to [add]).
+     *
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay duration before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying
+     * @param block the suspending lambda to invoke; called up to [maxAttempts] times
+     */
+    fun <R : Base> addWithRetry(
+        key: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend () -> R
+    ): AsyncOperationResult {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        return also {
+            registerNode(key, TaskNode.Independent(key) { _ ->
+                var lastException: Exception? = null
+                var delayMs = initialDelayMs
+                var result: List<Base>? = null
+                for (attempt in 1..maxAttempts) {
+                    try {
+                        result = listOf(block())
+                        break
+                    } catch (e: Exception) {
+                        lastException = e
+                        if (!retryOn(e) || attempt == maxAttempts) break
+                        delay(delayMs)
+                        delayMs *= 2
+                    }
+                }
+                result ?: throw lastException!!
+            })
+        }
     }
 
     // ── DAG inspection ───────────────────────────────────────────────────────
