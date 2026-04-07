@@ -20,3 +20,19 @@ fun Exception.toOperationOutcome(): OperationOutcome = OperationOutcome().apply 
  */
 fun BaseServerResponseException.toOperationOutcome(): OperationOutcome =
     (operationOutcome as? OperationOutcome) ?: (this as Exception).toOperationOutcome()
+
+/**
+ * Builds a WARNING-severity [OperationOutcome] from [e], preserving any rich embedded
+ * outcome when [e] is a [BaseServerResponseException].
+ *
+ * Shared by [OperationResult.addOrSkip], [OperationResult.addOrDefault], and the
+ * conditional-chaining methods — do not duplicate this logic inline.
+ */
+internal fun warningOutcome(e: Exception): OperationOutcome {
+    val base = when (e) {
+        is BaseServerResponseException -> e.toOperationOutcome()
+        else -> e.toOperationOutcome()
+    }
+    base.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+    return base
+}

@@ -40,6 +40,18 @@ src/test/java/dev/ratkay/operation/
 - Validate with `require()` and `error()` — no checked exceptions
 - `AsyncOperationResult` uses sealed classes for DAG task nodes with cycle detection at registration time
 
+## Java Interop Rule
+
+FHIRMason must be fully usable from Java with an unbroken fluent chain. Kotlin extension functions compile to **static** JVM methods and cannot be chained in Java — `result.flatMap(...)` becomes `OperationResultKt.flatMap(result, ...)`, which destroys the API.
+
+**Rule:** Never use Kotlin extension functions for any public API method on `OperationResult<T>` (or any other public API class). All public methods must be declared as class members so that Java callers can use them as instance methods.
+
+Extension functions are only acceptable for:
+- Private/internal helper utilities that Java callers never invoke directly (e.g. top-level `internal fun` helpers in the same package).
+- The existing `getResultList()` top-level extension, which is a special case: it only applies to `OperationResult<List<R>>` and is documented as a Kotlin convenience alias.
+
+When splitting or reorganising source files, keep all public instance methods inside the class body. Only extract **private helpers** (pure functions that accept their inputs as parameters rather than accessing `this`) to separate internal files.
+
 ## Import Rules
 
 - **No wildcard imports** (`import foo.*`) anywhere in source or test files. Import every symbol individually.
