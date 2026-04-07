@@ -557,9 +557,11 @@ class OperationResult<T> private constructor(
 
     // Builder methods - single item
 
+    @JvmOverloads
     fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> =
         runBuilderStep(name) { start -> storeAndCopy(name, builder(), start) }
 
+    @JvmOverloads
     fun <R : Base> addUsing(name: String? = null, builder: (T) -> R): OperationResult<R> =
         runBuilderStep(name) { start -> storeAndCopy(name, builder(getResult()), start) }
 
@@ -567,9 +569,11 @@ class OperationResult<T> private constructor(
     // addAll/addAllUsing return OperationResult<List<R>>; use getResultList() or getResult()
     // to retrieve the typed list without casting.
 
+    @JvmOverloads
     fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> =
         runBuilderStep(name) { start -> storeListAndCopy(name, builder(), start) }
 
+    @JvmOverloads
     fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> =
         runBuilderStep(name) { start -> storeListAndCopy(name, builder(getResult()), start) }
 
@@ -589,6 +593,7 @@ class OperationResult<T> private constructor(
 
     // Builder variants with explicit error handling
 
+    @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
         val start = System.currentTimeMillis()
         return try {
@@ -609,6 +614,7 @@ class OperationResult<T> private constructor(
         }
     }
 
+    @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
         val start = System.currentTimeMillis()
         return try {
@@ -656,6 +662,7 @@ class OperationResult<T> private constructor(
      * @param retryOn predicate called with each exception — return `false` to stop retrying
      * @param builder the lambda to invoke; invoked up to [maxAttempts] times
      */
+    @JvmOverloads
     fun <R : Base> addWithRetry(
         name: String? = null,
         maxAttempts: Int = 3,
@@ -699,6 +706,7 @@ class OperationResult<T> private constructor(
      * @param retryOn predicate called with each exception — return `false` to stop retrying
      * @param builder the lambda to invoke with the current head; invoked up to [maxAttempts] times
      */
+    @JvmOverloads
     fun <R : Base> addWithRetryUsing(
         name: String? = null,
         maxAttempts: Int = 3,
@@ -766,6 +774,7 @@ class OperationResult<T> private constructor(
 
     // ── Complex data type convenience methods ────────────────────────────────
 
+    @JvmOverloads
     fun addCoding(name: String, system: String, code: String, display: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
             Coding().apply {
@@ -818,6 +827,7 @@ class OperationResult<T> private constructor(
             }
         }
 
+    @JvmOverloads
     fun addQuantity(name: String, value: BigDecimal, unit: String, system: String? = null, code: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
             Quantity().apply {
@@ -828,6 +838,7 @@ class OperationResult<T> private constructor(
             }
         }
 
+    @JvmOverloads
     fun addCodeableConcept(name: String, system: String, code: String, display: String? = null, text: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
             CodeableConcept().apply {
@@ -1285,6 +1296,7 @@ class OperationResult<T> private constructor(
             if (resource is Resource) setResource(resource)
         }
 
+    @JvmOverloads
     fun toBundle(
         type: Bundle.BundleType,
         configBlock: ((Bundle.BundleEntryComponent) -> Unit)? = null
@@ -1361,6 +1373,8 @@ class OperationResult<T> private constructor(
             return OperationResult(mutable, null, outcomes.toMutableList(), ErrorStrategy.FAIL_FAST, failedTasks.toMutableMap())
         }
 
+        @JvmStatic
+        @JvmOverloads
         fun <T : Base> of(value: T, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<T> {
             val key = name ?: value.fhirType().lowercase()
             val params = mutableMapOf<String, MutableList<Base>>()
@@ -1368,6 +1382,8 @@ class OperationResult<T> private constructor(
             return OperationResult(params, value, mutableListOf(), errorStrategy, mutableMapOf())
         }
 
+        @JvmStatic
+        @JvmOverloads
         fun <T : Base> of(values: List<T>, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<List<T>> {
             val params = mutableMapOf<String, MutableList<Base>>()
             val instance = OperationResult(params, values, mutableListOf(), errorStrategy, mutableMapOf())
@@ -1389,6 +1405,7 @@ class OperationResult<T> private constructor(
          * The returned result has no "current" typed head ([getResult] will throw); use
          * [fromParametersTyped] when a typed head is required.
          */
+        @JvmStatic
         fun fromParameters(parameters: Parameters): OperationResult<Base> {
             val (params, exts) = ParameterMapSerializer.flatten(parameters)
             return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
@@ -1400,6 +1417,7 @@ class OperationResult<T> private constructor(
          *
          * @throws IllegalArgumentException if no value of [type] exists under [primaryKey].
          */
+        @JvmStatic
         fun <T : Base> fromParametersTyped(
             parameters: Parameters,
             primaryKey: String,
@@ -1433,6 +1451,7 @@ class OperationResult<T> private constructor(
          *
          * @see fromBundle overload with [keyStrategy] for custom key extraction.
          */
+        @JvmStatic
         fun fromBundle(bundle: Bundle): OperationResult<Base> =
             fromBundle(bundle) { entry -> entry.resource.fhirType().lowercase() }
 
@@ -1448,6 +1467,7 @@ class OperationResult<T> private constructor(
          * OperationResult.fromBundle(bundle) { entry -> entry.fullUrl ?: entry.resource.fhirType() }
          * ```
          */
+        @JvmStatic
         fun fromBundle(
             bundle: Bundle,
             keyStrategy: (Bundle.BundleEntryComponent) -> String
@@ -1475,6 +1495,8 @@ class OperationResult<T> private constructor(
          * [getResult] will throw [IllegalStateException] until a value is added via [add] or similar.
          * [toParameters] returns a valid empty [Parameters] resource.
          */
+        @JvmStatic
+        @JvmOverloads
         fun empty(errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<Base> =
             OperationResult(
                 mutableMapOf(),

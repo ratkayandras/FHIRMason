@@ -1350,6 +1350,82 @@ class FhirMasonConfig {
 
 ---
 
+## Using from Java
+
+FHIRMason is fully usable from Java with an unbroken fluent chain.
+
+### Factory methods
+
+`@JvmStatic` annotations on the companion object mean you call factories directly on the class — no `.Companion.` required:
+
+```java
+// Single resource — name defaults to fhirType().lowercase()
+OperationResult<Patient> result = OperationResult.of(patient);
+
+// Single resource with explicit name and error strategy
+OperationResult<Patient> result = OperationResult.of(patient, "patient", ErrorStrategy.ACCUMULATE);
+
+// Empty pipeline
+OperationResult<Base> empty = OperationResult.empty();
+OperationResult<Base> accumulating = OperationResult.empty(ErrorStrategy.ACCUMULATE);
+
+// From existing FHIR resources
+OperationResult<Base> fromParams = OperationResult.fromParameters(parameters);
+OperationResult<Patient> typed = OperationResult.fromParametersTyped(parameters, "patient", Patient.class);
+OperationResult<Base> fromBundle = OperationResult.fromBundle(bundle);
+```
+
+### Builder methods with optional parameters
+
+`@JvmOverloads` generates overloads for every trailing-default parameter, so you only supply what you need:
+
+```java
+// add without a name — key defaults to fhirType().lowercase()
+result.add(() -> buildEncounter())
+      .add("coverage", () -> buildCoverage());
+
+// addUsing — receives the current pipeline head
+OperationResult.of(patient)
+    .addUsing(encounter -> buildClaim(encounter))
+    .addUsing("summary", encounter -> buildSummary(encounter));
+
+// addAll / addAllUsing work the same way
+result.addAll(() -> List.of(obs1, obs2))
+      .addAll("vitals", () -> List.of(obs3));
+```
+
+### Convenience methods with optional trailing parameters
+
+```java
+// addCoding — display is optional
+result.addCoding("status", "http://loinc.org", "55423-8")
+      .addCoding("type",   "http://loinc.org", "55423-8", "Step count");
+
+// addQuantity — system and code are optional
+result.addQuantity("weight", new BigDecimal("70"), "kg")
+      .addQuantity("bmi",    new BigDecimal("22"), "kg/m2", "http://unitsofmeasure.org", "kg/m2");
+
+// addCodeableConcept — display and text are optional
+result.addCodeableConcept("category", "http://loinc.org", "vital-signs")
+      .addCodeableConcept("category", "http://loinc.org", "vital-signs", "Vital Signs", "Patient vitals");
+
+// toBundle — configBlock is optional
+Bundle plain = result.toBundle(Bundle.BundleType.COLLECTION);
+Bundle custom = result.toBundle(Bundle.BundleType.COLLECTION, entry -> entry.setFullUrl("urn:uuid:" + UUID.randomUUID()));
+```
+
+### Retry methods
+
+```java
+// addWithRetry — all retry parameters have defaults
+result.addWithRetry(() -> fetchPatientFromServer())
+      .addWithRetry("obs", 5, () -> fetchObservation())
+      .addWithRetry("enc", 3, 1000L, () -> fetchEncounter())
+      .addWithRetry("cov", 3, 500L, e -> !(e instanceof FatalException), () -> fetchCoverage());
+```
+
+---
+
 ## Core Artifact
 
 ```xml
