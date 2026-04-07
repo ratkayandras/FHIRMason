@@ -52,6 +52,16 @@ Extension functions are only acceptable for:
 
 When splitting or reorganising source files, keep all public instance methods inside the class body. Only extract **private helpers** (pure functions that accept their inputs as parameters rather than accessing `this`) to separate internal files.
 
+### @JvmStatic and @JvmOverloads requirements
+
+Every **public** `companion object` function must be annotated with `@JvmStatic` so Java callers can write `OperationResult.of(...)` instead of `OperationResult.Companion.of(...)`.
+
+Every **public** function (instance method or companion function) that has one or more default parameter values must also be annotated with `@JvmOverloads` so the Kotlin compiler generates the full set of Java overloads for each trailing-default combination.
+
+Exceptions — do **not** add these annotations to:
+- `internal` functions (not part of the public API).
+- `inline fun` with `reified` type parameters — these have no JVM bytecode representation and cannot be annotated.
+
 ## Import Rules
 
 - **No wildcard imports** (`import foo.*`) anywhere in source or test files. Import every symbol individually.

@@ -152,6 +152,7 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying
      * @param block the suspending lambda to invoke; called up to [maxAttempts] times
      */
+    @JvmOverloads
     fun <R : Base> addWithRetry(
         key: String,
         maxAttempts: Int = 3,
