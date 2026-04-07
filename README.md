@@ -226,6 +226,30 @@ val result = OperationResult.of(patient)
     .addOrDefault("score", defaultScore) { computeRiskScore() }
 ```
 
+#### Retry on transient failures
+
+`addWithRetry` calls the builder lambda up to `maxAttempts` times with exponential backoff between attempts. On final failure it records an ERROR `OperationOutcome` (Pattern A — same as `add`). The `retryOn` predicate lets you restrict retries to specific exception types.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | `String?` | `null` | Key under which the value is stored (`fhirType()` if null) |
+| `maxAttempts` | `Int` | `3` | Total number of attempts including the first; must be ≥ 1 |
+| `initialDelayMs` | `Long` | `500` | Delay before the second attempt in ms; must be ≥ 0 |
+| `retryOn` | `(Exception) -> Boolean` | `{ true }` | Return `false` to stop retrying for a specific exception |
+| `builder` | `() -> R` | — | Resource-producing lambda |
+
+```kotlin
+val result = OperationResult.of(patient)
+    .addWithRetry("encounter", maxAttempts = 3, initialDelayMs = 200) {
+        fhirClient.fetchEncounter(id)   // retried up to 3 times on any exception
+    }
+    .addWithRetry("coverage", retryOn = { e -> e is IOException }) {
+        fhirClient.fetchCoverage(id)   // only retried for IOException
+    }
+```
+
+Delay schedule: `initialDelayMs` before attempt 2, `initialDelayMs * 2` before attempt 3, etc. Uses `Thread.sleep` (blocking); the async variant uses `kotlinx.coroutines.delay` (non-blocking).
+
 #### Primitive value helpers
 
 Store raw Kotlin/Java primitives as FHIR types without changing the pipeline head. These methods always return `OperationResult<T>` (the current head type is preserved) because primitives are metadata or configuration, not pipeline resources.
@@ -932,6 +956,25 @@ Tier assignment: `tier(task) = 1` for root tasks; `tier(task) = 1 + max(tier(dep
 
 Returns `"AsyncOperationResult DAG: (empty)"` when no tasks have been registered.
 
+### Retry on transient failures
+
+`addWithRetry` works the same as in the sync builder but the lambda is `suspend` and delays use `kotlinx.coroutines.delay` (non-blocking).
+
+```kotlin
+val dag = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .addWithRetry("encounter", maxAttempts = 3, initialDelayMs = 200) {
+        fhirClient.fetchEncounter(id)
+    }
+    .addWithRetry("coverage", retryOn = { e -> e is IOException }) {
+        fhirClient.fetchCoverage(id)
+    }
+
+val result = dag.run()
+```
+
+On final failure the key is absent from the result and an ERROR `OperationOutcome` is recorded. See the sync builder section for the full parameter table.
+
 ### Constraints
 
 - Task keys must be unique — duplicate registration throws `IllegalArgumentException`
@@ -1189,8 +1232,15 @@ fhirmason-core/
         ├── OperationResultFromTest.kt
         ├── OperationResultLinkReferencesTest.kt
         ├── OperationResultMetricsTest.kt
+        ├── OperationResultConditionalTest.kt
+        ├── OperationResultMapHeadTest.kt
+        ├── OperationResultFhirErrorHandlingTest.kt
+        ├── OperationResultRetryTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
+        ├── AsyncOperationResultDescribeTest.kt
+        ├── AsyncOperationResultRetryTest.kt
+        ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
 fhirmason-spring/
