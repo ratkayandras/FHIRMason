@@ -2,7 +2,6 @@ package dev.ratkay.operation
 
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
-import org.hl7.fhir.instance.model.api.IBaseHasExtensions
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.BooleanType
 import org.hl7.fhir.r4.model.Extension
@@ -50,6 +49,26 @@ import kotlin.reflect.KClass
  * "head" of the pipeline so that [getResult] returns the correct type without casting.
  * When the last step produced a list, [T] becomes `List<R>` and the result can be
  * retrieved via [getResult] or via the [getResultList] extension.
+ *
+ * ### Section map (for navigation)
+ * | Section | Methods |
+ * |---------|---------|
+ * | Error state | `hasErrors`, `isSuccessful`, `getOutcomes`, `getFailedTasks`, `toOperationOutcome`, `throwIfErrors` |
+ * | Metrics & timing | `timed`, `getMetrics` |
+ * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
+ * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
+ * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
+ * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault` |
+ * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate`, `addDateTime`, `addInstant`, `addTime`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
+ * | Nested params | `addPart` |
+ * | Extension support | `addWithExtension` |
+ * | Query | `getAllParameters`, `getAll`, `getByType`, `containsKey`, `getKeys`, `count`, `totalCount`, `isEmpty`, `isNotEmpty` |
+ * | Transformations | `filterByType`, `filterByName`, `mapValues`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `peek` |
+ * | Conditional chaining | `whenTrue`, `ifPresent`, `guardFalse` |
+ * | Extraction | `takeFirst`, `takeFirstTyped`, `extractParam`, `extractParamList` |
+ * | Reference linking | `linkReferences` |
+ * | Serialization | `toParameters`, `toBundleEntry`, `toBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
+ * | Factory *(companion)* | `of`, `fromParameters`, `fromParametersTyped`, `fromBundle`, `empty` |
  */
 class OperationResult<T> private constructor(
     private val parameters: MutableMap<String, MutableList<Base>>,
@@ -229,51 +248,11 @@ class OperationResult<T> private constructor(
 
     // Builder methods — filter all accumulated parameters by type and extension URLs
 
-    /**
-     * Collects all values across every accumulated parameter, keeps only instances of [type],
-     * and — if [extUrls] is non-empty — further filters by extension-URL presence.
-     *
-     * When [matchAll] is `true` (AND): a resource must carry **every** supplied URL.
-     * When [matchAll] is `false` (OR): a resource must carry **at least one** of the URLs.
-     * When [extUrls] is empty, all instances of [type] are returned regardless of [matchAll].
-     */
-    private fun <I : Base> collectByExtension(
-        type: KClass<I>,
-        extUrls: Array<out String>,
-        matchAll: Boolean
-    ): List<I> {
-        val allOfType = parameters.values.flatten().filterIsInstance(type.java)
-        return if (extUrls.isEmpty()) allOfType
-        else allOfType.filter { resource ->
-            resource is IBaseHasExtensions && if (matchAll) {
-                extUrls.all { url -> FhirExtensionHelper.hasExtension(resource, url) }
-            } else {
-                extUrls.any { url -> FhirExtensionHelper.hasExtension(resource, url) }
-            }
-        }
-    }
+    private fun <I : Base> collectByExtension(type: KClass<I>, extUrls: Array<out String>, matchAll: Boolean): List<I> =
+        filterByExtension(parameters.values.flatten(), type, extUrls, matchAll)
 
-    /**
-     * Searches **all** accumulated parameters for instances of [type] that have an [Extension] at
-     * [url] whose value is an instance of [valueType] and satisfies [predicate].
-     *
-     * Resources that do not implement [IBaseHasExtensions], have no extension at [url], or whose
-     * extension value is not an instance of [valueType] are silently excluded.
-     * When the extension appears multiple times at [url], the resource passes if **any** value
-     * satisfies [predicate].
-     */
-    private fun <I : Base, V : Type> collectByExtensionAndValueType(
-        type: KClass<I>,
-        url: String,
-        valueType: KClass<V>,
-        predicate: (V) -> Boolean
-    ): List<I> =
-        parameters.values.flatten()
-            .filterIsInstance(type.java)
-            .filter { resource ->
-                resource is IBaseHasExtensions &&
-                    FhirExtensionHelper.getAllValuesAs(resource, url, valueType.java).any(predicate)
-            }
+    private fun <I : Base, V : Type> collectByExtensionAndValueType(type: KClass<I>, url: String, valueType: KClass<V>, predicate: (V) -> Boolean): List<I> =
+        filterByExtensionAndValueType(parameters.values.flatten(), type, url, valueType, predicate)
 
     /**
      * Searches **all** accumulated parameters for instances of [type] that carry **every** one of
@@ -1199,20 +1178,8 @@ class OperationResult<T> private constructor(
      * @throws IllegalArgumentException if more than one target resource exists for any rule.
      */
     fun linkReferences(vararg rules: ReferenceLinkRule<*, *>): OperationResult<T> {
-        val copiedParams = deepCopyParameters()
-        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
-        rules.forEach { rule ->
-            val sources = allResources.filter { rule.sourceType.java.isInstance(it) }
-            val targets = allResources.filter { rule.targetType.java.isInstance(it) }
-            require(targets.size <= 1) {
-                "Ambiguous reference target: ${targets.size} resources of type " +
-                "'${rule.targetType.simpleName}' found; exactly one is required per rule"
-            }
-            val target = targets.singleOrNull() ?: return@forEach
-            sources.forEach { source ->
-                if (source !== target) rule.applyTo(source, target)
-            }
-        }
+        val copiedParams = deepCopyParameters(parameters)
+        applyReferenceLinkRules(copiedParams, rules)
         return copyWith(result, params = copiedParams)
     }
 
@@ -1236,36 +1203,8 @@ class OperationResult<T> private constructor(
      * accumulated resources remain unchanged.
      */
     fun linkReferences(): OperationResult<T> {
-        val copiedParams = deepCopyParameters()
-        val allResources = copiedParams.values.flatten().filterIsInstance<Resource>()
-
-        val resourceIndex: Map<String, List<Resource>> = allResources
-            .filter { it.hasId() }
-            .groupBy { it.fhirType().lowercase() }
-
-        allResources.forEach { source ->
-            source.children().forEach { property ->
-                val typeCode = property.typeCode ?: return@forEach
-                if (!typeCode.startsWith("Reference(")) return@forEach
-                if (property.hasValues()) return@forEach
-
-                val allowedTypes = typeCode
-                    .removePrefix("Reference(")
-                    .removeSuffix(")")
-                    .split("|")
-                    .map { it.trim().lowercase() }
-
-                val candidates: List<Resource> = allowedTypes.flatMap { type ->
-                    resourceIndex[type]?.filter { it !== source } ?: emptyList()
-                }
-
-                if (candidates.size == 1) {
-                    val target = candidates.single()
-                    val ref = Reference("${target.fhirType()}/${target.idPart}")
-                    runCatching { source.setProperty(property.name, ref) }
-                }
-            }
-        }
+        val copiedParams = deepCopyParameters(parameters)
+        autoLinkReferences(copiedParams)
         return copyWith(result, params = copiedParams)
     }
 
@@ -1337,26 +1276,6 @@ class OperationResult<T> private constructor(
     fun getResult(): T = result ?: throw IllegalStateException("No result set")
 
     // Private helpers
-
-    /**
-     * Returns a deep copy of [parameters] so that [linkReferences] can mutate the copies
-     * without affecting the original accumulated resources.
-     *
-     * HAPI FHIR's [Base.copy] performs a recursive clone of each element.
-     */
-    private fun deepCopyParameters(): MutableMap<String, MutableList<Base>> =
-        parameters.mapValues { (_, values) ->
-            values.map { base -> if (base is Resource) base.copy() else base }.toMutableList()
-        }.toMutableMap()
-
-    private fun warningOutcome(e: Exception): OperationOutcome {
-        val base = when (e) {
-            is BaseServerResponseException -> e.toOperationOutcome()
-            else -> e.toOperationOutcome()
-        }
-        base.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-        return base
-    }
 
     private fun addToParameters(values: List<Base>, name: String?) {
         if (name != null) {

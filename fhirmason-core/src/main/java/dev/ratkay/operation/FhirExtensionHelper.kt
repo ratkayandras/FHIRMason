@@ -5,6 +5,7 @@ import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.Extension
 import org.hl7.fhir.r4.model.Type
 import java.util.Optional
+import kotlin.reflect.KClass
 
 /**
  * Utility object for retrieving FHIR extensions from any object that can carry them.
@@ -204,3 +205,51 @@ object FhirExtensionHelper {
         }
     }
 }
+
+// ── Internal helpers used by OperationResult extension-filter methods ────────
+
+/**
+ * Filters [allValues] to instances of [type], then — when [extUrls] is non-empty — further
+ * requires each instance to implement [IBaseHasExtensions] and carry the relevant URLs.
+ *
+ * [matchAll] = `true` (AND): every URL must be present.
+ * [matchAll] = `false` (OR): at least one URL must be present.
+ * When [extUrls] is empty all instances of [type] are returned regardless of [matchAll].
+ */
+internal fun <I : Base> filterByExtension(
+    allValues: List<Base>,
+    type: KClass<I>,
+    extUrls: Array<out String>,
+    matchAll: Boolean
+): List<I> {
+    val allOfType = allValues.filterIsInstance(type.java)
+    return if (extUrls.isEmpty()) allOfType
+    else allOfType.filter { resource ->
+        resource is IBaseHasExtensions && if (matchAll) {
+            extUrls.all { url -> FhirExtensionHelper.hasExtension(resource, url) }
+        } else {
+            extUrls.any { url -> FhirExtensionHelper.hasExtension(resource, url) }
+        }
+    }
+}
+
+/**
+ * Filters [allValues] to instances of [type] that have an extension at [url] with a value
+ * of [valueType] satisfying [predicate].
+ *
+ * Resources that do not implement [IBaseHasExtensions], have no extension at [url], or whose
+ * extension value is not an instance of [valueType] are silently excluded.
+ */
+internal fun <I : Base, V : Type> filterByExtensionAndValueType(
+    allValues: List<Base>,
+    type: KClass<I>,
+    url: String,
+    valueType: KClass<V>,
+    predicate: (V) -> Boolean
+): List<I> =
+    allValues
+        .filterIsInstance(type.java)
+        .filter { resource ->
+            resource is IBaseHasExtensions &&
+                FhirExtensionHelper.getAllValuesAs(resource, url, valueType.java).any(predicate)
+        }
