@@ -228,7 +228,9 @@ val result = OperationResult.of(patient)
 
 #### Retry on transient failures
 
-`addWithRetry` calls the builder lambda up to `maxAttempts` times with exponential backoff between attempts. On final failure it records an ERROR `OperationOutcome` (Pattern A — same as `add`). The `retryOn` predicate lets you restrict retries to specific exception types.
+`addWithRetry` / `addWithRetryUsing` call the builder lambda up to `maxAttempts` times with exponential backoff between attempts. On final failure an ERROR `OperationOutcome` is recorded (Pattern A — same as `add`). The `retryOn` predicate lets you restrict retries to specific exception types.
+
+`addWithRetryUsing` passes the current pipeline head value `T` into the builder, matching the `addUsing` convention.
 
 | Parameter | Type | Default | Meaning |
 |---|---|---|---|
@@ -236,15 +238,16 @@ val result = OperationResult.of(patient)
 | `maxAttempts` | `Int` | `3` | Total number of attempts including the first; must be ≥ 1 |
 | `initialDelayMs` | `Long` | `500` | Delay before the second attempt in ms; must be ≥ 0 |
 | `retryOn` | `(Exception) -> Boolean` | `{ true }` | Return `false` to stop retrying for a specific exception |
-| `builder` | `() -> R` | — | Resource-producing lambda |
+| `builder` (`addWithRetry`) | `() -> R` | — | Resource-producing lambda |
+| `builder` (`addWithRetryUsing`) | `(T) -> R` | — | Resource-producing lambda that receives the current head |
 
 ```kotlin
 val result = OperationResult.of(patient)
     .addWithRetry("encounter", maxAttempts = 3, initialDelayMs = 200) {
-        fhirClient.fetchEncounter(id)   // retried up to 3 times on any exception
+        fhirClient.fetchEncounter(id)          // retried up to 3 times on any exception
     }
-    .addWithRetry("coverage", retryOn = { e -> e is IOException }) {
-        fhirClient.fetchCoverage(id)   // only retried for IOException
+    .addWithRetryUsing("coverage", retryOn = { e -> e is IOException }) { p ->
+        fhirClient.fetchCoverage(p.idPart)     // head Patient passed into the builder
     }
 ```
 

@@ -256,4 +256,57 @@ class OperationResultRetryTest {
         val diagnostics = result.getOutcomes().first().issueFirstRep.diagnostics
         assertEquals("final failure message", diagnostics)
     }
+
+    // ── addWithRetryUsing ─────────────────────────────────────────────────────
+
+    @Test
+    fun `addWithRetryUsing passes head value to builder`() {
+        val result = OperationResult.of(patient())
+            .addWithRetryUsing("enc", maxAttempts = 3, initialDelayMs = 0) { p ->
+                Encounter().apply { subject.reference = "Patient/${(p as Patient).idPart}" }
+            }
+
+        assertFalse(result.hasErrors())
+        val enc = result.getAll("enc").first() as Encounter
+        assertEquals("Patient/p1", enc.subject.reference)
+    }
+
+    @Test
+    fun `addWithRetryUsing retries and succeeds using head value`() {
+        var attempts = 0
+        val result = OperationResult.of(patient())
+            .addWithRetryUsing("enc", maxAttempts = 3, initialDelayMs = 0) { p ->
+                attempts++
+                if (attempts < 2) throw RuntimeException("transient")
+                Encounter().apply { subject.reference = "Patient/${(p as Patient).idPart}" }
+            }
+
+        assertFalse(result.hasErrors())
+        assertEquals(2, attempts)
+        assertTrue(result.containsKey("enc"))
+    }
+
+    @Test
+    fun `addWithRetryUsing records error after all attempts exhausted`() {
+        val result = OperationResult.of(patient())
+            .addWithRetryUsing("enc", maxAttempts = 2, initialDelayMs = 0) { _ ->
+                throw RuntimeException("always fails")
+            }
+
+        assertTrue(result.hasErrors())
+        assertFalse(result.containsKey("enc"))
+    }
+
+    @Test
+    fun `addWithRetryUsing retryOn predicate stops early`() {
+        var attempts = 0
+        val result = OperationResult.of(patient())
+            .addWithRetryUsing("enc", maxAttempts = 5, initialDelayMs = 0, retryOn = { false }) { _ ->
+                attempts++
+                throw RuntimeException("non-retryable")
+            }
+
+        assertEquals(1, attempts)
+        assertTrue(result.hasErrors())
+    }
 }

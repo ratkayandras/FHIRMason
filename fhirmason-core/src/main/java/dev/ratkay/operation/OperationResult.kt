@@ -48,7 +48,7 @@ import kotlin.reflect.KClass
  * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
  * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
- * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault`, `addWithRetry` |
+ * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault`, `addWithRetry`, `addWithRetryUsing` |
  * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate([DateTimeInput])`, `addDateTime([DateTimeInput])`, `addInstant([DateTimeInput])`, `addTime([DateTimeInput])`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
@@ -689,6 +689,23 @@ class OperationResult<T> private constructor(
             success ?: throw lastException!!
         }
     }
+
+    /**
+     * Like [addWithRetry] but the builder receives the current pipeline head value [T].
+     * Useful when the resource to fetch depends on data already in the pipeline.
+     *
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs sleep duration before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying
+     * @param builder the lambda to invoke with the current head; invoked up to [maxAttempts] times
+     */
+    fun <R : Base> addWithRetryUsing(
+        name: String? = null,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        builder: (T) -> R
+    ): OperationResult<R> = addWithRetry(name, maxAttempts, initialDelayMs, retryOn) { builder(getResult()) }
 
     // ── Primitive value convenience methods ──────────────────────────────────
 
