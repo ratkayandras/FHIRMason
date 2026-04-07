@@ -1142,10 +1142,13 @@ fhirmason-core/
     ├── main/java/dev/ratkay/operation/
     │   ├── OperationResult.kt              # Synchronous accumulator builder
     │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
+    │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
     │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
+    │   ├── ReferenceLinkHelper.kt          # Reference linking algorithm helpers (internal)
     │   ├── StepMetrics.kt                  # Per-step timing and outcome data
     │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-    │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helper
+    │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR type converter
+    │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
     └── test/java/dev/ratkay/operation/
         ├── OperationResultTest.kt
