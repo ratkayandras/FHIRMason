@@ -238,15 +238,13 @@ Store raw Kotlin/Java primitives as FHIR types without changing the pipeline hea
 | `addDecimal(name, value)` | `BigDecimal` | `DecimalType` | `addDecimalUsing(name) { t -> BigDecimal }` |
 | `addCode(name, value)` | `String` | `CodeType` | `addCodeUsing(name) { t -> String }` |
 | `addUri(name, value)` | `String` | `UriType` | `addUriUsing(name) { t -> String }` |
-| `addDate(name, value)` | `String` · `LocalDate` · `YearMonth` · `Year` · `Date` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` | `DateType` | `addDateUsing(name) { t -> String }` · `addDateUsingLocalDate` · `addDateUsingYearMonth` · `addDateUsingYear` · `addDateUsingLocalDateTime` · `addDateUsingZonedDateTime` · `addDateUsingOffsetDateTime` |
-| `addDateTime(name, value)` | `String` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Instant` · `Date` · `Calendar` | `DateTimeType` | `addDateTimeUsing(name) { t -> String }` · `addDateTimeUsingLocalDateTime` · `addDateTimeUsingZonedDateTime` · `addDateTimeUsingOffsetDateTime` · `addDateTimeUsingInstant` |
-| `addInstant(name, value)` | `String` · `Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` | `addInstantUsing(name) { t -> String }` · `addInstantUsingInstant` · `addInstantUsingZonedDateTime` · `addInstantUsingOffsetDateTime` |
-| `addTime(name, value)` | `String` · `LocalTime` | `TimeType` | `addTimeUsing(name) { t -> String }` · `addTimeUsingLocalTime` |
+| `addDate(name, value)` | [`DateTimeInput`](#datetimeinput) | `DateType` | `addDateUsing(name) { t -> DateTimeInput }` |
+| `addDateTime(name, value)` | [`DateTimeInput`](#datetimeinput) | `DateTimeType` | `addDateTimeUsing(name) { t -> DateTimeInput }` |
+| `addInstant(name, value)` | [`DateTimeInput`](#datetimeinput) | `InstantType` | `addInstantUsing(name) { t -> DateTimeInput }` |
+| `addTime(name, value)` | [`DateTimeInput`](#datetimeinput) | `TimeType` | `addTimeUsing(name) { t -> DateTimeInput }` |
 | `addCanonical(name, value)` | `String` | `CanonicalType` | `addCanonicalUsing(name) { t -> String }` |
 
-`addDate` and `addDateTime` accept either FHIR-format strings (e.g. `"2024-01-15"`, `"2024-01-15T10:30:00"`) or common Java/Kotlin date-time types — see [`FhirDateTimeConverter`](#fhirdatetimeconverter) for how each type is mapped. `addInstant` and `addTime` follow the same pattern. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
-
-The `Using` builder variants for Java date-time types use type-encoded names (e.g. `addDateUsingLocalDate`, `addDateTimeUsingZonedDateTime`) because Kotlin cannot resolve overloads that differ only in the lambda return type after JVM erasure.
+`addDate`, `addDateTime`, `addInstant`, and `addTime` each take a single [`DateTimeInput`](#datetimeinput) value that wraps any supported Java/Kotlin date-time type. `addDecimal` takes `java.math.BigDecimal` to avoid floating-point precision issues.
 
 ```kotlin
 val result = OperationResult.of(patient)
@@ -283,16 +281,51 @@ val result = OperationResult.of(patient)
 val p: Patient = result.getResult()  // head type unchanged
 ```
 
+#### DateTimeInput
+
+`DateTimeInput` is a sealed class that wraps any supported Java/Kotlin date-time value for use with `addDate`, `addDateTime`, `addInstant`, and `addTime`. It replaces the old per-type overload families, which could not be named uniformly because lambda return types share the same JVM signature after erasure.
+
+| Subclass | Wrapped type |
+|---|---|
+| `DateTimeInput.OfString` | FHIR-format string (`"2024-01-15"`, `"10:30:00"`, …) |
+| `DateTimeInput.OfLocalDate` | `java.time.LocalDate` |
+| `DateTimeInput.OfLocalDateTime` | `java.time.LocalDateTime` |
+| `DateTimeInput.OfZonedDateTime` | `java.time.ZonedDateTime` |
+| `DateTimeInput.OfOffsetDateTime` | `java.time.OffsetDateTime` |
+| `DateTimeInput.OfInstant` | `java.time.Instant` |
+| `DateTimeInput.OfDate` | `java.util.Date` |
+| `DateTimeInput.OfCalendar` | `java.util.Calendar` |
+| `DateTimeInput.OfYearMonth` | `java.time.YearMonth` |
+| `DateTimeInput.OfYear` | `java.time.Year` |
+| `DateTimeInput.OfLocalTime` | `java.time.LocalTime` |
+
+Use the `DateTimeInput.of(value)` factory (Kotlin and Java) or construct the subclass directly in Kotlin:
+
+```kotlin
+// Factory — same syntax from Kotlin and Java
+DateTimeInput.of(LocalDate.of(1990, 6, 15))
+DateTimeInput.of(ZonedDateTime.now())
+
+// Direct subclass construction (Kotlin only)
+DateTimeInput.OfLocalDate(LocalDate.of(1990, 6, 15))
+```
+
+Not every subclass is valid for every FHIR primitive type. Unsupported combinations (e.g. `OfInstant` passed to `addDate`) throw `IllegalArgumentException` at runtime.
+
+---
+
 #### FhirDateTimeConverter
 
 `FhirDateTimeConverter` is a public Kotlin `object` in `dev.ratkay.operation` that maps common Java/Kotlin date-time types to their HAPI FHIR R4 equivalents. All functions are pure and stateless — they can be used directly without an `OperationResult` pipeline.
 
+Each typed overload converts directly; `DateTimeInput`-accepting overloads dispatch to the correct typed converter based on the wrapped subclass.
+
 | Function | Input type(s) | HAPI FHIR result |
 |---|---|---|
-| `toFhirDate(value)` | `LocalDate` · `YearMonth` · `Year` · `java.util.Date` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` | `DateType` |
-| `toFhirDateTime(value)` | `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Instant` · `Date` · `Calendar` | `DateTimeType` |
-| `toFhirInstant(value)` | `java.time.Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` | `InstantType` |
-| `toFhirTime(value)` | `LocalTime` | `TimeType` |
+| `toFhirDate(value)` | `LocalDate` · `YearMonth` · `Year` · `java.util.Date` · `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `DateTimeInput` | `DateType` |
+| `toFhirDateTime(value)` | `LocalDateTime` · `ZonedDateTime` · `OffsetDateTime` · `Instant` · `Date` · `Calendar` · `DateTimeInput` | `DateTimeType` |
+| `toFhirInstant(value)` | `java.time.Instant` · `ZonedDateTime` · `OffsetDateTime` · `Date` · `DateTimeInput` | `InstantType` |
+| `toFhirTime(value)` | `LocalTime` · `DateTimeInput` | `TimeType` |
 
 **Conversion notes:**
 - `LocalDate`, `YearMonth`, `Year` → no timezone (FHIR date is zone-agnostic)
@@ -309,20 +342,20 @@ val fhirDt      = FhirDateTimeConverter.toFhirDateTime(ZonedDateTime.now())     
 val fhirInstant = FhirDateTimeConverter.toFhirInstant(Instant.now())             // InstantType UTC
 val fhirTime    = FhirDateTimeConverter.toFhirTime(LocalTime.of(10, 30))         // TimeType "10:30"
 
-// Inside an OperationResult pipeline — overloads accept Java types directly
+// Inside an OperationResult pipeline — wrap values with DateTimeInput.of(...)
 val result = OperationResult.of(patient)
-    .addDate("dob", LocalDate.of(1990, 6, 15))
-    .addDateTime("recorded", ZonedDateTime.now())
-    .addInstant("ts", Instant.now())
-    .addTime("appt", LocalTime.of(10, 30))
+    .addDate("dob",      DateTimeInput.of(LocalDate.of(1990, 6, 15)))
+    .addDateTime("ts",   DateTimeInput.of(ZonedDateTime.now()))
+    .addInstant("audit", DateTimeInput.of(Instant.now()))
+    .addTime("slot",     DateTimeInput.of(LocalTime.of(10, 30)))
     .addPeriod("coverage", ZonedDateTime.now(), ZonedDateTime.now().plusYears(1))
 
-// Builder (Using) variants with Java types use type-encoded names
+// Builder (Using) variants
 val result2 = OperationResult.of(patient)
-    .addDateUsingLocalDate("dob") { it.birthDate.toInstant().atZone(ZoneOffset.UTC).toLocalDate() }
-    .addDateTimeUsingZonedDateTime("recorded") { ZonedDateTime.now() }
-    .addInstantUsingInstant("ts") { Instant.now() }
-    .addTimeUsingLocalTime("appt") { LocalTime.of(9, 0) }
+    .addDateUsing("dob")      { DateTimeInput.of(it.birthDate.toInstant().atZone(ZoneOffset.UTC).toLocalDate()) }
+    .addDateTimeUsing("ts")   { DateTimeInput.of(ZonedDateTime.now()) }
+    .addInstantUsing("audit") { DateTimeInput.of(Instant.now()) }
+    .addTimeUsing("slot")     { DateTimeInput.of(LocalTime.of(9, 0)) }
 ```
 
 #### FhirExtensionHelper
@@ -1142,6 +1175,7 @@ fhirmason-core/
     ├── main/java/dev/ratkay/operation/
     │   ├── OperationResult.kt              # Synchronous accumulator builder
     │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
+    │   ├── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
     │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
     │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
     │   ├── ReferenceLinkHelper.kt          # Reference linking algorithm helpers (internal)

@@ -1471,7 +1471,7 @@ class OperationResultTest {
     @Test
     fun `addDate stores DateType under given name`() {
         val result = OperationResult.of(patient())
-            .addDate("dob", "2024-01-15")
+            .addDate("dob", DateTimeInput.of("2024-01-15"))
 
         assertTrue(result.containsKey("dob"))
         val stored = result.getAll("dob").first()
@@ -1482,7 +1482,7 @@ class OperationResultTest {
     @Test
     fun `addDateTime stores DateTimeType under given name`() {
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", "2024-01-15T10:30:00")
+            .addDateTime("recorded", DateTimeInput.of("2024-01-15T10:30:00"))
 
         assertTrue(result.containsKey("recorded"))
         val stored = result.getAll("recorded").first()
@@ -1492,7 +1492,7 @@ class OperationResultTest {
     @Test
     fun `addDate with LocalDate stores DateType with correct ISO value`() {
         val result = OperationResult.of(patient())
-            .addDate("dob", LocalDate.of(1990, 6, 15))
+            .addDate("dob", DateTimeInput.of(LocalDate.of(1990, 6, 15)))
 
         assertTrue(result.containsKey("dob"))
         val stored = result.getAll("dob").first() as DateType
@@ -1502,7 +1502,7 @@ class OperationResultTest {
     @Test
     fun `addDate with YearMonth stores DateType with month precision`() {
         val result = OperationResult.of(patient())
-            .addDate("period", YearMonth.of(2024, 3))
+            .addDate("period", DateTimeInput.of(YearMonth.of(2024, 3)))
 
         val stored = result.getAll("period").first() as DateType
         assertEquals("2024-03", stored.valueAsString)
@@ -1511,7 +1511,7 @@ class OperationResultTest {
     @Test
     fun `addDate with Year stores DateType with year precision`() {
         val result = OperationResult.of(patient())
-            .addDate("year", Year.of(2024))
+            .addDate("year", DateTimeInput.of(Year.of(2024)))
 
         val stored = result.getAll("year").first() as DateType
         assertEquals("2024", stored.valueAsString)
@@ -1520,7 +1520,7 @@ class OperationResultTest {
     @Test
     fun `addDate with java util Date stores DateType`() {
         val result = OperationResult.of(patient())
-            .addDate("dob", Date(0))
+            .addDate("dob", DateTimeInput.of(Date(0)))
 
         assertTrue(result.containsKey("dob"))
         assertThat(result.getAll("dob").first(), instanceOf(DateType::class.java))
@@ -1530,7 +1530,7 @@ class OperationResultTest {
     fun `addDateTime with LocalDateTime stores zone-less DateTimeType with seconds`() {
         val ldt = LocalDateTime.of(2024, 3, 15, 10, 30, 0)
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", ldt)
+            .addDateTime("recorded", DateTimeInput.of(ldt))
 
         val stored = result.getAll("recorded").first() as DateTimeType
         assertEquals("2024-03-15T10:30:00", stored.valueAsString)
@@ -1540,7 +1540,7 @@ class OperationResultTest {
     fun `addDateTime with ZonedDateTime stores offset-aware DateTimeType`() {
         val zdt = ZonedDateTime.of(2024, 3, 15, 10, 30, 15, 0, ZoneOffset.UTC)
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", zdt)
+            .addDateTime("recorded", DateTimeInput.of(zdt))
 
         val stored = result.getAll("recorded").first() as DateTimeType
         assertTrue(stored.valueAsString.contains("+00:00") || stored.valueAsString.endsWith("Z"),
@@ -1551,7 +1551,7 @@ class OperationResultTest {
     fun `addDateTime with OffsetDateTime stores correct DateTimeType`() {
         val odt = OffsetDateTime.of(2024, 3, 15, 10, 30, 30, 0, ZoneOffset.ofHours(2))
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", odt)
+            .addDateTime("recorded", DateTimeInput.of(odt))
 
         val stored = result.getAll("recorded").first() as DateTimeType
         assertTrue(stored.valueAsString.contains("+02:00"),
@@ -1561,7 +1561,7 @@ class OperationResultTest {
     @Test
     fun `addDateTime with java util Date stores DateTimeType`() {
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", Date())
+            .addDateTime("recorded", DateTimeInput.of(Date()))
 
         assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
     }
@@ -1570,7 +1570,7 @@ class OperationResultTest {
     fun `addDateTime with Calendar stores DateTimeType`() {
         val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
         val result = OperationResult.of(patient())
-            .addDateTime("recorded", cal)
+            .addDateTime("recorded", DateTimeInput.of(cal))
 
         assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
     }
@@ -1578,7 +1578,7 @@ class OperationResultTest {
     @Test
     fun `addInstant with String stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstant("ts", "2024-03-15T10:30:00.000Z")
+            .addInstant("ts", DateTimeInput.of("2024-03-15T10:30:00.000Z"))
 
         assertTrue(result.containsKey("ts"))
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
@@ -1588,7 +1588,7 @@ class OperationResultTest {
     fun `addInstant with java time Instant stores InstantType`() {
         val instant = Instant.parse("2024-03-15T10:30:00.000Z")
         val result = OperationResult.of(patient())
-            .addInstant("ts", instant)
+            .addInstant("ts", DateTimeInput.of(instant))
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
@@ -1597,7 +1597,7 @@ class OperationResultTest {
     fun `addInstant with ZonedDateTime stores InstantType`() {
         val zdt = ZonedDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)
         val result = OperationResult.of(patient())
-            .addInstant("ts", zdt)
+            .addInstant("ts", DateTimeInput.of(zdt))
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
@@ -1606,7 +1606,7 @@ class OperationResultTest {
     fun `addInstant with OffsetDateTime stores InstantType`() {
         val odt = OffsetDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)
         val result = OperationResult.of(patient())
-            .addInstant("ts", odt)
+            .addInstant("ts", DateTimeInput.of(odt))
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
@@ -1614,7 +1614,7 @@ class OperationResultTest {
     @Test
     fun `addInstant with java util Date stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstant("ts", Date())
+            .addInstant("ts", DateTimeInput.of(Date()))
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
@@ -1622,7 +1622,7 @@ class OperationResultTest {
     @Test
     fun `addTime with String stores TimeType`() {
         val result = OperationResult.of(patient())
-            .addTime("appt", "10:30:00")
+            .addTime("appt", DateTimeInput.of("10:30:00"))
 
         assertTrue(result.containsKey("appt"))
         val stored = result.getAll("appt").first() as TimeType
@@ -1632,110 +1632,110 @@ class OperationResultTest {
     @Test
     fun `addTime with LocalTime stores TimeType`() {
         val result = OperationResult.of(patient())
-            .addTime("appt", LocalTime.of(14, 45, 30))
+            .addTime("appt", DateTimeInput.of(LocalTime.of(14, 45, 30)))
 
         val stored = result.getAll("appt").first() as TimeType
         assertEquals("14:45:30", stored.valueAsString)
     }
 
     @Test
-    fun `addInstantUsing with String builder stores InstantType`() {
+    fun `addInstantUsing with DateTimeInput builder stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstantUsing("ts") { "2024-03-15T10:30:00.000Z" }
+            .addInstantUsing("ts") { DateTimeInput.of("2024-03-15T10:30:00.000Z") }
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
 
     @Test
-    fun `addTimeUsing with String builder stores TimeType`() {
+    fun `addTimeUsing with DateTimeInput builder stores TimeType`() {
         val result = OperationResult.of(patient())
-            .addTimeUsing("appt") { "09:00:00" }
+            .addTimeUsing("appt") { DateTimeInput.of("09:00:00") }
 
         val stored = result.getAll("appt").first() as TimeType
         assertEquals("09:00:00", stored.valueAsString)
     }
 
     @Test
-    fun `addDateUsingLocalDate builder stores DateType with correct value`() {
+    fun `addDateUsing with LocalDate builder stores DateType with correct value`() {
         val result = OperationResult.of(patient())
-            .addDateUsingLocalDate("dob") { LocalDate.of(1990, 6, 15) }
+            .addDateUsing("dob") { DateTimeInput.of(LocalDate.of(1990, 6, 15)) }
 
         val stored = result.getAll("dob").first() as DateType
         assertEquals("1990-06-15", stored.valueAsString)
     }
 
     @Test
-    fun `addDateUsingYearMonth builder stores DateType with month precision`() {
+    fun `addDateUsing with YearMonth builder stores DateType with month precision`() {
         val result = OperationResult.of(patient())
-            .addDateUsingYearMonth("period") { YearMonth.of(2024, 3) }
+            .addDateUsing("period") { DateTimeInput.of(YearMonth.of(2024, 3)) }
 
         val stored = result.getAll("period").first() as DateType
         assertEquals("2024-03", stored.valueAsString)
     }
 
     @Test
-    fun `addDateUsingYear builder stores DateType with year precision`() {
+    fun `addDateUsing with Year builder stores DateType with year precision`() {
         val result = OperationResult.of(patient())
-            .addDateUsingYear("year") { Year.of(2024) }
+            .addDateUsing("year") { DateTimeInput.of(Year.of(2024)) }
 
         val stored = result.getAll("year").first() as DateType
         assertEquals("2024", stored.valueAsString)
     }
 
     @Test
-    fun `addDateTimeUsingLocalDateTime builder stores zone-less DateTimeType`() {
+    fun `addDateTimeUsing with LocalDateTime builder stores zone-less DateTimeType`() {
         val result = OperationResult.of(patient())
-            .addDateTimeUsingLocalDateTime("recorded") { LocalDateTime.of(2024, 3, 15, 10, 30, 0) }
+            .addDateTimeUsing("recorded") { DateTimeInput.of(LocalDateTime.of(2024, 3, 15, 10, 30, 0)) }
 
         val stored = result.getAll("recorded").first() as DateTimeType
         assertEquals("2024-03-15T10:30:00", stored.valueAsString)
     }
 
     @Test
-    fun `addDateTimeUsingZonedDateTime builder stores offset-aware DateTimeType`() {
+    fun `addDateTimeUsing with ZonedDateTime builder stores offset-aware DateTimeType`() {
         val result = OperationResult.of(patient())
-            .addDateTimeUsingZonedDateTime("recorded") { ZonedDateTime.of(2024, 3, 15, 10, 30, 15, 0, ZoneOffset.UTC) }
+            .addDateTimeUsing("recorded") { DateTimeInput.of(ZonedDateTime.of(2024, 3, 15, 10, 30, 15, 0, ZoneOffset.UTC)) }
 
         assertThat(result.getAll("recorded").first(), instanceOf(DateTimeType::class.java))
     }
 
     @Test
-    fun `addDateTimeUsingOffsetDateTime builder stores offset-aware DateTimeType`() {
+    fun `addDateTimeUsing with OffsetDateTime builder stores offset-aware DateTimeType`() {
         val result = OperationResult.of(patient())
-            .addDateTimeUsingOffsetDateTime("recorded") { OffsetDateTime.of(2024, 3, 15, 10, 30, 30, 0, ZoneOffset.ofHours(2)) }
+            .addDateTimeUsing("recorded") { DateTimeInput.of(OffsetDateTime.of(2024, 3, 15, 10, 30, 30, 0, ZoneOffset.ofHours(2))) }
 
         val stored = result.getAll("recorded").first() as DateTimeType
         assertTrue(stored.valueAsString.contains("+02:00"))
     }
 
     @Test
-    fun `addInstantUsingInstant builder stores InstantType`() {
+    fun `addInstantUsing with Instant builder stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstantUsingInstant("ts") { Instant.parse("2024-03-15T10:30:00.000Z") }
+            .addInstantUsing("ts") { DateTimeInput.of(Instant.parse("2024-03-15T10:30:00.000Z")) }
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
 
     @Test
-    fun `addInstantUsingZonedDateTime builder stores InstantType`() {
+    fun `addInstantUsing with ZonedDateTime builder stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstantUsingZonedDateTime("ts") { ZonedDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC) }
+            .addInstantUsing("ts") { DateTimeInput.of(ZonedDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)) }
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
 
     @Test
-    fun `addInstantUsingOffsetDateTime builder stores InstantType`() {
+    fun `addInstantUsing with OffsetDateTime builder stores InstantType`() {
         val result = OperationResult.of(patient())
-            .addInstantUsingOffsetDateTime("ts") { OffsetDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC) }
+            .addInstantUsing("ts") { DateTimeInput.of(OffsetDateTime.of(2024, 3, 15, 10, 30, 0, 0, ZoneOffset.UTC)) }
 
         assertThat(result.getAll("ts").first(), instanceOf(InstantType::class.java))
     }
 
     @Test
-    fun `addTimeUsingLocalTime builder stores TimeType`() {
+    fun `addTimeUsing with LocalTime builder stores TimeType`() {
         val result = OperationResult.of(patient())
-            .addTimeUsingLocalTime("appt") { LocalTime.of(9, 0) }
+            .addTimeUsing("appt") { DateTimeInput.of(LocalTime.of(9, 0)) }
 
         val stored = result.getAll("appt").first() as TimeType
         assertEquals("09:00", stored.valueAsString)
@@ -1780,7 +1780,7 @@ class OperationResultTest {
     fun `addDate with LocalDate preserves pipeline head type`() {
         val patient = patient()
         val result: OperationResult<Patient> = OperationResult.of(patient)
-            .addDate("dob", LocalDate.of(1990, 1, 1))
+            .addDate("dob", DateTimeInput.of(LocalDate.of(1990, 1, 1)))
 
         assertThat(result.getResult(), sameInstance(patient))
     }
@@ -1789,7 +1789,7 @@ class OperationResultTest {
     fun `addInstant with Instant preserves pipeline head type`() {
         val patient = patient()
         val result: OperationResult<Patient> = OperationResult.of(patient)
-            .addInstant("ts", Instant.now())
+            .addInstant("ts", DateTimeInput.of(Instant.now()))
 
         assertThat(result.getResult(), sameInstance(patient))
     }
