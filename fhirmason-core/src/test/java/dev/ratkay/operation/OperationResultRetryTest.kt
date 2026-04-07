@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import dev.ratkay.operation.ErrorStrategy
 
 class OperationResultRetryTest {
 
@@ -308,5 +309,20 @@ class OperationResultRetryTest {
 
         assertEquals(1, attempts)
         assertTrue(result.hasErrors())
+    }
+
+    @Test
+    fun `addWithRetryUsing does not retry when head is null in ACCUMULATE mode`() {
+        var builderCalls = 0
+        // First add fails → head becomes null. addWithRetryUsing should record Pattern A once, not maxAttempts times.
+        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+            .add("enc") { throw RuntimeException("step 1 fails") }
+            .addWithRetryUsing("obs", maxAttempts = 5, initialDelayMs = 0) { _ ->
+                builderCalls++
+                encounter()
+            }
+
+        assertEquals(0, builderCalls)
+        assertEquals(2, result.getOutcomes().size)  // one for each failed step
     }
 }

@@ -705,7 +705,37 @@ class OperationResult<T> private constructor(
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
         builder: (T) -> R
-    ): OperationResult<R> = addWithRetry(name, maxAttempts, initialDelayMs, retryOn) { builder(getResult()) }
+    ): OperationResult<R> {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        return runBuilderStep(name) { start ->
+            // Resolve head once, before the retry loop. If result is null this throws
+            // IllegalStateException here — caught by runBuilderStep's outer try/catch
+            // (Pattern A, one attempt), not inside the retry loop.
+            val head = getResult()
+            var lastException: Exception? = null
+            var delayMs = initialDelayMs
+            var success: OperationResult<R>? = null
+            for (attempt in 1..maxAttempts) {
+                try {
+                    success = storeAndCopy(name, builder(head), start)
+                    break
+                } catch (e: Exception) {
+                    lastException = e
+                    if (!retryOn(e) || attempt == maxAttempts) break
+                    try {
+                        Thread.sleep(delayMs)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        lastException = interrupted
+                        break
+                    }
+                    delayMs *= 2
+                }
+            }
+            success ?: throw lastException!!
+        }
+    }
 
     // ── Primitive value convenience methods ──────────────────────────────────
 
