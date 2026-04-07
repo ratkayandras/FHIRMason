@@ -113,4 +113,89 @@ object FhirDateTimeConverter {
 
     /** FHIR time from a local time. Result: `"HH:MM:SS[.nnnnnnnnn]"`. */
     fun toFhirTime(value: LocalTime): TimeType = TimeType(value.toString())
+
+    // ── DateTimeInput dispatch ─────────────────────────────────────────────────
+
+    /**
+     * Dispatches a [DateTimeInput] to the appropriate [DateType] converter.
+     *
+     * Supported subclasses: [DateTimeInput.OfString], [DateTimeInput.OfLocalDate],
+     * [DateTimeInput.OfYearMonth], [DateTimeInput.OfYear], [DateTimeInput.OfDate],
+     * [DateTimeInput.OfLocalDateTime], [DateTimeInput.OfZonedDateTime], [DateTimeInput.OfOffsetDateTime].
+     *
+     * @throws IllegalArgumentException for subclasses that do not map to a FHIR date
+     *   ([DateTimeInput.OfInstant], [DateTimeInput.OfCalendar], [DateTimeInput.OfLocalTime]).
+     */
+    fun toFhirDate(value: DateTimeInput): DateType = when (value) {
+        is DateTimeInput.OfString        -> DateType(value.value)
+        is DateTimeInput.OfLocalDate     -> toFhirDate(value.value)
+        is DateTimeInput.OfYearMonth     -> toFhirDate(value.value)
+        is DateTimeInput.OfYear          -> toFhirDate(value.value)
+        is DateTimeInput.OfDate          -> toFhirDate(value.value)
+        is DateTimeInput.OfLocalDateTime -> toFhirDate(value.value)
+        is DateTimeInput.OfZonedDateTime -> toFhirDate(value.value)
+        is DateTimeInput.OfOffsetDateTime -> toFhirDate(value.value)
+        is DateTimeInput.OfInstant, is DateTimeInput.OfCalendar, is DateTimeInput.OfLocalTime ->
+            throw IllegalArgumentException("${value::class.simpleName} cannot be converted to a FHIR date")
+    }
+
+    /**
+     * Dispatches a [DateTimeInput] to the appropriate [DateTimeType] converter.
+     *
+     * Supported subclasses: [DateTimeInput.OfString], [DateTimeInput.OfLocalDateTime],
+     * [DateTimeInput.OfZonedDateTime], [DateTimeInput.OfOffsetDateTime],
+     * [DateTimeInput.OfInstant], [DateTimeInput.OfDate], [DateTimeInput.OfCalendar].
+     *
+     * @throws IllegalArgumentException for subclasses that do not map to a FHIR dateTime
+     *   ([DateTimeInput.OfLocalDate], [DateTimeInput.OfYearMonth], [DateTimeInput.OfYear],
+     *   [DateTimeInput.OfLocalTime]).
+     */
+    fun toFhirDateTime(value: DateTimeInput): DateTimeType = when (value) {
+        is DateTimeInput.OfString         -> DateTimeType(value.value)
+        is DateTimeInput.OfLocalDateTime  -> toFhirDateTime(value.value)
+        is DateTimeInput.OfZonedDateTime  -> toFhirDateTime(value.value)
+        is DateTimeInput.OfOffsetDateTime -> toFhirDateTime(value.value)
+        is DateTimeInput.OfInstant        -> toFhirDateTime(value.value)
+        is DateTimeInput.OfDate           -> toFhirDateTime(value.value)
+        is DateTimeInput.OfCalendar       -> toFhirDateTime(value.value)
+        is DateTimeInput.OfLocalDate, is DateTimeInput.OfYearMonth,
+        is DateTimeInput.OfYear, is DateTimeInput.OfLocalTime ->
+            throw IllegalArgumentException("${value::class.simpleName} cannot be converted to a FHIR dateTime")
+    }
+
+    /**
+     * Dispatches a [DateTimeInput] to the appropriate [InstantType] converter.
+     *
+     * Supported subclasses: [DateTimeInput.OfString], [DateTimeInput.OfInstant],
+     * [DateTimeInput.OfZonedDateTime], [DateTimeInput.OfOffsetDateTime], [DateTimeInput.OfDate].
+     *
+     * @throws IllegalArgumentException for subclasses that do not map to a FHIR instant.
+     */
+    fun toFhirInstant(value: DateTimeInput): InstantType = when (value) {
+        is DateTimeInput.OfString         -> InstantType(value.value)
+        is DateTimeInput.OfInstant        -> toFhirInstant(value.value)
+        is DateTimeInput.OfZonedDateTime  -> toFhirInstant(value.value)
+        is DateTimeInput.OfOffsetDateTime -> toFhirInstant(value.value)
+        is DateTimeInput.OfDate           -> toFhirInstant(value.value)
+        is DateTimeInput.OfLocalDate, is DateTimeInput.OfYearMonth, is DateTimeInput.OfYear,
+        is DateTimeInput.OfLocalDateTime, is DateTimeInput.OfCalendar, is DateTimeInput.OfLocalTime ->
+            throw IllegalArgumentException("${value::class.simpleName} cannot be converted to a FHIR instant")
+    }
+
+    /**
+     * Dispatches a [DateTimeInput] to the appropriate [TimeType] converter.
+     *
+     * Supported subclasses: [DateTimeInput.OfString], [DateTimeInput.OfLocalTime].
+     *
+     * @throws IllegalArgumentException for all other subclasses.
+     */
+    fun toFhirTime(value: DateTimeInput): TimeType = when (value) {
+        is DateTimeInput.OfString    -> TimeType(value.value)
+        is DateTimeInput.OfLocalTime -> toFhirTime(value.value)
+        is DateTimeInput.OfLocalDate, is DateTimeInput.OfYearMonth, is DateTimeInput.OfYear,
+        is DateTimeInput.OfLocalDateTime, is DateTimeInput.OfZonedDateTime,
+        is DateTimeInput.OfOffsetDateTime, is DateTimeInput.OfInstant,
+        is DateTimeInput.OfDate, is DateTimeInput.OfCalendar ->
+            throw IllegalArgumentException("${value::class.simpleName} cannot be converted to a FHIR time")
+    }
 }

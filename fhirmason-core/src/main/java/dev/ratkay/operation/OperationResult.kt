@@ -11,10 +11,8 @@ import org.hl7.fhir.r4.model.CodeType
 import org.hl7.fhir.r4.model.CodeableConcept
 import org.hl7.fhir.r4.model.Coding
 import org.hl7.fhir.r4.model.DateTimeType
-import org.hl7.fhir.r4.model.DateType
 import org.hl7.fhir.r4.model.DecimalType
 import org.hl7.fhir.r4.model.Identifier
-import org.hl7.fhir.r4.model.InstantType
 import org.hl7.fhir.r4.model.IntegerType
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.hl7.fhir.r4.model.Parameters
@@ -23,21 +21,13 @@ import org.hl7.fhir.r4.model.Quantity
 import org.hl7.fhir.r4.model.Reference
 import org.hl7.fhir.r4.model.Resource
 import org.hl7.fhir.r4.model.StringType
-import org.hl7.fhir.r4.model.TimeType
 import org.hl7.fhir.r4.model.Type
 import org.hl7.fhir.r4.model.UriType
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
-import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.OffsetDateTime
-import java.time.Year
-import java.time.YearMonth
 import java.time.ZonedDateTime
-import java.util.Calendar
-import java.util.Date
 import java.util.IdentityHashMap
 import kotlin.reflect.KClass
 
@@ -59,7 +49,7 @@ import kotlin.reflect.KClass
  * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
  * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault` |
- * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate`, `addDateTime`, `addInstant`, `addTime`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
+ * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate([DateTimeInput])`, `addDateTime([DateTimeInput])`, `addInstant([DateTimeInput])`, `addTime([DateTimeInput])`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
  * | Query | `getAllParameters`, `getAll`, `getByType`, `containsKey`, `getKeys`, `count`, `totalCount`, `isEmpty`, `isNotEmpty` |
@@ -648,65 +638,24 @@ class OperationResult<T> private constructor(
     fun addDecimal(name: String, value: BigDecimal): OperationResult<T>  = runPrimitiveStep(name) { DecimalType(value) }
     fun addCode(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { CodeType(value) }
     fun addUri(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { UriType(value) }
-    fun addDate(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { DateType(value) }
-    fun addDate(name: String, value: LocalDate): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: YearMonth): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: Year): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: Date): OperationResult<T>            = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: LocalDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: ZonedDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-    fun addDate(name: String, value: OffsetDateTime): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
-
-    fun addDateTime(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { DateTimeType(value) }
-    fun addDateTime(name: String, value: LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-    fun addDateTime(name: String, value: ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-    fun addDateTime(name: String, value: OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-    fun addDateTime(name: String, value: Instant): OperationResult<T>         = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-    fun addDateTime(name: String, value: Date): OperationResult<T>            = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-    fun addDateTime(name: String, value: Calendar): OperationResult<T>        = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
-
-    fun addInstant(name: String, value: String): OperationResult<T>           = runPrimitiveStep(name) { InstantType(value) }
-    fun addInstant(name: String, value: Instant): OperationResult<T>          = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
-    fun addInstant(name: String, value: ZonedDateTime): OperationResult<T>    = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
-    fun addInstant(name: String, value: OffsetDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
-    fun addInstant(name: String, value: Date): OperationResult<T>             = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
-
-    fun addTime(name: String, value: String): OperationResult<T>              = runPrimitiveStep(name) { TimeType(value) }
-    fun addTime(name: String, value: LocalTime): OperationResult<T>           = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(value) }
+    fun addDate(name: String, value: DateTimeInput): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+    fun addDateTime(name: String, value: DateTimeInput): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+    fun addInstant(name: String, value: DateTimeInput): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+    fun addTime(name: String, value: DateTimeInput): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(value) }
 
     fun addCanonical(name: String, value: String): OperationResult<T>    = runPrimitiveStep(name) { CanonicalType(value) }
 
-    fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T>      = runPrimitiveStep(name) { StringType(builder(getResult())) }
-    fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T>    = runPrimitiveStep(name) { BooleanType(builder(getResult())) }
-    fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T>        = runPrimitiveStep(name) { IntegerType(builder(getResult())) }
-    fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T> = runPrimitiveStep(name) { DecimalType(builder(getResult())) }
-    fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { CodeType(builder(getResult())) }
-    fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T>         = runPrimitiveStep(name) { UriType(builder(getResult())) }
-    fun addDateUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { DateType(builder(getResult())) }
-    fun addDateTimeUsing(name: String, builder: (T) -> String): OperationResult<T>   = runPrimitiveStep(name) { DateTimeType(builder(getResult())) }
-    fun addInstantUsing(name: String, builder: (T) -> String): OperationResult<T>    = runPrimitiveStep(name) { InstantType(builder(getResult())) }
-    fun addTimeUsing(name: String, builder: (T) -> String): OperationResult<T>       = runPrimitiveStep(name) { TimeType(builder(getResult())) }
-    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>  = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
-
-    // ── Java date/time Using variants (named to avoid JVM erasure clash) ─────
-    // Lambda overloads that differ only in the lambda return type share the same JVM
-    // signature after erasure and also cause Kotlin overload-resolution ambiguity at
-    // call sites. Each variant is given a distinct name encoding the input type.
-
-    fun addDateUsingLocalDate(name: String, builder: (T) -> LocalDate): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateUsingYearMonth(name: String, builder: (T) -> YearMonth): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateUsingYear(name: String, builder: (T) -> Year): OperationResult<T>                         = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateUsingLocalDateTime(name: String, builder: (T) -> LocalDateTime): OperationResult<T>       = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>       = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
-    fun addDateTimeUsingLocalDateTime(name: String, builder: (T) -> LocalDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
-    fun addDateTimeUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
-    fun addDateTimeUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
-    fun addDateTimeUsingInstant(name: String, builder: (T) -> Instant): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
-    fun addInstantUsingInstant(name: String, builder: (T) -> Instant): OperationResult<T>                = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
-    fun addInstantUsingZonedDateTime(name: String, builder: (T) -> ZonedDateTime): OperationResult<T>    = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
-    fun addInstantUsingOffsetDateTime(name: String, builder: (T) -> OffsetDateTime): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
-    fun addTimeUsingLocalTime(name: String, builder: (T) -> LocalTime): OperationResult<T>               = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(builder(getResult())) }
+    fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T>           = runPrimitiveStep(name) { StringType(builder(getResult())) }
+    fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T>         = runPrimitiveStep(name) { BooleanType(builder(getResult())) }
+    fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T>             = runPrimitiveStep(name) { IntegerType(builder(getResult())) }
+    fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T>      = runPrimitiveStep(name) { DecimalType(builder(getResult())) }
+    fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T>             = runPrimitiveStep(name) { CodeType(builder(getResult())) }
+    fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T>              = runPrimitiveStep(name) { UriType(builder(getResult())) }
+    fun addDateUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+    fun addDateTimeUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+    fun addInstantUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
+    fun addTimeUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(builder(getResult())) }
+    fun addCanonicalUsing(name: String, builder: (T) -> String): OperationResult<T>        = runPrimitiveStep(name) { CanonicalType(builder(getResult())) }
 
     // ── Complex data type convenience methods ────────────────────────────────
 
