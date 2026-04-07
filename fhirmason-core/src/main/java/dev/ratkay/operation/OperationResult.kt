@@ -1283,12 +1283,7 @@ class OperationResult<T> private constructor(
      * Keys without dots are emitted as ordinary top-level parameters (one entry per value),
      * exactly as before.
      */
-    fun toParameters(): Parameters = Parameters().apply {
-        val fhirParams = this
-        buildParameterComponents(parameters) { name ->
-            fhirParams.addParameter().also { it.name = name }
-        }
-    }
+    fun toParameters(): Parameters = ParameterMapSerializer.unflatten(parameters, extensions)
 
     fun toBundleEntry(resource: Base): Bundle.BundleEntryComponent =
         Bundle.BundleEntryComponent().apply {
@@ -1342,68 +1337,6 @@ class OperationResult<T> private constructor(
     fun getResult(): T = result ?: throw IllegalStateException("No result set")
 
     // Private helpers
-
-    /**
-     * Recursively builds [Parameters.ParametersParameterComponent] entries from [entries].
-     *
-     * [addComponent] abstracts the difference between adding to a [Parameters] root
-     * (`parameters.addParameter()`) and adding to a parent part (`component.addPart()`),
-     * so the same logic handles both levels.
-     *
-     * Algorithm:
-     * - Collect all unique top-level segments (the portion of each key before the first dot),
-     *   preserving map insertion order.
-     * - For a segment whose values live directly under that key (no dot sub-keys):
-     *   emit one component per value (leaf node).
-     * - For a segment whose values all live under dot-qualified sub-keys:
-     *   emit a single parent component with no value/resource, then recurse for its children.
-     *
-     * This means `"address.city"` and `"address.country"` together produce:
-     * ```
-     * name="address"
-     *   part: name="city",    value=…
-     *   part: name="country", value=…
-     * ```
-     * and `"outer.inner.leaf"` produces three levels of nesting.
-     */
-    private fun buildParameterComponents(
-        entries: Map<String, List<Base>>,
-        keyPrefix: String = "",
-        addComponent: (String) -> Parameters.ParametersParameterComponent
-    ) {
-        // Unique top-level segments in insertion order
-        val topSegments = entries.keys.mapTo(linkedSetOf()) { it.substringBefore('.') }
-
-        topSegments.forEach { segment ->
-            val directValues = entries[segment]
-            // Sub-entries for keys like "segment.rest" — strip the "segment." prefix
-            val childEntries: Map<String, List<Base>> = entries
-                .filterKeys { it.startsWith("$segment.") }
-                .mapKeys { (key, _) -> key.removePrefix("$segment.") }
-
-            val fullKey = if (keyPrefix.isEmpty()) segment else "$keyPrefix.$segment"
-
-            if (childEntries.isEmpty()) {
-                // Leaf: one component per value
-                directValues?.forEach { value ->
-                    addComponent(segment).apply {
-                        when (value) {
-                            is Type     -> setValue(value)
-                            is Resource -> setResource(value)
-                        }
-                        val valueExts = extensions[fullKey]?.get(value)
-                        valueExts?.forEach { ext -> addExtension(ext) }
-                    }
-                }
-            } else {
-                // Branch: single parent component whose children are built recursively
-                val parent = addComponent(segment)
-                buildParameterComponents(childEntries, fullKey) { childName ->
-                    parent.addPart().also { it.name = childName }
-                }
-            }
-        }
-    }
 
     /**
      * Returns a deep copy of [parameters] so that [linkReferences] can mutate the copies
@@ -1482,7 +1415,7 @@ class OperationResult<T> private constructor(
          * [fromParametersTyped] when a typed head is required.
          */
         fun fromParameters(parameters: Parameters): OperationResult<Base> {
-            val (params, exts) = buildParamsFrom(parameters)
+            val (params, exts) = ParameterMapSerializer.flatten(parameters)
             return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
         }
 
@@ -1497,7 +1430,7 @@ class OperationResult<T> private constructor(
             primaryKey: String,
             type: KClass<T>
         ): OperationResult<T> {
-            val (params, exts) = buildParamsFrom(parameters)
+            val (params, exts) = ParameterMapSerializer.flatten(parameters)
             val primary = params[primaryKey]
                 ?.filterIsInstance(type.java)
                 ?.firstOrNull()
@@ -1576,51 +1509,6 @@ class OperationResult<T> private constructor(
                 mutableMapOf()
             )
 
-        // ── Private helpers ───────────────────────────────────────────────────
-
-        private fun buildParamsFrom(
-            parameters: Parameters
-        ): Pair<MutableMap<String, MutableList<Base>>, MutableMap<String, MutableMap<Base, List<Extension>>>> {
-            val params = mutableMapOf<String, MutableList<Base>>()
-            val exts = mutableMapOf<String, MutableMap<Base, List<Extension>>>()
-            parameters.parameter.forEach { param -> populateFromParam(params, exts, param) }
-            return params to exts
-        }
-
-        /**
-         * Recursively populates [params] and [exts] from a single [Parameters.ParametersParameterComponent].
-         *
-         * - Resource parameter  → stored under [keyPrefix]`.<name>` (or just `<name>` at root);
-         *                         component-level extensions on resource parameters are not captured
-         *                         because the resource already carries its own extension list.
-         * - Value parameter     → stored under [keyPrefix]`.<name>`; any component-level extensions
-         *                         (i.e. [Parameters.ParametersParameterComponent.extension]) are
-         *                         preserved in [exts] so that a subsequent [toParameters] call
-         *                         re-emits them on the same component.
-         * - Parts-only entry    → each part is processed recursively with the current key as prefix
-         */
-        private fun populateFromParam(
-            params: MutableMap<String, MutableList<Base>>,
-            exts: MutableMap<String, MutableMap<Base, List<Extension>>>,
-            param: Parameters.ParametersParameterComponent,
-            keyPrefix: String = ""
-        ) {
-            val key = if (keyPrefix.isEmpty()) param.name else "$keyPrefix.${param.name}"
-            when {
-                param.hasResource() -> params.getOrPut(key) { mutableListOf() }.add(param.resource)
-                param.hasValue() -> {
-                    val value = param.value
-                    params.getOrPut(key) { mutableListOf() }.add(value)
-                    if (param.hasExtension()) {
-                        val innerMap = exts.getOrPut(key) { IdentityHashMap() }
-                        innerMap[value] = param.extension.toList()
-                    }
-                }
-                param.hasPart() -> param.part.forEach { part ->
-                    populateFromParam(params, exts, part, key)
-                }
-            }
-        }
     }
 }
 
