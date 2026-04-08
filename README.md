@@ -906,6 +906,8 @@ When a task has exactly one dependency, use the typed overloads to skip the manu
 | `addListAfter(key, dep, type) { t -> List<Base> }` | single typed value | `List<Base>` |
 | `addAfterAll(key, dep, type) { list -> Base }` | typed list | `Base` |
 | `addListAfterAll(key, dep, type) { list -> List<Base> }` | typed list | `List<Base>` |
+| `merge { AsyncOperationResult() … }` | — (lambda builds inner DAG) | `this` |
+| `merge(other: AsyncOperationResult)` | — (pre-built inner DAG) | `this` |
 
 ```kotlin
 AsyncOperationResult()
@@ -977,6 +979,50 @@ val result = dag.run()
 ```
 
 On final failure the key is absent from the result and an ERROR `OperationOutcome` is recorded. See the sync builder section for the full parameter table.
+
+### DAG Composition (`merge`)
+
+`merge` combines an independently built sub-DAG into the current DAG. All task nodes from the
+inner `AsyncOperationResult` are absorbed into the outer DAG's node map so they participate
+in the same parallel execution.
+
+After a `merge` call, any task added via `addAfter` or `addListAfter` may reference keys from
+either the original outer DAG or the merged inner DAG:
+
+```kotlin
+// Lambda form — build the inner DAG inline
+val result = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .merge {
+        AsyncOperationResult()
+            .add("coverage") { fetchCoverage() }
+            .addAfter("claim", "coverage", Coverage::class) { cov -> buildClaim(cov) }
+    }
+    .addAfter("summary", "patient", "claim") { deps ->
+        buildSummary(deps["patient"]!!, deps["claim"]!!)
+    }
+    .run()
+```
+
+```kotlin
+// Instance form — useful when the inner DAG is produced by a factory function
+fun billingDag(): AsyncOperationResult = AsyncOperationResult()
+    .add("coverage") { fetchCoverage() }
+    .add("claim")    { fetchClaim() }
+
+val result = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .merge(billingDag())
+    .run()
+```
+
+**Constraints:**
+- Inner nodes may only depend on other inner nodes — cross-DAG inner-to-outer dependencies
+  cannot be expressed (the inner DAG is built independently).
+- Task keys must be unique across both DAGs — a duplicate key throws `IllegalArgumentException`.
+- Empty inner DAGs are silently accepted (no-op).
+- The inner DAG's `timed()` setting is ignored; the outer DAG's timing applies to all tasks
+  after the merge.
 
 ### Constraints
 
@@ -1243,6 +1289,7 @@ fhirmason-core/
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
         ├── AsyncOperationResultRetryTest.kt
+        ├── AsyncOperationResultMergeTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 

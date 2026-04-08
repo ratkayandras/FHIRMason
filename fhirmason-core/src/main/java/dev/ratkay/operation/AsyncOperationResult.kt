@@ -183,6 +183,46 @@ class AsyncOperationResult {
         }
     }
 
+    // ── DAG composition ──────────────────────────────────────────────────────
+
+    /**
+     * Merges all task nodes from [other] into this DAG and returns `this`.
+     *
+     * The two DAGs must be completely independent: nodes in [other] may only depend on
+     * other nodes registered in [other], not on nodes already registered in this DAG.
+     * After the merge, any task added via [addAfter] or [addListAfter] may reference
+     * keys from either the original outer DAG or the merged inner DAG:
+     * ```kotlin
+     * AsyncOperationResult()
+     *     .add("patient") { fetchPatient() }
+     *     .merge {
+     *         AsyncOperationResult()
+     *             .add("coverage") { fetchCoverage() }
+     *             .addAfter("claim", "coverage", Coverage::class) { cov -> buildClaim(cov) }
+     *     }
+     *     .addAfter("summary", "patient", "claim") { deps -> combine(deps) }
+     *     .run()
+     * ```
+     *
+     * Duplicate keys between DAGs cause [IllegalArgumentException] — task keys are
+     * identities, not values; two tasks cannot share the same name in a single DAG.
+     * The [other] instance's [timed] setting is ignored; the outer DAG's applies uniformly
+     * to all tasks after the merge.
+     *
+     * @throws IllegalArgumentException if any key from [other] is already registered in this DAG
+     */
+    fun merge(other: AsyncOperationResult): AsyncOperationResult = also {
+        other.nodes.values.forEach { node -> registerNode(node.key, node) }
+    }
+
+    /**
+     * Calls [block] to build an inner [AsyncOperationResult] and merges all of its task nodes
+     * into this DAG. Returns `this`. See [merge] for the full contract.
+     *
+     * @throws IllegalArgumentException if any key produced by [block] is already registered in this DAG
+     */
+    fun merge(block: () -> AsyncOperationResult): AsyncOperationResult = merge(block())
+
     // ── DAG inspection ───────────────────────────────────────────────────────
 
     /**
