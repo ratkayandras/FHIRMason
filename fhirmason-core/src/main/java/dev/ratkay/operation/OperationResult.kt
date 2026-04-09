@@ -565,8 +565,8 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] where [expression]
      * evaluates to `true` (using [FhirPathHelper.matches] semantics), passes the typed list
-     * to [builder], and stores the single result under [name] (or [type]'s simple name
-     * lowercase when [name] is `null`).
+     * to [builder], and stores the single result under [name] (or the builder result's
+     * [Base.fhirType] lowercase when [name] is `null` — consistent with [add]).
      *
      * Error handling follows Pattern A: exceptions (including malformed FHIRPath syntax)
      * record an ERROR-severity [OperationOutcome] and skip the head value.
@@ -585,13 +585,14 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = name ?: type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByPath(type, expression)), start)
+            storeAndCopy(name, builder(collectByPath(type, expression)), start)
         }
     }
 
     /**
      * Like [addFromMatching] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase) when [name] is `null`.
+     * When [name] is `null`, the output key defaults to the first element's [Base.fhirType]
+     * (lowercase) — consistent with [addAll].
      */
     @JvmOverloads
     fun <I : Base, R : Base> addAllFromMatching(
@@ -602,7 +603,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = name ?: type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByPath(type, expression)), start)
+            storeListAndCopy(name, builder(collectByPath(type, expression)), start)
         }
     }
 

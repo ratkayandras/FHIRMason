@@ -50,6 +50,18 @@ class OperationResultFhirPathTest {
     }
 
     @Test
+    fun `addFromMatching without explicit name uses output fhirType as key`() {
+        val patient = Patient().apply { active = true }
+
+        val result = OperationResult.of(patient)
+            .addFromMatching<Patient, StringType>(expression = "active = true") { StringType("found") }
+
+        // Key is the output fhirType ("string"), NOT the input type name ("patient")
+        assertThat(result.getAll("string"), hasSize(1))
+        assertThat(result.getAll("patient"), hasSize(1)) // only the original patient, not the StringType
+    }
+
+    @Test
     fun `addFromMatching with explicit name stores result under that key`() {
         val patient = Patient().apply { active = true }
 
