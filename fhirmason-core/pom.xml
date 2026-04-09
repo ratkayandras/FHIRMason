@@ -13,6 +13,9 @@
     <artifactId>fhirmason-core</artifactId>
     <packaging>jar</packaging>
 
+    <name>FHIRMason Core</name>
+    <description>Core builder API for accumulating and transforming FHIR R4 resources using a fluent chainable API.</description>
+
     <dependencies>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
