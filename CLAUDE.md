@@ -114,9 +114,16 @@ catch (e: Exception) {
 - Primitive convenience methods must delegate to `runPrimitiveStep` (Pattern B) — never duplicate the try/catch inline.
 - Do not add new catch patterns without updating this section.
 
-## Pre-Push Requirement
+## Pre-Commit and Pre-Push Requirement
 
-Run the full test suite (`mvn test`) before every push. All tests across all modules must be green — fix any failure, even if it appears unrelated to your changes, before committing and pushing.
+**This is a hard requirement — no exceptions.**
+
+Run the full test suite (`mvn test`) before every commit **and** before every push. All tests across all modules must be green with zero failures and zero errors.
+
+- Do **not** commit if any test is failing.
+- Do **not** push if any test is failing.
+- Fix every failure, even if it appears unrelated to your changes, before committing or pushing.
+- A commit that introduces or leaves a failing test is a policy violation regardless of intent.
 
 ## README Maintenance
 
