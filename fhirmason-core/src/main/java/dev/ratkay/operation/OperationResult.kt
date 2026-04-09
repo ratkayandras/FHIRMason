@@ -249,7 +249,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that carry **every** one of
      * the supplied [extUrls] (AND semantics), passes the typed list to [builder], and stores the
-     * single result under [type]'s simple name (lowercase).
+     * single result under the result's fhirType (lowercase).
      *
      * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
      * and skip the head value.
@@ -263,7 +263,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
         }
     }
 
@@ -284,7 +284,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that carry **at least one**
      * of the supplied [extUrls] (OR semantics), passes the typed list to [builder], and stores the
-     * single result under [type]'s simple name (lowercase).
+     * single result under the result's fhirType (lowercase).
      *
      * Use [addFromHavingAllExtensions] when AND semantics are needed instead.
      */
@@ -295,7 +295,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
         }
     }
 
@@ -314,7 +314,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingAllExtensions] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, R : Base> addAllFromHavingAllExtensions(
         type: KClass<I>,
@@ -323,7 +323,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
         }
     }
 
@@ -340,7 +340,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingAnyExtension] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, R : Base> addAllFromHavingAnyExtension(
         type: KClass<I>,
@@ -349,7 +349,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
         }
     }
 
@@ -402,7 +402,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that have an extension at
      * [url] with a value of [valueType], passes the typed list to [builder], and stores the single
-     * result under [type]'s simple name (lowercase).
+     * result under the result's fhirType (lowercase).
      *
      * This is a convenience shorthand for [addFromHavingExtensionValueMatching] with a trivially
      * true predicate — use that method when you also need to inspect the value itself.
@@ -430,7 +430,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingExtensionWithValueType] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionWithValueType(
         type: KClass<I>,
@@ -469,7 +469,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that have an extension at
      * [url] with a value of [valueType] satisfying [predicate], passes the typed list to [builder],
-     * and stores the single result under [type]'s simple name (lowercase).
+     * and stores the single result under the result's fhirType (lowercase).
      *
      * The resource is included when **any** of its extension values at [url] satisfies [predicate].
      * Resources with no extension at [url], or whose value is not of [valueType], are excluded.
@@ -488,7 +488,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+            storeAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
         }
     }
 
@@ -509,7 +509,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingExtensionValueMatching] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionValueMatching(
         type: KClass<I>,
@@ -520,7 +520,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+            storeListAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
         }
     }
 
