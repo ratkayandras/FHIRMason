@@ -135,6 +135,11 @@
                 <artifactId>hapi-fhir-server</artifactId>
                 <version>${hapi.fhir.version}</version>
             </dependency>
+            <dependency>
+                <groupId>ca.uhn.hapi.fhir</groupId>
+                <artifactId>hapi-fhir-caching-guava</artifactId>
+                <version>${hapi.fhir.version}</version>
+            </dependency>
             <!-- Internal modules -->
             <dependency>
                 <groupId>dev.ratkay</groupId>

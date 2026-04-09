@@ -213,6 +213,38 @@ val result4 = OperationResult.of(patients, "patients")
     }
 ```
 
+#### From all parameters, filtered by FHIRPath expression
+
+`addFromMatching` and `addAllFromMatching` evaluate a FHIRPath expression against every accumulated resource of a given type and pass only those that evaluate to `true` to the builder. The expression is relative to each candidate resource (write `"active = true"`, not `"Patient.active = true"`).
+
+| Method | Returns | Default key |
+|---|---|---|
+| `addFromMatching(name?, type, expression) { list -> R }` | `OperationResult<R>` | `type` simple name (lowercase) |
+| `addAllFromMatching(name?, type, expression) { list -> List<R> }` | `OperationResult<List<R>>` | `type` simple name (lowercase) |
+
+Both methods have reified Kotlin overloads (omit `type`) and generate `@JvmOverloads` for Java callers. Error handling follows Pattern A: malformed expressions produce an ERROR `OperationOutcome` and skip the head.
+
+```kotlin
+// Keep only active patients, then build a summary
+val result = OperationResult.of(patients, "patients")
+    .addFromMatching<Patient, OperationOutcome>(expression = "active = true") { active ->
+        OperationOutcome().apply { addIssue().diagnostics = "${active.size} active patients" }
+    }
+
+// Multi-field condition — extension value AND regular field
+val result2 = OperationResult.of(patients, "patients")
+    .addAllFromMatching<Patient, Patient>(
+        "high-risk",
+        expression = "extension('http://ext/risk').value = 'high' and birthDate < @1960-01-01"
+    ) { it }
+
+// Named output key — KClass form (required when you also want an explicit name in Kotlin)
+val result3 = OperationResult.of(patients, "patients")
+    .addFromMatching("enrolled", Patient::class, "identifier.where(system='http://example.org/mpi').exists()") { filtered ->
+        buildEnrolledSummary(filtered)
+    }
+```
+
 #### Error-resilient variants
 
 | Method | On exception | Returns |
@@ -640,6 +672,27 @@ OperationResult.of(patient)
 ```
 
 All three methods preserve the head type `T`. The block passed to `whenTrue` and `ifPresent` may contain any pipeline operations including head-changing ones — the outer head is always restored after the block completes.
+
+#### FHIRPath conditional chaining and extraction
+
+Three FHIRPath-aware methods complement the existing conditional API. All expressions are relative to the current head resource (write `"active = true"`, not `"Patient.active = true"`).
+
+| Method | Head requirement | Behaviour |
+|---|---|---|
+| `whenPath(expression) { ... }` | Must be a `Base`; silent skip if null/non-Base | Runs block and merges parameters when expression is truthy; WARNING on malformed expression |
+| `guardPath(expression, message)` | Must be a `Base`; WARNING if null/non-Base | Records WARNING `OperationOutcome` with `message` when expression is `false`; WARNING on malformed expression |
+| `selectByPath(type, expression, name?)` | Must be a `Base`; ERROR if null/non-Base | Evaluates expression, promotes first matching result of `type` to the new pipeline head, stores under `name`; ERROR if no match found |
+
+```kotlin
+val result = OperationResult.of(patient)
+    .guardPath("active = true", "Patient must be active")
+    .whenPath("identifier.where(system='http://example.org/mpi').exists()") {
+        add("mpi-flag") { StringType("enrolled") }
+    }
+    .selectByPath<HumanName>("name.where(use='official').first()", "official-name")
+```
+
+`selectByPath` has a reified Kotlin overload (`selectByPath<HumanName>("name.first()")`). Error handling for `whenPath` and `guardPath` follows Pattern B (head preserved); `selectByPath` follows Pattern A (head skipped on failure).
 
 #### Convenience lookups
 
