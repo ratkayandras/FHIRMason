@@ -13,6 +13,9 @@
     <artifactId>fhirmason-spring</artifactId>
     <packaging>jar</packaging>
 
+    <name>FHIRMason Spring</name>
+    <description>Spring Boot auto-configuration and integration for the FHIRMason FHIR R4 builder API.</description>
+
     <dependencies>
         <dependency>
             <groupId>dev.ratkay</groupId>

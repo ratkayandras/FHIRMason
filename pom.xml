@@ -9,6 +9,32 @@
     <version>0.0.1</version>
     <packaging>pom</packaging>
 
+    <name>FHIRMason</name>
+    <description>Fluent, chainable API for accumulating and transforming FHIR R4 resources using HAPI FHIR.</description>
+    <url>https://github.com/ratkayandras/fhirmason</url>
+
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>ratkayandras</id>
+            <name>Andras Ratkay</name>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/ratkayandras/fhirmason.git</connection>
+        <developerConnection>scm:git:ssh://github.com/ratkayandras/fhirmason.git</developerConnection>
+        <url>https://github.com/ratkayandras/fhirmason</url>
+        <tag>HEAD</tag>
+    </scm>
+
     <modules>
         <module>fhirmason-core</module>
         <module>fhirmason-spring</module>
@@ -27,6 +53,7 @@
         <slf4j.version>1.7.36</slf4j.version>
         <logback.version>1.2.12</logback.version>
         <spring.boot.version>2.7.18</spring.boot.version>
+        <dokka.version>1.9.20</dokka.version>
     </properties>
 
     <dependencyManagement>
@@ -125,8 +152,89 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
                 </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.jetbrains.dokka</groupId>
+                    <artifactId>dokka-maven-plugin</artifactId>
+                    <version>${dokka.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <version>3.2.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>com.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>0.7.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <!-- Sources JAR -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Kotlin API docs JAR (Dokka, replaces maven-javadoc-plugin) -->
+                    <plugin>
+                        <groupId>org.jetbrains.dokka</groupId>
+                        <artifactId>dokka-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <phase>package</phase>
+                                <goals><goal>javadocJar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- GPG signing -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+                    <!-- Central Portal publisher -->
+                    <plugin>
+                        <groupId>com.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                            <waitUntil>uploaded</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
