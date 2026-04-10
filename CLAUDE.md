@@ -35,7 +35,7 @@ src/test/java/dev/ratkay/operation/
 - Factory entry points live in `companion object` as `of()` methods
 - Use reified generics (`KClass<R>`) for type-safe resource filtering
 - Receiver-lambda overloads are named `addUsing` / `addAllUsing` (not `add` / `addAll`)
-- If no explicit key name is given, defaults to `value.fhirType().lowercase()`
+- If no explicit key name is given, the storage key is always the **output** value's `fhirType().lowercase()` — never the input type's name. For example, a builder that receives `Patient` resources and returns an `OperationOutcome` stores under `"operationoutcome"`, not `"patient"`. This applies to every method with an optional `name` parameter: `add`, `addAll`, `addFrom`, `addAllFrom`, `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom*`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, `addAllFromHavingExtensionValueMatching`, `addFromMatching`, `addAllFromMatching`, and `selectByPath`. Pass `null` (or omit the name) to `storeAndCopy`/`storeListAndCopy` and let them derive the key from the result; never pass a derived input-type name.
 - Test method names use Kotlin backtick syntax: `` `descriptive test name` ``
 - Validate with `require()` and `error()` — no checked exceptions
 - `AsyncOperationResult` uses sealed classes for DAG task nodes with cycle detection at registration time
