@@ -424,6 +424,31 @@ class OperationResultTest {
     }
 
     @Test
+    fun `addFromHavingAllExtensions unnamed overload stores result under output fhirType not input type`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { _ ->
+                OperationOutcome().apply { addIssue().diagnostics = "found" }
+            }
+
+        // Key must be "operationoutcome" (output fhirType), NOT "patient" (input type)
+        assertThat(result.getAll("operationoutcome"), hasSize(1))
+        assertFalse(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `addFromHavingAnyExtension unnamed overload stores result under output fhirType not input type`() {
+        val hasExt = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val result = OperationResult.of(listOf(hasExt, patient()), "patients")
+            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1") { _ ->
+                OperationOutcome().apply { addIssue().diagnostics = "found" }
+            }
+
+        assertThat(result.getAll("operationoutcome"), hasSize(1))
+        assertFalse(result.containsKey("patient"))
+    }
+
+    @Test
     fun `addFromHavingAllExtensions named overload stores result under explicit name`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
@@ -447,6 +472,31 @@ class OperationResultTest {
             }
 
         assertThat(result.getResult(), hasSize(1))
+    }
+
+    @Test
+    fun `addAllFromHavingAllExtensions unnamed overload stores results under output fhirType not input type`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addAllFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getAll("operationoutcome"), hasSize(1))
+        assertFalse(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `addAllFromHavingAnyExtension unnamed overload stores results under output fhirType not input type`() {
+        val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
+        val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
+        val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
+            .addAllFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getAll("operationoutcome"), hasSize(2))
+        assertFalse(result.containsKey("patient"))
     }
 
     // ── Extension URL + value-type / value-predicate filters ─────────────────
@@ -587,6 +637,30 @@ class OperationResultTest {
             }
 
         assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromHavingExtensionValueMatching unnamed overload stores result under output fhirType not input type`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromHavingExtensionValueMatching(Patient::class, "http://example.org/enrolled", StringType::class, { it.value == "true" }) { _ ->
+                OperationOutcome().apply { addIssue().diagnostics = "found" }
+            }
+
+        assertThat(result.getAll("operationoutcome"), hasSize(1))
+        assertFalse(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `addAllFromHavingExtensionValueMatching unnamed overload stores results under output fhirType not input type`() {
+        val high = patient().apply { addExtension("http://example.org/priority", IntegerType(10)) }
+        val result = OperationResult.of(listOf(high, patient()), "patients")
+            .addAllFromHavingExtensionValueMatching(Patient::class, "http://example.org/priority", IntegerType::class, { it.value > 5 }) { filtered ->
+                filtered.map { OperationOutcome() }
+            }
+
+        assertThat(result.getAll("operationoutcome"), hasSize(1))
+        assertFalse(result.containsKey("patient"))
     }
 
     // ── Query methods ─────────────────────────────────────────────────────────

@@ -48,13 +48,15 @@ import kotlin.reflect.KClass
  * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
  * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
+ * | FHIRPath filters | `addFromMatching`, `addAllFromMatching` |
  * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault`, `addWithRetry`, `addWithRetryUsing` |
  * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate([DateTimeInput])`, `addDateTime([DateTimeInput])`, `addInstant([DateTimeInput])`, `addTime([DateTimeInput])`, `addCanonical`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
  * | Query | `getAllParameters`, `getAll`, `getByType`, `containsKey`, `getKeys`, `count`, `totalCount`, `isEmpty`, `isNotEmpty` |
  * | Transformations | `filterByType`, `filterByName`, `mapValues`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `peek` |
- * | Conditional chaining | `whenTrue`, `ifPresent`, `guardFalse` |
+ * | Conditional chaining | `whenTrue`, `ifPresent`, `guardFalse`, `whenPath`, `guardPath` |
+ * | FHIRPath extraction | `selectByPath` |
  * | Extraction | `takeFirst`, `takeFirstTyped`, `extractParam`, `extractParamList` |
  * | Reference linking | `linkReferences` |
  * | Serialization | `toParameters`, `toBundleEntry`, `toBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
@@ -247,7 +249,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that carry **every** one of
      * the supplied [extUrls] (AND semantics), passes the typed list to [builder], and stores the
-     * single result under [type]'s simple name (lowercase).
+     * single result under the result's fhirType (lowercase).
      *
      * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
      * and skip the head value.
@@ -261,7 +263,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
         }
     }
 
@@ -282,7 +284,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that carry **at least one**
      * of the supplied [extUrls] (OR semantics), passes the typed list to [builder], and stores the
-     * single result under [type]'s simple name (lowercase).
+     * single result under the result's fhirType (lowercase).
      *
      * Use [addFromHavingAllExtensions] when AND semantics are needed instead.
      */
@@ -293,7 +295,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
         }
     }
 
@@ -312,7 +314,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingAllExtensions] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, R : Base> addAllFromHavingAllExtensions(
         type: KClass<I>,
@@ -321,7 +323,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
         }
     }
 
@@ -338,7 +340,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingAnyExtension] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, R : Base> addAllFromHavingAnyExtension(
         type: KClass<I>,
@@ -347,7 +349,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
         }
     }
 
@@ -400,7 +402,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that have an extension at
      * [url] with a value of [valueType], passes the typed list to [builder], and stores the single
-     * result under [type]'s simple name (lowercase).
+     * result under the result's fhirType (lowercase).
      *
      * This is a convenience shorthand for [addFromHavingExtensionValueMatching] with a trivially
      * true predicate — use that method when you also need to inspect the value itself.
@@ -428,7 +430,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingExtensionWithValueType] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionWithValueType(
         type: KClass<I>,
@@ -467,7 +469,7 @@ class OperationResult<T> private constructor(
     /**
      * Searches **all** accumulated parameters for instances of [type] that have an extension at
      * [url] with a value of [valueType] satisfying [predicate], passes the typed list to [builder],
-     * and stores the single result under [type]'s simple name (lowercase).
+     * and stores the single result under the result's fhirType (lowercase).
      *
      * The resource is included when **any** of its extension values at [url] satisfies [predicate].
      * Resources with no extension at [url], or whose value is not of [valueType], are excluded.
@@ -486,7 +488,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+            storeAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
         }
     }
 
@@ -507,7 +509,7 @@ class OperationResult<T> private constructor(
 
     /**
      * Like [addFromHavingExtensionValueMatching] but [builder] returns a `List<R>`.
-     * The output name defaults to [type]'s simple name (lowercase).
+     * The output name defaults to the result elements' fhirType (lowercase).
      */
     fun <I : Base, V : Type, R : Base> addAllFromHavingExtensionValueMatching(
         type: KClass<I>,
@@ -518,7 +520,7 @@ class OperationResult<T> private constructor(
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
         return runBuilderStep(stepName) { start ->
-            storeListAndCopy(stepName, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+            storeListAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
         }
     }
 
@@ -554,6 +556,70 @@ class OperationResult<T> private constructor(
         noinline predicate: (V) -> Boolean,
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromHavingExtensionValueMatching(I::class, url, V::class, predicate, builder)
+
+    // Builder methods — filter all accumulated parameters by type and FHIRPath expression
+
+    private fun <I : Base> collectByPath(type: KClass<I>, expression: String): List<I> =
+        filterByPath(parameters.values.flatten(), type.java, expression)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] where [expression]
+     * evaluates to `true` (using [FhirPathHelper.matches] semantics), passes the typed list
+     * to [builder], and stores the single result under [name] (or the builder result's
+     * [Base.fhirType] lowercase when [name] is `null` — consistent with [add]).
+     *
+     * Error handling follows Pattern A: exceptions (including malformed FHIRPath syntax)
+     * record an ERROR-severity [OperationOutcome] and skip the head value.
+     *
+     * [expression] is evaluated against each individual resource, so it should be written as
+     * a relative path (e.g. `"active = true"`, not `"Patient.active = true"`).
+     *
+     * Use [addAllFromMatching] when [builder] returns a `List<R>`.
+     */
+    @JvmOverloads
+    fun <I : Base, R : Base> addFromMatching(
+        name: String? = null,
+        type: KClass<I>,
+        expression: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> {
+        val stepName = name ?: type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeAndCopy(name, builder(collectByPath(type, expression)), start)
+        }
+    }
+
+    /**
+     * Like [addFromMatching] but [builder] returns a `List<R>`.
+     * When [name] is `null`, the output key defaults to the first element's [Base.fhirType]
+     * (lowercase) — consistent with [addAll].
+     */
+    @JvmOverloads
+    fun <I : Base, R : Base> addAllFromMatching(
+        name: String? = null,
+        type: KClass<I>,
+        expression: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> {
+        val stepName = name ?: type.java.simpleName.lowercase()
+        return runBuilderStep(stepName) { start ->
+            storeListAndCopy(name, builder(collectByPath(type, expression)), start)
+        }
+    }
+
+    /** Reified overload of [addFromMatching] — no [KClass] argument needed at call sites. */
+    inline fun <reified I : Base, R : Base> addFromMatching(
+        name: String? = null,
+        expression: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromMatching(name, I::class, expression, builder)
+
+    /** Reified overload of [addAllFromMatching] — no [KClass] argument needed at call sites. */
+    inline fun <reified I : Base, R : Base> addAllFromMatching(
+        name: String? = null,
+        expression: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromMatching(name, I::class, expression, builder)
 
     // Builder methods - single item
 
@@ -1181,6 +1247,143 @@ class OperationResult<T> private constructor(
         outcomes.add(outcome)
         return copyWith(result)
     }
+
+    // ── FHIRPath conditional chaining ────────────────────────────────────
+
+    /**
+     * Runs [block] on this result only when [expression] evaluates to `true` against the
+     * current head value (using [FhirPathHelper.matches] semantics), merges all accumulated
+     * parameters and outcomes from the block result into the current map, and returns an
+     * [OperationResult] with the original head type [T] preserved.
+     *
+     * When the head is `null` or not a FHIR [Base] resource, the block is skipped silently
+     * and the result is returned unchanged.
+     *
+     * [expression] is evaluated against the head resource directly, so write it as a relative
+     * path (e.g. `"active = true"`, not `"Patient.active = true"`).
+     *
+     * On exception inside [block] or during expression evaluation: records a WARNING-severity
+     * [OperationOutcome] and returns the current result unchanged (Pattern B — head-preserving).
+     */
+    fun whenPath(expression: String, block: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val head = result
+        if (head !is Base) return copyWith(result)
+        val start = System.currentTimeMillis()
+        val subPipeline = OperationResult<T>(
+            mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
+        )
+        return try {
+            if (!FhirPathHelper.matches(head, expression)) return copyWith(result)
+            val inner = block(subPipeline)
+            val newParams = shallowCopyParams()
+            inner.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            outcomes.addAll(inner.outcomes)
+            val durationMs = System.currentTimeMillis() - start
+            recordMetric("whenPath", "", durationMs, true)
+            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - start
+            logger.warn("FHIRMason | step='whenPath' | WARN: {}", e.message)
+            recordMetric("whenPath", "", durationMs, false)
+            val outcome = when (e) {
+                is BaseServerResponseException -> e.toOperationOutcome()
+                else -> e.toOperationOutcome()
+            }
+            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+            outcomes.add(outcome)
+            copyWith(result)
+        }
+    }
+
+    /**
+     * Returns this result unchanged when [expression] evaluates to `true` against the current
+     * head value.
+     *
+     * When [expression] evaluates to `false`, records a WARNING-severity [OperationOutcome]
+     * with [message] as diagnostics. When the head is `null` or not a FHIR [Base] resource,
+     * also records a WARNING indicating that the expression could not be evaluated.
+     *
+     * [expression] is evaluated against the head resource directly, so write it as a relative
+     * path (e.g. `"active = true"`, not `"Patient.active = true"`).
+     *
+     * On expression evaluation exception, records a WARNING and returns unchanged
+     * (Pattern B — head-preserving).
+     */
+    fun guardPath(expression: String, message: String): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val head = result
+        if (head !is Base) {
+            val outcome = OperationOutcome().apply {
+                addIssue().apply {
+                    severity = OperationOutcome.IssueSeverity.WARNING
+                    code = OperationOutcome.IssueType.BUSINESSRULE
+                    diagnostics = "guardPath: head value is not a FHIR resource; expression '$expression' could not be evaluated"
+                }
+            }
+            outcomes.add(outcome)
+            return copyWith(result)
+        }
+        return try {
+            if (FhirPathHelper.matches(head, expression)) {
+                copyWith(result)
+            } else {
+                val outcome = OperationOutcome().apply {
+                    addIssue().apply {
+                        severity = OperationOutcome.IssueSeverity.WARNING
+                        code = OperationOutcome.IssueType.BUSINESSRULE
+                        diagnostics = message
+                    }
+                }
+                outcomes.add(outcome)
+                copyWith(result)
+            }
+        } catch (e: Exception) {
+            logger.warn("FHIRMason | step='guardPath' | WARN: {}", e.message)
+            val outcome = when (e) {
+                is BaseServerResponseException -> e.toOperationOutcome()
+                else -> e.toOperationOutcome()
+            }
+            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+            outcomes.add(outcome)
+            copyWith(result)
+        }
+    }
+
+    // ── FHIRPath extraction ───────────────────────────────────────────────
+
+    /**
+     * Evaluates [expression] against the current head resource, promotes the first matching
+     * result of type [type] to the new head, and stores it under [name] (or [expression] when
+     * [name] is `null`).
+     *
+     * Error handling follows Pattern A: if the head is `null` or not a [Base], if the
+     * expression matches no values of [type], or if the expression is malformed, an
+     * ERROR-severity [OperationOutcome] is recorded and the head is skipped.
+     *
+     * [expression] is evaluated against the head resource directly, so write it as a relative
+     * path (e.g. `"name.where(use='official').first()"`, not `"Patient.name…"`).
+     *
+     * Use the reified overload to avoid passing [type] explicitly:
+     * `result.selectByPath<HumanName>("name.first()")`
+     */
+    @JvmOverloads
+    fun <R : Base> selectByPath(type: KClass<R>, expression: String, name: String? = null): OperationResult<R> {
+        val stepName = name ?: expression
+        return runBuilderStep(stepName) { start ->
+            val head = result
+            require(head is Base) { "selectByPath: head value is not a FHIR resource" }
+            val match = FhirPathHelper.evaluateFirst(head, expression, type.java)
+                ?: error("selectByPath: expression '$expression' matched no ${type.simpleName} values")
+            storeAndCopy(name, match, start)
+        }
+    }
+
+    /** Reified overload of [selectByPath] — no [KClass] argument needed at call sites. */
+    inline fun <reified R : Base> selectByPath(expression: String, name: String? = null): OperationResult<R> =
+        selectByPath(R::class, expression, name)
 
     /** Returns the first value stored under [name], or `null` if the key is absent or empty. */
     fun takeFirst(name: String): Base? = parameters[name]?.firstOrNull()
