@@ -294,6 +294,98 @@ class AsyncOperationResult {
         })
     }
 
+    // ── Type-safe single-dependency overloads for timeout ────────────────────
+
+    /**
+     * Registers a dependent DAG task with a per-task timeout where the single dependency value
+     * is extracted and typed automatically, eliminating manual map lookup and casting.
+     *
+     * Equivalent to [addAfterWithTimeout] with a raw [Map] block, but the block receives the
+     * first value stored under [dep] that is an instance of [type] instead of the raw map.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout; receives the typed dep value
+     */
+    fun <T : Base> addAfterWithTimeout(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        timeoutMs: Long,
+        block: suspend (T) -> Base
+    ): AsyncOperationResult = addAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task with a per-task timeout where the single
+     * dependency value is extracted and typed automatically.
+     * See [addAfterWithTimeout] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout; receives the typed dep value
+     */
+    fun <T : Base> addListAfterWithTimeout(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        timeoutMs: Long,
+        block: suspend (T) -> List<Base>
+    ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    /**
+     * Registers a dependent DAG task with a per-task timeout where all values stored under
+     * [dep] are filtered to [type] and injected as a typed list.
+     * See [addAfterWithTimeout] for the full contract.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout; receives the typed dep list
+     */
+    fun <T : Base> addAfterAllWithTimeout(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        timeoutMs: Long,
+        block: suspend (List<T>) -> Base
+    ): AsyncOperationResult = addAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task with a per-task timeout where all values
+     * stored under [dep] are filtered to [type] and injected as a typed list.
+     * See [addAfterWithTimeout] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout; receives the typed dep list
+     */
+    fun <T : Base> addListAfterAllWithTimeout(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        timeoutMs: Long,
+        block: suspend (List<T>) -> List<Base>
+    ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
+    }
+
     // ── Dependent task with retry ─────────────────────────────────────────────
 
     /**
@@ -394,6 +486,135 @@ class AsyncOperationResult {
                 result ?: throw lastException!!
             })
         }
+    }
+
+    // ── Type-safe single-dependency overloads for retry ──────────────────────
+
+    /**
+     * Registers a dependent DAG task with retry where the single dependency value is extracted
+     * and typed automatically, eliminating manual map lookup and casting.
+     *
+     * Equivalent to [addAfterWithRetry] with a raw [Map] block, but the block receives the
+     * first value stored under [dep] that is an instance of [type] instead of the raw map.
+     * The retry loop wraps the full extraction + block call on every attempt.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives the typed dep value
+     */
+    fun <T : Base> addAfterWithRetry(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (T) -> Base
+    ): AsyncOperationResult = addAfterWithRetry(
+        key, dep,
+        maxAttempts = maxAttempts,
+        initialDelayMs = initialDelayMs,
+        retryOn = retryOn
+    ) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task with retry where the single dependency
+     * value is extracted and typed automatically.
+     * See [addAfterWithRetry] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives the typed dep value
+     */
+    fun <T : Base> addListAfterWithRetry(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (T) -> List<Base>
+    ): AsyncOperationResult = addListAfterWithRetry(
+        key, dep,
+        maxAttempts = maxAttempts,
+        initialDelayMs = initialDelayMs,
+        retryOn = retryOn
+    ) { deps ->
+        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        block(value)
+    }
+
+    /**
+     * Registers a dependent DAG task with retry where all values stored under [dep] are
+     * filtered to [type] and injected as a typed list on every attempt.
+     * See [addAfterWithRetry] for the full contract.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives the typed dep list
+     */
+    fun <T : Base> addAfterAllWithRetry(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (List<T>) -> Base
+    ): AsyncOperationResult = addAfterWithRetry(
+        key, dep,
+        maxAttempts = maxAttempts,
+        initialDelayMs = initialDelayMs,
+        retryOn = retryOn
+    ) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task with retry where all values stored under
+     * [dep] are filtered to [type] and injected as a typed list on every attempt.
+     * See [addAfterWithRetry] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives the typed dep list
+     */
+    fun <T : Base> addListAfterAllWithRetry(
+        key: String,
+        dep: String,
+        type: KClass<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (List<T>) -> List<Base>
+    ): AsyncOperationResult = addListAfterWithRetry(
+        key, dep,
+        maxAttempts = maxAttempts,
+        initialDelayMs = initialDelayMs,
+        retryOn = retryOn
+    ) { deps ->
+        val values = deps[dep]!!.filterIsInstance(type.java)
+        block(values)
     }
 
     // ── Independent task with fallback value ─────────────────────────────────
