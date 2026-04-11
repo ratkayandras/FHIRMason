@@ -4,8 +4,10 @@ import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.slf4j.LoggerFactory
@@ -17,6 +19,7 @@ class AsyncOperationResult {
     private val logger = LoggerFactory.getLogger(AsyncOperationResult::class.java)
 
     private var timingEnabled: Boolean = false
+    private var dagTimeoutMs: Long? = null
 
     private val taskMetrics = ConcurrentHashMap<String, StepMetrics>()
     private var totalDurationMs: Long = 0L
@@ -44,6 +47,23 @@ class AsyncOperationResult {
 
     /** Enables per-task metrics collection. [getMetrics] returns empty when not called. */
     fun timed(): AsyncOperationResult = also { timingEnabled = true }
+
+    /**
+     * Sets a maximum wall-clock time for the entire DAG execution.
+     *
+     * If [run] does not complete within [durationMs] milliseconds, it returns an
+     * [OperationResult] containing a single `TIMEOUT`-coded [OperationOutcome] and no task
+     * results. [getTotalDuration] will return `0` on timeout because the duration assignment
+     * inside the DAG execution is interrupted before it can run.
+     *
+     * [runBlocking] inherits this timeout automatically.
+     *
+     * @param durationMs maximum allowed wall-clock time in milliseconds; must be > 0
+     */
+    fun timeout(durationMs: Long): AsyncOperationResult = also {
+        require(durationMs > 0) { "durationMs must be positive" }
+        dagTimeoutMs = durationMs
+    }
 
     /** Returns a snapshot of [StepMetrics] collected per task after [run] or [runBlocking]. */
     fun getMetrics(): Map<String, StepMetrics> = taskMetrics.toMap()
@@ -183,6 +203,282 @@ class AsyncOperationResult {
         }
     }
 
+    // ── Independent task with timeout ────────────────────────────────────────
+
+    /**
+     * Registers an independent DAG task that must complete within [timeoutMs] milliseconds.
+     *
+     * If [block] does not complete in time, [kotlinx.coroutines.withTimeout] throws
+     * [kotlinx.coroutines.TimeoutCancellationException], which is caught by the DAG execution
+     * engine as a failed task: the key is absent from the final [OperationResult] and a
+     * [org.hl7.fhir.r4.model.OperationOutcome] carrying the timeout diagnostics is recorded.
+     * Downstream tasks that depend on this key are skipped.
+     *
+     * @param key storage key for the result
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout
+     */
+    fun addWithTimeout(key: String, timeoutMs: Long, block: suspend () -> Base): AsyncOperationResult = also {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+        registerNode(key, TaskNode.Independent(key) {
+            withTimeout(timeoutMs) { listOf(block()) }
+        })
+    }
+
+    /**
+     * Registers an independent list-producing DAG task that must complete within [timeoutMs]
+     * milliseconds. See [addWithTimeout] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout
+     */
+    fun addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> List<Base>): AsyncOperationResult = also {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+        registerNode(key, TaskNode.Independent(key) {
+            withTimeout(timeoutMs) { block() }
+        })
+    }
+
+    // ── Dependent task with timeout ───────────────────────────────────────────
+
+    /**
+     * Registers a dependent DAG task that must complete within [timeoutMs] milliseconds.
+     * Dependency results are passed to [block] as a [Map] keyed by dependency name.
+     *
+     * The timeout window begins after all dependencies have resolved. If any dependency
+     * fails the task is skipped without starting the timeout clock.
+     * See [addWithTimeout] for timeout failure semantics.
+     *
+     * @param key storage key for the result
+     * @param deps dependency keys whose results are passed to [block]
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout
+     */
+    fun addAfterWithTimeout(
+        key: String,
+        vararg deps: String,
+        timeoutMs: Long,
+        block: suspend (Map<String, List<Base>>) -> Base
+    ): AsyncOperationResult = also {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+        val depList = deps.toList()
+        requireKeysExist(depList)
+        requireNoCycle(key, depList)
+        registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
+            withTimeout(timeoutMs) { listOf(block(depResults)) }
+        })
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task that must complete within [timeoutMs]
+     * milliseconds. See [addAfterWithTimeout] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param deps dependency keys whose results are passed to [block]
+     * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
+     * @param block the suspending lambda to execute within the timeout
+     */
+    fun addListAfterWithTimeout(
+        key: String,
+        vararg deps: String,
+        timeoutMs: Long,
+        block: suspend (Map<String, List<Base>>) -> List<Base>
+    ): AsyncOperationResult = also {
+        require(timeoutMs > 0) { "timeoutMs must be positive" }
+        val depList = deps.toList()
+        requireKeysExist(depList)
+        requireNoCycle(key, depList)
+        registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
+            withTimeout(timeoutMs) { block(depResults) }
+        })
+    }
+
+    // ── Dependent task with retry ─────────────────────────────────────────────
+
+    /**
+     * Registers a dependent DAG task that calls [block] up to [maxAttempts] times,
+     * retrying on transient failures with exponential backoff using [kotlinx.coroutines.delay].
+     * Dependency results are passed to [block] as a [Map] keyed by dependency name.
+     *
+     * The backoff schedule mirrors [addWithRetry] (no delay before the first attempt):
+     * ```
+     * Before attempt 2 → delay initialDelayMs
+     * Before attempt k → delay initialDelayMs × 2^(k-2)
+     * ```
+     *
+     * When any dependency fails the retry block never runs — the task is skipped with a
+     * dependency-failure [OperationOutcome] exactly as for [addAfter].
+     *
+     * @param key storage key for the result
+     * @param deps dependency keys whose results are passed to [block]
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives resolved dependency results
+     */
+    fun addAfterWithRetry(
+        key: String,
+        vararg deps: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (Map<String, List<Base>>) -> Base
+    ): AsyncOperationResult {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        val depList = deps.toList()
+        requireKeysExist(depList)
+        requireNoCycle(key, depList)
+        return also {
+            registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
+                var lastException: Exception? = null
+                var delayMs = initialDelayMs
+                var result: List<Base>? = null
+                for (attempt in 1..maxAttempts) {
+                    try {
+                        result = listOf(block(depResults))
+                        break
+                    } catch (e: Exception) {
+                        lastException = e
+                        if (!retryOn(e) || attempt == maxAttempts) break
+                        delay(delayMs)
+                        delayMs *= 2
+                    }
+                }
+                result ?: throw lastException!!
+            })
+        }
+    }
+
+    /**
+     * Registers a dependent list-producing DAG task that retries with exponential backoff.
+     * See [addAfterWithRetry] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param deps dependency keys whose results are passed to [block]
+     * @param maxAttempts total number of attempts including the first; must be ≥ 1
+     * @param initialDelayMs delay before the second attempt in milliseconds; must be ≥ 0
+     * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
+     * @param block the suspending lambda to invoke; receives resolved dependency results
+     */
+    fun addListAfterWithRetry(
+        key: String,
+        vararg deps: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (Map<String, List<Base>>) -> List<Base>
+    ): AsyncOperationResult {
+        require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
+        require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
+        val depList = deps.toList()
+        requireKeysExist(depList)
+        requireNoCycle(key, depList)
+        return also {
+            registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
+                var lastException: Exception? = null
+                var delayMs = initialDelayMs
+                var result: List<Base>? = null
+                for (attempt in 1..maxAttempts) {
+                    try {
+                        result = block(depResults)
+                        break
+                    } catch (e: Exception) {
+                        lastException = e
+                        if (!retryOn(e) || attempt == maxAttempts) break
+                        delay(delayMs)
+                        delayMs *= 2
+                    }
+                }
+                result ?: throw lastException!!
+            })
+        }
+    }
+
+    // ── Independent task with fallback value ─────────────────────────────────
+
+    /**
+     * Registers an independent DAG task that stores [default] when [block] throws,
+     * rather than leaving the key absent and recording a failed task.
+     *
+     * Unlike [add], a failure here is silent at the DAG level: the key IS present in the
+     * final [OperationResult], no [OperationOutcome] is added, and downstream [addAfter]
+     * tasks that depend on this key will still execute — receiving the [default] value.
+     *
+     * A WARN log line is emitted on fallback, mirroring sync `OperationResult.addOrDefault`.
+     *
+     * @param key storage key for the result
+     * @param default value to store when [block] throws
+     * @param block suspending lambda that produces the primary value
+     */
+    fun <R : Base> addWithDefault(key: String, default: R, block: suspend () -> R): AsyncOperationResult = also {
+        registerNode(key, TaskNode.Independent(key) {
+            try {
+                listOf(block())
+            } catch (e: BaseServerResponseException) {
+                logger.warn("FHIRMason.async | task='{}' | using default: {}", key, e.message)
+                listOf(default)
+            } catch (e: Exception) {
+                logger.warn("FHIRMason.async | task='{}' | using default: {}", key, e.message)
+                listOf(default)
+            }
+        })
+    }
+
+    /**
+     * Registers an independent list-producing DAG task that stores [default] when [block] throws.
+     * See [addWithDefault] for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param default list to store when [block] throws
+     * @param block suspending lambda that produces the primary list
+     */
+    fun <R : Base> addListWithDefault(key: String, default: List<R>, block: suspend () -> List<R>): AsyncOperationResult = also {
+        registerNode(key, TaskNode.Independent(key) {
+            try {
+                block()
+            } catch (e: BaseServerResponseException) {
+                logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
+                default
+            } catch (e: Exception) {
+                logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
+                default
+            }
+        })
+    }
+
+    // ── Conditional task registration ────────────────────────────────────────
+
+    /**
+     * Registers an independent DAG task via [add] only when [condition] is `true`.
+     * When [condition] is `false`, returns `this` unchanged — no node is registered.
+     *
+     * This is an ergonomic alternative to:
+     * ```kotlin
+     * val dag = AsyncOperationResult().add("patient") { fetchPatient() }
+     * if (includeAppointments) dag.add("appointment") { fetchAppointment() }
+     * ```
+     * which can be written as:
+     * ```kotlin
+     * AsyncOperationResult()
+     *     .add("patient") { fetchPatient() }
+     *     .addIf(includeAppointments, "appointment") { fetchAppointment() }
+     * ```
+     *
+     * Note: a key skipped by `addIf(false, ...)` is never registered and cannot be referenced
+     * as a dependency in [addAfter] or [addListAfter] — [requireKeysExist] will throw.
+     */
+    fun addIf(condition: Boolean, key: String, block: suspend () -> Base): AsyncOperationResult =
+        if (condition) add(key, block) else this
+
+    /**
+     * Registers an independent list-producing DAG task via [addList] only when [condition] is `true`.
+     * When [condition] is `false`, returns `this` unchanged. See [addIf] for full contract.
+     */
+    fun addListIf(condition: Boolean, key: String, block: suspend () -> List<Base>): AsyncOperationResult =
+        if (condition) addList(key, block) else this
+
     // ── DAG composition ──────────────────────────────────────────────────────
 
     /**
@@ -274,7 +570,29 @@ class AsyncOperationResult {
         return sb.toString().trimEnd()
     }
 
-    suspend fun run(): OperationResult<Base> = coroutineScope {
+    /**
+     * Executes all registered tasks as a coroutine DAG and returns the accumulated
+     * [OperationResult]. Independent tasks run in parallel; dependent tasks wait for their
+     * dependencies via [kotlinx.coroutines.Deferred.await].
+     *
+     * If a DAG-level timeout was configured via [timeout], the execution is wrapped in
+     * [kotlinx.coroutines.withTimeout]. On timeout, an [OperationResult] containing a single
+     * `TIMEOUT`-coded [OperationOutcome] is returned with no task results.
+     */
+    suspend fun run(): OperationResult<Base> {
+        val t = dagTimeoutMs
+        return if (t != null) {
+            try {
+                withTimeout(t) { runInternal() }
+            } catch (e: TimeoutCancellationException) {
+                OperationResult.fromMap(emptyMap(), listOf(dagTimeoutOutcome(t)), emptyMap())
+            }
+        } else {
+            runInternal()
+        }
+    }
+
+    private suspend fun runInternal(): OperationResult<Base> = coroutineScope {
         val dagStart = System.currentTimeMillis()
         val resolved = mutableMapOf<String, Deferred<List<Base>?>>()
         val failedTasks = ConcurrentHashMap<String, OperationOutcome>()
@@ -353,6 +671,14 @@ class AsyncOperationResult {
     }
 
     fun runBlocking(): OperationResult<Base> = runBlocking { run() }
+
+    private fun dagTimeoutOutcome(durationMs: Long): OperationOutcome = OperationOutcome().apply {
+        addIssue().apply {
+            severity = OperationOutcome.IssueSeverity.ERROR
+            code = OperationOutcome.IssueType.TIMEOUT
+            diagnostics = "DAG execution exceeded timeout of ${durationMs}ms"
+        }
+    }
 
     private fun dependencyFailureOutcome(taskKey: String, failedDep: String): OperationOutcome =
         OperationOutcome().apply {

@@ -959,6 +959,17 @@ When a task has exactly one dependency, use the typed overloads to skip the manu
 | `addListAfter(key, dep, type) { t -> List<Base> }` | single typed value | `List<Base>` |
 | `addAfterAll(key, dep, type) { list -> Base }` | typed list | `Base` |
 | `addListAfterAll(key, dep, type) { list -> List<Base> }` | typed list | `List<Base>` |
+| `addWithRetry(key, …) { Base }` | none | `Base` |
+| `addAfterWithRetry(key, *deps, …) { Map → Base }` | dep map | `Base` |
+| `addListAfterWithRetry(key, *deps, …) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addWithTimeout(key, timeoutMs) { Base }` | none | `Base` |
+| `addListWithTimeout(key, timeoutMs) { List<Base> }` | none | `List<Base>` |
+| `addAfterWithTimeout(key, *deps, timeoutMs) { Map → Base }` | dep map | `Base` |
+| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addIf(condition, key) { Base }` | none | `Base` (or no-op) |
+| `addListIf(condition, key) { List<Base> }` | none | `List<Base>` (or no-op) |
+| `addWithDefault(key, default) { Base }` | none | `Base` |
+| `addListWithDefault(key, default) { List<Base> }` | none | `List<Base>` |
 | `merge { AsyncOperationResult() … }` | — (lambda builds inner DAG) | `this` |
 | `merge(other: AsyncOperationResult)` | — (pre-built inner DAG) | `this` |
 
@@ -1032,6 +1043,112 @@ val result = dag.run()
 ```
 
 On final failure the key is absent from the result and an ERROR `OperationOutcome` is recorded. See the sync builder section for the full parameter table.
+
+### Retry for dependent tasks
+
+`addAfterWithRetry` / `addListAfterWithRetry` bring the same exponential-backoff retry behaviour to dependent tasks. The block receives the resolved dependency map on every attempt.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `key` | `String` | — | Storage key for the result |
+| `deps` | `vararg String` | — | Dependency keys passed to the block |
+| `maxAttempts` | `Int` | `3` | Total attempts including the first; must be ≥ 1 |
+| `initialDelayMs` | `Long` | `500` | Delay before the second attempt in ms; must be ≥ 0 |
+| `retryOn` | `(Exception) -> Boolean` | `{ true }` | Return `false` to stop retrying for a specific exception |
+| `block` | `suspend (Map<String, List<Base>>) -> Base` | — | Suspending lambda; receives dependency results |
+
+```kotlin
+val dag = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .addAfterWithRetry("encounter", "patient", maxAttempts = 3, initialDelayMs = 200) { deps ->
+        val p = deps["patient"]!!.first() as Patient
+        fhirClient.fetchEncounter(p.idPart)   // retried up to 3 times on any exception
+    }
+    .addListAfterWithRetry("observations", "patient", retryOn = { e -> e is IOException }) { deps ->
+        val p = deps["patient"]!!.first() as Patient
+        fhirClient.fetchObservations(p.idPart)
+    }
+
+val result = dag.run()
+```
+
+When a dependency fails the retry block never runs — the dependent task is skipped with a dependency-failure `OperationOutcome`, identical to `addAfter`.
+
+### Per-task timeout
+
+Wrap any task in a coroutine timeout. If the block does not finish within the deadline, the key is absent from the final result and an ERROR `OperationOutcome` carrying the timeout diagnostics is recorded. Downstream tasks that depend on a timed-out key are skipped.
+
+| Method | Lambda input | Result |
+|---|---|---|
+| `addWithTimeout(key, timeoutMs) { Base }` | none | `Base` |
+| `addListWithTimeout(key, timeoutMs) { List<Base> }` | none | `List<Base>` |
+| `addAfterWithTimeout(key, *deps, timeoutMs) { Map → Base }` | dep map | `Base` |
+| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<Base> }` | dep map | `List<Base>` |
+
+```kotlin
+val dag = AsyncOperationResult()
+    .addWithTimeout("patient", timeoutMs = 2_000) { fetchPatient() }
+    .addAfterWithTimeout("encounter", "patient", timeoutMs = 1_000) { deps ->
+        val p = deps["patient"]!!.first() as Patient
+        fhirClient.fetchEncounter(p.idPart)
+    }
+
+val result = dag.run()
+if (result.hasErrors()) {
+    // one or more tasks timed out
+}
+```
+
+### Conditional task registration
+
+`addIf` / `addListIf` register a task only when a boolean condition is true. When the condition is false the method is a no-op — the key is never registered. This avoids the awkward `if (condition) dag.add(...) else dag` pattern.
+
+```kotlin
+val dag = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .addIf(includeAppointments, "appointment") { fetchAppointment() }
+    .addListIf(includeMedications, "medications") { fetchMedications() }
+
+val result = dag.run()
+```
+
+> A key skipped by `addIf(false, …)` is never registered. Referencing it as a dependency in `addAfter` will throw `IllegalArgumentException` at registration time.
+
+### Fallback values
+
+`addWithDefault` / `addListWithDefault` silently substitute a fallback value when the block throws, rather than leaving the key absent. The task is treated as fully successful — no `OperationOutcome` is added and downstream tasks that depend on the key will run, receiving the fallback value.
+
+```kotlin
+val dag = AsyncOperationResult()
+    .addWithDefault("coverage", emptyCoverage) { fetchCoverage() }   // fallback if fetch fails
+    .addListWithDefault("medications", emptyList()) { fetchMedications() }
+    .addAfter("summary", "coverage") { deps ->
+        // always runs — "coverage" is always present (real value or fallback)
+        buildSummary(deps["coverage"]!!.first() as Coverage)
+    }
+
+val result = dag.run()
+```
+
+A WARN log line is emitted when the fallback is used.
+
+### DAG-level execution timeout
+
+`timeout(durationMs)` sets a maximum wall-clock time for the entire `run()` invocation. If the DAG has not finished within the deadline, `run()` returns immediately with a single `TIMEOUT`-coded `OperationOutcome` and no task results. `runBlocking()` inherits this timeout.
+
+```kotlin
+val result = AsyncOperationResult()
+    .timeout(5_000)                            // entire DAG must finish within 5 s
+    .add("patient") { fetchPatient() }
+    .add("coverage") { fetchCoverage() }
+    .run()
+
+if (result.hasErrors()) {
+    // check outcome diagnostics — "DAG execution exceeded timeout of 5000ms"
+}
+```
+
+Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the duration assignment inside the execution body is interrupted before it can run.
 
 ### DAG Composition (`merge`)
 
@@ -1342,7 +1459,12 @@ fhirmason-core/
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
         ├── AsyncOperationResultRetryTest.kt
+        ├── AsyncOperationResultDependentRetryTest.kt
         ├── AsyncOperationResultMergeTest.kt
+        ├── AsyncOperationResultTimeoutTest.kt
+        ├── AsyncOperationResultDagTimeoutTest.kt
+        ├── AsyncOperationResultConditionalTest.kt
+        ├── AsyncOperationResultDefaultTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
