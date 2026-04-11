@@ -962,10 +962,18 @@ When a task has exactly one dependency, use the typed overloads to skip the manu
 | `addWithRetry(key, …) { Base }` | none | `Base` |
 | `addAfterWithRetry(key, *deps, …) { Map → Base }` | dep map | `Base` |
 | `addListAfterWithRetry(key, *deps, …) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addAfterWithRetry(key, dep, type, …) { t -> Base }` | single typed value | `Base` |
+| `addListAfterWithRetry(key, dep, type, …) { t -> List<Base> }` | single typed value | `List<Base>` |
+| `addAfterAllWithRetry(key, dep, type, …) { list -> Base }` | typed list | `Base` |
+| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<Base> }` | typed list | `List<Base>` |
 | `addWithTimeout(key, timeoutMs) { Base }` | none | `Base` |
 | `addListWithTimeout(key, timeoutMs) { List<Base> }` | none | `List<Base>` |
 | `addAfterWithTimeout(key, *deps, timeoutMs) { Map → Base }` | dep map | `Base` |
 | `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addAfterWithTimeout(key, dep, type, timeoutMs) { t -> Base }` | single typed value | `Base` |
+| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<Base> }` | single typed value | `List<Base>` |
+| `addAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> Base }` | typed list | `Base` |
+| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<Base> }` | typed list | `List<Base>` |
 | `addIf(condition, key) { Base }` | none | `Base` (or no-op) |
 | `addListIf(condition, key) { List<Base> }` | none | `List<Base>` (or no-op) |
 | `addWithDefault(key, default) { Base }` | none | `Base` |
@@ -1074,6 +1082,30 @@ val result = dag.run()
 
 When a dependency fails the retry block never runs — the dependent task is skipped with a dependency-failure `OperationOutcome`, identical to `addAfter`.
 
+#### Type-safe single-dependency overloads
+
+When a task has exactly one dependency, use the typed overloads to avoid the manual map lookup and cast. The compiler extracts the first matching instance (or the full typed list for `addAfterAllWithRetry` / `addListAfterAllWithRetry`) and passes it directly to the block.
+
+| Method | Lambda receives |
+|---|---|
+| `addAfterWithRetry(key, dep, type, …) { t -> Base }` | single typed value |
+| `addListAfterWithRetry(key, dep, type, …) { t -> List<Base> }` | single typed value |
+| `addAfterAllWithRetry(key, dep, type, …) { list -> Base }` | typed list |
+| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<Base> }` | typed list |
+
+```kotlin
+val dag = AsyncOperationResult()
+    .add("patient") { fetchPatient() }
+    .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 200) { patient ->
+        fhirClient.fetchEncounter(patient.idPart)   // no cast needed
+    }
+    .addListAfterWithRetry("observations", "patient", Patient::class) { patient ->
+        fhirClient.fetchObservations(patient.idPart)
+    }
+
+val result = dag.run()
+```
+
 ### Per-task timeout
 
 Wrap any task in a coroutine timeout. If the block does not finish within the deadline, the key is absent from the final result and an ERROR `OperationOutcome` carrying the timeout diagnostics is recorded. Downstream tasks that depend on a timed-out key are skipped.
@@ -1097,6 +1129,30 @@ val result = dag.run()
 if (result.hasErrors()) {
     // one or more tasks timed out
 }
+```
+
+#### Type-safe single-dependency overloads
+
+When a task has exactly one dependency, use the typed overloads to avoid the manual map lookup and cast.
+
+| Method | Lambda receives |
+|---|---|
+| `addAfterWithTimeout(key, dep, type, timeoutMs) { t -> Base }` | single typed value |
+| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<Base> }` | single typed value |
+| `addAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> Base }` | typed list |
+| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<Base> }` | typed list |
+
+```kotlin
+val dag = AsyncOperationResult()
+    .addWithTimeout("patient", timeoutMs = 2_000) { fetchPatient() }
+    .addAfterWithTimeout("encounter", "patient", Patient::class, timeoutMs = 1_000) { patient ->
+        fhirClient.fetchEncounter(patient.idPart)   // no cast needed
+    }
+    .addListAfterAllWithTimeout("relatedPersons", "patients", Patient::class, timeoutMs = 500) { patients ->
+        patients.flatMap { fhirClient.fetchRelatedPersons(it.idPart) }
+    }
+
+val result = dag.run()
 ```
 
 ### Conditional task registration
