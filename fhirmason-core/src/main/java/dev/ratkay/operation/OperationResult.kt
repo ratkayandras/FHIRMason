@@ -30,6 +30,8 @@ import java.time.OffsetDateTime
 import java.time.ZonedDateTime
 import java.util.IdentityHashMap
 import kotlin.reflect.KClass
+import kotlin.time.measureTime
+import kotlin.time.measureTimedValue
 
 /**
  * A typed, immutable pipeline builder that accumulates FHIR resources keyed by name and
@@ -152,34 +154,37 @@ class OperationResult<T> private constructor(
     /**
      * Common try/catch skeleton shared by [runBuilderStep] and [runPrimitiveStep].
      *
-     * Checks [shouldSkip] and delegates to [onSkip] for the early return, records the wall-clock
-     * start time, invokes [block] with it, and on any exception delegates to [onError] with the
-     * exception and elapsed milliseconds.  All three lambda parameters are inlined.
+     * Checks [shouldSkip] and delegates to [onSkip] for the early return, times the [block]
+     * execution with a monotonic clock via [measureTimedValue], and on any exception delegates
+     * to [onError] with the exception and elapsed milliseconds.  All three lambda parameters
+     * are inlined.
      */
     private inline fun <R> runStep(
         onSkip: () -> OperationResult<R>,
         onError: (Exception, Long) -> OperationResult<R>,
-        block: (Long) -> OperationResult<R>
+        block: () -> OperationResult<R>
     ): OperationResult<R> {
         if (shouldSkip()) return onSkip()
-        val start = System.currentTimeMillis()
-        return try {
-            block(start)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            onError(e, durationMs)
+        var caughtException: Exception? = null
+        val (stepResult, duration) = measureTimedValue {
+            try { block() } catch (e: Exception) { caughtException = e; null }
         }
+        val durationMs = duration.inWholeMilliseconds
+        return if (caughtException != null) onError(caughtException!!, durationMs)
+               else stepResult!!
     }
 
-    private fun <R> runBuilderStep(name: String?, block: (Long) -> OperationResult<R>): OperationResult<R> =
+    private fun <R> runBuilderStep(name: String?, block: () -> OperationResult<R>): OperationResult<R> =
         runStep(
             onSkip = { skippedResult() },
             onError = { e, durationMs ->
                 recordMetric(name ?: "unknown", "", durationMs, false)
-                outcomes.add(when (e) {
-                    is BaseServerResponseException -> e.toOperationOutcome()
-                    else -> e.toOperationOutcome()
-                })
+                outcomes.add(
+                    when (e) {
+                        is BaseServerResponseException -> e.toOperationOutcome()
+                        else -> e.toOperationOutcome()
+                    }
+                )
                 skippedResult()
             },
             block = block
@@ -209,18 +214,17 @@ class OperationResult<T> private constructor(
                 outcomes.add(outcome)
                 copyWith(result)
             },
-            block = { start ->
-                val fhirValue = build()
+            block = {
+                val (fhirValue, duration) = measureTimedValue { build() }
+                val durationMs = duration.inWholeMilliseconds
                 parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-                val durationMs = System.currentTimeMillis() - start
                 recordMetric(name, fhirValue.fhirType(), durationMs, true)
                 logStep(name, fhirValue.fhirType(), durationMs)
                 copyWith(result)
             }
         )
 
-    private fun <R : Base> storeAndCopy(name: String?, value: R, start: Long): OperationResult<R> {
-        val durationMs = System.currentTimeMillis() - start
+    private fun <R : Base> storeAndCopy(name: String?, value: R, durationMs: Long): OperationResult<R> {
         val key = name ?: value.fhirType().lowercase()
         parameters.getOrPut(key) { mutableListOf() }.add(value)
         recordMetric(key, value.fhirType(), durationMs, true)
@@ -228,8 +232,7 @@ class OperationResult<T> private constructor(
         return copyWith(value)
     }
 
-    private fun <R : Base> storeListAndCopy(name: String?, values: List<R>, start: Long): OperationResult<List<R>> {
-        val durationMs = System.currentTimeMillis() - start
+    private fun <R : Base> storeListAndCopy(name: String?, values: List<R>, durationMs: Long): OperationResult<List<R>> {
         addToParameters(values, name)
         val key = name ?: values.firstOrNull()?.fhirType()?.lowercase() ?: "list"
         val typeDesc = "${values.firstOrNull()?.fhirType() ?: "Empty"}[${values.size}]"
@@ -262,8 +265,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> R
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        return runBuilderStep(stepName) {
+            val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -277,8 +281,9 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> R
     ): OperationResult<R> =
-        runBuilderStep(name) { start ->
-            storeAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
     /**
@@ -294,8 +299,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> R
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        return runBuilderStep(stepName) {
+            val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -308,8 +314,9 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> R
     ): OperationResult<R> =
-        runBuilderStep(name) { start ->
-            storeAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
     /**
@@ -322,8 +329,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        return runBuilderStep(stepName) {
+            val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
     }
 
@@ -334,8 +342,9 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> =
-        runBuilderStep(name) { start ->
-            storeListAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = true)), start)
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
 
     /**
@@ -348,8 +357,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeListAndCopy(null, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        return runBuilderStep(stepName) {
+            val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
     }
 
@@ -360,8 +370,9 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> =
-        runBuilderStep(name) { start ->
-            storeListAndCopy(name, builder(collectByExtension(type, extUrls, matchAll = false)), start)
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
 
     /**
@@ -487,8 +498,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> R
     ): OperationResult<R> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        return runBuilderStep(stepName) {
+            val (value, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -503,8 +515,9 @@ class OperationResult<T> private constructor(
         predicate: (V) -> Boolean,
         builder: (List<I>) -> R
     ): OperationResult<R> =
-        runBuilderStep(name) { start ->
-            storeAndCopy(name, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
     /**
@@ -519,8 +532,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
         val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeListAndCopy(null, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        return runBuilderStep(stepName) {
+            val (values, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
     }
 
@@ -533,8 +547,9 @@ class OperationResult<T> private constructor(
         predicate: (V) -> Boolean,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> =
-        runBuilderStep(name) { start ->
-            storeListAndCopy(name, builder(collectByExtensionAndValueType(type, url, valueType, predicate)), start)
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
 
     /**
@@ -584,8 +599,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> R
     ): OperationResult<R> {
         val stepName = name ?: type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeAndCopy(name, builder(collectByPath(type, expression)), start)
+        return runBuilderStep(stepName) {
+            val (value, duration) = measureTimedValue { builder(collectByPath(type, expression)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -602,8 +618,9 @@ class OperationResult<T> private constructor(
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
         val stepName = name ?: type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) { start ->
-            storeListAndCopy(name, builder(collectByPath(type, expression)), start)
+        return runBuilderStep(stepName) {
+            val (values, duration) = measureTimedValue { builder(collectByPath(type, expression)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
     }
 
@@ -625,11 +642,17 @@ class OperationResult<T> private constructor(
 
     @JvmOverloads
     fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> =
-        runBuilderStep(name) { start -> storeAndCopy(name, builder(), start) }
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder() }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
 
     @JvmOverloads
     fun <R : Base> addUsing(name: String? = null, builder: (T) -> R): OperationResult<R> =
-        runBuilderStep(name) { start -> storeAndCopy(name, builder(getResult()), start) }
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(getResult()) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
 
     // Builder methods - list
     // addAll/addAllUsing return OperationResult<List<R>>; use getResultList() or getResult()
@@ -637,68 +660,82 @@ class OperationResult<T> private constructor(
 
     @JvmOverloads
     fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> =
-        runBuilderStep(name) { start -> storeListAndCopy(name, builder(), start) }
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder() }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
 
     @JvmOverloads
     fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> =
-        runBuilderStep(name) { start -> storeListAndCopy(name, builder(getResult()), start) }
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(getResult()) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
 
     // Builder methods - from existing parameters
 
     fun <I : Base, R : Base> addFrom(name: String, type: KClass<I>, builder: (List<I>) -> R): OperationResult<R> =
-        runBuilderStep(name) { start ->
-            val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
-            storeAndCopy(name, builder(filtered), start)
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue {
+                val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
+                builder(filtered)
+            }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
     fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> List<R>): OperationResult<List<R>> =
-        runBuilderStep(name) { start ->
-            val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
-            storeListAndCopy(name, builder(filtered), start)
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue {
+                val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
+                builder(filtered)
+            }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
 
     // Builder variants with explicit error handling
 
     @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
-        val start = System.currentTimeMillis()
-        return try {
-            val value = builder()
-            val durationMs = System.currentTimeMillis() - start
-            val key = name ?: value.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value)
+        var caughtException: Exception? = null
+        val (value, duration) = measureTimedValue {
+            try { builder() } catch (e: Exception) { caughtException = e; null }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return if (caughtException != null) {
+            val key = name ?: "unknown"
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
+            recordMetric(key, "", durationMs, false)
+            outcomes.add(warningOutcome(caughtException!!))
+            copyWith(result)
+        } else {
+            val key = name ?: value!!.fhirType().lowercase()
+            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
             recordMetric(key, value.fhirType(), durationMs, true)
             logStep(key, value.fhirType(), durationMs)
-            copyWith(result)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            val key = name ?: "unknown"
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
-            recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
             copyWith(result)
         }
     }
 
     @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
-        val start = System.currentTimeMillis()
-        return try {
-            val value = builder()
-            val durationMs = System.currentTimeMillis() - start
-            val key = name ?: value.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value)
-            recordMetric(key, value.fhirType(), durationMs, true)
-            logStep(key, value.fhirType(), durationMs)
-            copyWith(value)
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
+        var caughtException: Exception? = null
+        val (value, duration) = measureTimedValue {
+            try { builder() } catch (e: Exception) { caughtException = e; null }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return if (caughtException != null) {
             val key = name ?: default.fhirType().lowercase()
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, e.message)
+            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
             recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(e))
+            outcomes.add(warningOutcome(caughtException!!))
             parameters.getOrPut(key) { mutableListOf() }.add(default)
             copyWith(default)
+        } else {
+            val key = name ?: value!!.fhirType().lowercase()
+            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
+            recordMetric(key, value.fhirType(), durationMs, true)
+            logStep(key, value.fhirType(), durationMs)
+            copyWith(value!!)
         }
     }
 
@@ -738,28 +775,31 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
-        return runBuilderStep(name) { start ->
+        return runBuilderStep(name) {
             var lastException: Exception? = null
             var delayMs = initialDelayMs
-            var success: OperationResult<R>? = null
-            for (attempt in 1..maxAttempts) {
-                try {
-                    success = storeAndCopy(name, builder(), start)
-                    break
-                } catch (e: Exception) {
-                    lastException = e
-                    if (!retryOn(e) || attempt == maxAttempts) break
+            var successValue: R? = null
+            val duration = measureTime {
+                for (attempt in 1..maxAttempts) {
                     try {
-                        Thread.sleep(delayMs)
-                    } catch (interrupted: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        lastException = interrupted
+                        successValue = builder()
                         break
+                    } catch (e: Exception) {
+                        lastException = e
+                        if (!retryOn(e) || attempt == maxAttempts) break
+                        try {
+                            Thread.sleep(delayMs)
+                        } catch (interrupted: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            lastException = interrupted
+                            break
+                        }
+                        delayMs *= 2
                     }
-                    delayMs *= 2
                 }
             }
-            success ?: throw lastException!!
+            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
+            else throw lastException!!
         }
     }
 
@@ -782,32 +822,35 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> {
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
-        return runBuilderStep(name) { start ->
+        return runBuilderStep(name) {
             // Resolve head once, before the retry loop. If result is null this throws
             // IllegalStateException here — caught by runBuilderStep's outer try/catch
             // (Pattern A, one attempt), not inside the retry loop.
             val head = getResult()
             var lastException: Exception? = null
             var delayMs = initialDelayMs
-            var success: OperationResult<R>? = null
-            for (attempt in 1..maxAttempts) {
-                try {
-                    success = storeAndCopy(name, builder(head), start)
-                    break
-                } catch (e: Exception) {
-                    lastException = e
-                    if (!retryOn(e) || attempt == maxAttempts) break
+            var successValue: R? = null
+            val duration = measureTime {
+                for (attempt in 1..maxAttempts) {
                     try {
-                        Thread.sleep(delayMs)
-                    } catch (interrupted: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                        lastException = interrupted
+                        successValue = builder(head)
                         break
+                    } catch (e: Exception) {
+                        lastException = e
+                        if (!retryOn(e) || attempt == maxAttempts) break
+                        try {
+                            Thread.sleep(delayMs)
+                        } catch (interrupted: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                            lastException = interrupted
+                            break
+                        }
+                        delayMs *= 2
                     }
-                    delayMs *= 2
                 }
             }
-            success ?: throw lastException!!
+            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
+            else throw lastException!!
         }
     }
 
@@ -933,20 +976,19 @@ class OperationResult<T> private constructor(
      */
     fun addPart(name: String, builder: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
 
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
 
-        val built = builder(subPipeline)
+        val (built, duration) = measureTimedValue { builder(subPipeline) }
 
         built.getAllParameters().forEach { (childKey, values) ->
             val prefixedKey = "$name.$childKey"
             parameters.getOrPut(prefixedKey) { mutableListOf() }.addAll(values)
         }
 
-        val durationMs = System.currentTimeMillis() - start
+        val durationMs = duration.inWholeMilliseconds
         recordMetric(name, "part", durationMs, true)
         logStep(name, "part", durationMs)
         return copyWith(result)
@@ -971,13 +1013,13 @@ class OperationResult<T> private constructor(
         vararg exts: Extension
     ): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
-        val start = System.currentTimeMillis()
-        parameters.getOrPut(name) { mutableListOf() }.add(value)
-        if (exts.isNotEmpty()) {
-            val innerMap = extensions.getOrPut(name) { IdentityHashMap() }
-            innerMap[value] = exts.toList()
-        }
-        val durationMs = System.currentTimeMillis() - start
+        val durationMs = measureTime {
+            parameters.getOrPut(name) { mutableListOf() }.add(value)
+            if (exts.isNotEmpty()) {
+                val innerMap = extensions.getOrPut(name) { IdentityHashMap() }
+                innerMap[value] = exts.toList()
+            }
+        }.inWholeMilliseconds
         recordMetric(name, value.fhirType(), durationMs, true)
         logStep(name, value.fhirType(), durationMs)
         return copyWith(result)
@@ -1083,9 +1125,9 @@ class OperationResult<T> private constructor(
      * On exception: records an ERROR-severity [OperationOutcome] and skips the head (Pattern A).
      */
     fun <R : Base> mapHead(transform: (T) -> R): OperationResult<R> =
-        runBuilderStep("mapHead") { start ->
-            val r = transform(getResult())
-            val durationMs = System.currentTimeMillis() - start
+        runBuilderStep("mapHead") {
+            val (r, duration) = measureTimedValue { transform(getResult()) }
+            val durationMs = duration.inWholeMilliseconds
             recordMetric("mapHead", r.fhirType(), durationMs, true)
             logStep("mapHead", r.fhirType(), durationMs)
             copyWith(r)
@@ -1155,31 +1197,32 @@ class OperationResult<T> private constructor(
     fun whenTrue(condition: Boolean, block: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
         if (!condition) return copyWith(result)
-        val start = System.currentTimeMillis()
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        return try {
-            val inner = block(subPipeline)
-            val newParams = shallowCopyParams()
-            inner.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric("whenTrue", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='whenTrue' | WARN: {}", e.message)
+        var caughtException: Exception? = null
+        val (inner, duration) = measureTimedValue {
+            try { block(subPipeline) } catch (e: Exception) { caughtException = e; null }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return if (caughtException != null) {
+            logger.warn("FHIRMason | step='whenTrue' | WARN: {}", caughtException!!.message)
             recordMetric("whenTrue", "", durationMs, false)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
+            val outcome = when (val ex = caughtException!!) {
+                is BaseServerResponseException -> ex.toOperationOutcome()
+                else -> ex.toOperationOutcome()
             }
             outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
             outcomes.add(outcome)
             copyWith(result)
+        } else {
+            val newParams = shallowCopyParams()
+            inner!!.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            outcomes.addAll(inner.outcomes)
+            recordMetric("whenTrue", "", durationMs, true)
+            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
         }
     }
 
@@ -1196,28 +1239,29 @@ class OperationResult<T> private constructor(
     fun ifPresent(block: (T) -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
         val current = result ?: return copyWith(result)
-        val start = System.currentTimeMillis()
-        return try {
-            val inner = block(current)
-            val newParams = shallowCopyParams()
-            inner.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric("ifPresent", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='ifPresent' | WARN: {}", e.message)
+        var caughtException: Exception? = null
+        val (inner, duration) = measureTimedValue {
+            try { block(current) } catch (e: Exception) { caughtException = e; null }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return if (caughtException != null) {
+            logger.warn("FHIRMason | step='ifPresent' | WARN: {}", caughtException!!.message)
             recordMetric("ifPresent", "", durationMs, false)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
+            val outcome = when (val ex = caughtException!!) {
+                is BaseServerResponseException -> ex.toOperationOutcome()
+                else -> ex.toOperationOutcome()
             }
             outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
             outcomes.add(outcome)
             copyWith(result)
+        } else {
+            val newParams = shallowCopyParams()
+            inner!!.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            outcomes.addAll(inner.outcomes)
+            recordMetric("ifPresent", "", durationMs, true)
+            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
         }
     }
 
@@ -1269,32 +1313,39 @@ class OperationResult<T> private constructor(
         if (shouldSkip()) return copyWith(result)
         val head = result
         if (head !is Base) return copyWith(result)
-        val start = System.currentTimeMillis()
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        return try {
-            if (!FhirPathHelper.matches(head, expression)) return copyWith(result)
-            val inner = block(subPipeline)
-            val newParams = shallowCopyParams()
-            inner.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+        var caughtException: Exception? = null
+        val (inner, duration) = measureTimedValue {
+            try {
+                if (!FhirPathHelper.matches(head, expression)) null
+                else block(subPipeline)
+            } catch (e: Exception) { caughtException = e; null }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return when {
+            caughtException != null -> {
+                logger.warn("FHIRMason | step='whenPath' | WARN: {}", caughtException!!.message)
+                recordMetric("whenPath", "", durationMs, false)
+                val outcome = when (val ex = caughtException!!) {
+                    is BaseServerResponseException -> ex.toOperationOutcome()
+                    else -> ex.toOperationOutcome()
+                }
+                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
+                outcomes.add(outcome)
+                copyWith(result)
             }
-            outcomes.addAll(inner.outcomes)
-            val durationMs = System.currentTimeMillis() - start
-            recordMetric("whenPath", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        } catch (e: Exception) {
-            val durationMs = System.currentTimeMillis() - start
-            logger.warn("FHIRMason | step='whenPath' | WARN: {}", e.message)
-            recordMetric("whenPath", "", durationMs, false)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
+            inner != null -> {
+                val newParams = shallowCopyParams()
+                inner.parameters.forEach { (key, values) ->
+                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                }
+                outcomes.addAll(inner.outcomes)
+                recordMetric("whenPath", "", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
+            else -> copyWith(result)  // expression evaluated to false
         }
     }
 
@@ -1372,12 +1423,14 @@ class OperationResult<T> private constructor(
     @JvmOverloads
     fun <R : Base> selectByPath(type: KClass<R>, expression: String, name: String? = null): OperationResult<R> {
         val stepName = name ?: expression
-        return runBuilderStep(stepName) { start ->
+        return runBuilderStep(stepName) {
             val head = result
             require(head is Base) { "selectByPath: head value is not a FHIR resource" }
-            val match = FhirPathHelper.evaluateFirst(head, expression, type.java)
-                ?: error("selectByPath: expression '$expression' matched no ${type.simpleName} values")
-            storeAndCopy(name, match, start)
+            val (match, duration) = measureTimedValue {
+                FhirPathHelper.evaluateFirst(head as Base, expression, type.java)
+                    ?: error("selectByPath: expression '$expression' matched no ${type.simpleName} values")
+            }
+            storeAndCopy(name, match, duration.inWholeMilliseconds)
         }
     }
 
