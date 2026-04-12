@@ -1511,6 +1511,8 @@ fhirmason-core/
         ├── OperationResultMapHeadTest.kt
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
+        ├── OperationResultFhirPathTest.kt
+        ├── OperationResultComplexTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
@@ -1521,6 +1523,7 @@ fhirmason-core/
         ├── AsyncOperationResultDagTimeoutTest.kt
         ├── AsyncOperationResultConditionalTest.kt
         ├── AsyncOperationResultDefaultTest.kt
+        ├── AsyncOperationResultComplexTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
