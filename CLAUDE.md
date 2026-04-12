@@ -130,4 +130,4 @@ Run the full test suite (`mvn test`) before every commit **and** before every pu
 Keep `README.md` up to date on every branch. When a branch adds or changes a feature, update the relevant section(s) of the README before committing:
 - Add new methods to the appropriate table or code block
 - Add or update usage examples that demonstrate the new behaviour
-- Update the Project Structure section if new source files are added
+- **Update the Project Structure section whenever any file is added, removed, or renamed** — this includes test files (`src/test/…`), not just production source files. The tree in the README must exactly match the files on disk.
