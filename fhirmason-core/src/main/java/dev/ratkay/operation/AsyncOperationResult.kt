@@ -13,6 +13,8 @@ import org.hl7.fhir.r4.model.OperationOutcome
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
+import kotlin.time.measureTime
+import kotlin.time.measureTimedValue
 
 class AsyncOperationResult {
 
@@ -814,7 +816,6 @@ class AsyncOperationResult {
     }
 
     private suspend fun runInternal(): OperationResult<Base> = coroutineScope {
-        val dagStart = System.currentTimeMillis()
         val resolved = mutableMapOf<String, Deferred<List<Base>?>>()
         val failedTasks = ConcurrentHashMap<String, OperationOutcome>()
 
@@ -822,7 +823,6 @@ class AsyncOperationResult {
             resolved.getOrPut(node.key) {
                 async {
                     logger.debug("FHIRMason.async | task='{}' | status=STARTED", node.key)
-                    val taskStart = System.currentTimeMillis()
 
                     val depResults = mutableMapOf<String, List<Base>>()
                     var failedDep: String? = null
@@ -832,22 +832,25 @@ class AsyncOperationResult {
                         depResults[depKey] = depResult
                     }
 
-                    val taskResult: List<Base>? = if (failedDep != null) {
-                        failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
-                        null
-                    } else {
-                        try {
-                            node.block(depResults)
-                        } catch (e: BaseServerResponseException) {
-                            failedTasks[node.key] = e.toOperationOutcome()
+                    var taskResult: List<Base>? = null
+                    val taskDuration = measureTime {
+                        taskResult = if (failedDep != null) {
+                            failedTasks[node.key] = dependencyFailureOutcome(node.key, failedDep)
                             null
-                        } catch (e: Exception) {
-                            failedTasks[node.key] = e.toOperationOutcome()
-                            null
+                        } else {
+                            try {
+                                node.block(depResults)
+                            } catch (e: BaseServerResponseException) {
+                                failedTasks[node.key] = e.toOperationOutcome()
+                                null
+                            } catch (e: Exception) {
+                                failedTasks[node.key] = e.toOperationOutcome()
+                                null
+                            }
                         }
                     }
 
-                    val durationMs = System.currentTimeMillis() - taskStart
+                    val durationMs = taskDuration.inWholeMilliseconds
                     val success = taskResult != null
                     val resourceType = taskResult?.firstOrNull()?.fhirType() ?: ""
 
@@ -871,17 +874,18 @@ class AsyncOperationResult {
                 }
             }
 
-        nodes.values.forEach { launchNode(it) }
-
         val accumulator = mutableMapOf<String, MutableList<Base>>()
-        resolved.forEach { (key, deferred) ->
-            val taskResult = deferred.await()
-            if (taskResult != null) {
-                accumulator.getOrPut(key) { mutableListOf() }.addAll(taskResult)
+        val dagDuration = measureTime {
+            nodes.values.forEach { launchNode(it) }
+            resolved.forEach { (key, deferred) ->
+                val taskResult = deferred.await()
+                if (taskResult != null) {
+                    accumulator.getOrPut(key) { mutableListOf() }.addAll(taskResult)
+                }
             }
         }
 
-        totalDurationMs = System.currentTimeMillis() - dagStart
+        totalDurationMs = dagDuration.inWholeMilliseconds
         logger.debug(
             "FHIRMason.async | dag=COMPLETED | totalDuration={}ms | tasks={}",
             totalDurationMs, nodes.size
