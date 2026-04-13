@@ -152,6 +152,34 @@ class AsyncOperationResult {
         block(values)
     }
 
+    // ── Retry helper ─────────────────────────────────────────────────────────
+
+    /**
+     * Suspending analogue of `OperationResult.executeWithRetry`: calls [block] up to
+     * [maxAttempts] times with exponential backoff via [delay] between attempts.
+     * Returns the first successful result, or throws the last caught exception.
+     */
+    private suspend fun <R> suspendExecuteWithRetry(
+        maxAttempts: Int,
+        initialDelayMs: Long,
+        retryOn: (Exception) -> Boolean,
+        block: suspend () -> R
+    ): R {
+        var lastException: Exception? = null
+        var delayMs = initialDelayMs
+        for (attempt in 1..maxAttempts) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                lastException = e
+                if (!retryOn(e) || attempt == maxAttempts) break
+                delay(delayMs)
+                delayMs *= 2
+            }
+        }
+        throw lastException!!
+    }
+
     // ── Independent task with retry ──────────────────────────────────────────
 
     /**
@@ -186,21 +214,7 @@ class AsyncOperationResult {
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
         return also {
             registerNode(key, TaskNode.Independent(key) { _ ->
-                var lastException: Exception? = null
-                var delayMs = initialDelayMs
-                var result: List<Base>? = null
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        result = listOf(block())
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        delay(delayMs)
-                        delayMs *= 2
-                    }
-                }
-                result ?: throw lastException!!
+                listOf(suspendExecuteWithRetry(maxAttempts, initialDelayMs, retryOn) { block() })
             })
         }
     }
@@ -426,21 +440,7 @@ class AsyncOperationResult {
         requireNoCycle(key, depList)
         return also {
             registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
-                var lastException: Exception? = null
-                var delayMs = initialDelayMs
-                var result: List<Base>? = null
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        result = listOf(block(depResults))
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        delay(delayMs)
-                        delayMs *= 2
-                    }
-                }
-                result ?: throw lastException!!
+                listOf(suspendExecuteWithRetry(maxAttempts, initialDelayMs, retryOn) { block(depResults) })
             })
         }
     }
@@ -471,21 +471,7 @@ class AsyncOperationResult {
         requireNoCycle(key, depList)
         return also {
             registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
-                var lastException: Exception? = null
-                var delayMs = initialDelayMs
-                var result: List<Base>? = null
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        result = block(depResults)
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        delay(delayMs)
-                        delayMs *= 2
-                    }
-                }
-                result ?: throw lastException!!
+                suspendExecuteWithRetry(maxAttempts, initialDelayMs, retryOn) { block(depResults) }
             })
         }
     }
