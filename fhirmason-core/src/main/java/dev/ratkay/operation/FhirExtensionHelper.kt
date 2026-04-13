@@ -193,9 +193,7 @@ object FhirExtensionHelper {
         if (!visited.add(System.identityHashCode(node))) return
 
         if (node is IBaseHasExtensions) {
-            node.extension.filterIsInstance<Extension>()
-                .filter { it.url == url }
-                .forEach { results.add(it) }
+            results.addAll(node.extension.filterIsInstance<Extension>().filter { it.url == url })
         }
 
         for (property in node.children()) {

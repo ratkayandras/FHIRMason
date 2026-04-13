@@ -1,6 +1,5 @@
 package dev.ratkay.operation
 
-import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.BooleanType
@@ -165,13 +164,15 @@ class OperationResult<T> private constructor(
         block: () -> OperationResult<R>
     ): OperationResult<R> {
         if (shouldSkip()) return onSkip()
-        var caughtException: Exception? = null
-        val (stepResult, duration) = measureTimedValue {
-            try { block() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (result, duration) = measureTimedValue { runCatching { block() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) onError(caughtException!!, durationMs)
-               else stepResult!!
+        return result.fold(
+            onSuccess = { it },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                onError(t, durationMs)
+            }
+        )
     }
 
     private fun <R> runBuilderStep(name: String?, block: () -> OperationResult<R>): OperationResult<R> =
@@ -179,12 +180,7 @@ class OperationResult<T> private constructor(
             onSkip = { skippedResult() },
             onError = { e, durationMs ->
                 recordMetric(name ?: "unknown", "", durationMs, false)
-                outcomes.add(
-                    when (e) {
-                        is BaseServerResponseException -> e.toOperationOutcome()
-                        else -> e.toOperationOutcome()
-                    }
-                )
+                outcomes.add(errorOutcome(e))
                 skippedResult()
             },
             block = block
@@ -206,12 +202,7 @@ class OperationResult<T> private constructor(
             onError = { e, durationMs ->
                 logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
                 recordMetric(name, "", durationMs, false)
-                val outcome = when (e) {
-                    is BaseServerResponseException -> e.toOperationOutcome()
-                    else -> e.toOperationOutcome()
-                }
-                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-                outcomes.add(outcome)
+                outcomes.add(warningOutcome(e))
                 copyWith(result)
             },
             block = {
@@ -696,50 +687,86 @@ class OperationResult<T> private constructor(
 
     @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
-        var caughtException: Exception? = null
-        val (value, duration) = measureTimedValue {
-            try { builder() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            val key = name ?: "unknown"
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
-            recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(caughtException!!))
-            copyWith(result)
-        } else {
-            val key = name ?: value!!.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
-            recordMetric(key, value.fhirType(), durationMs, true)
-            logStep(key, value.fhirType(), durationMs)
-            copyWith(result)
-        }
+        return builderResult.fold(
+            onSuccess = { value ->
+                val key = name ?: value.fhirType().lowercase()
+                parameters.getOrPut(key) { mutableListOf() }.add(value)
+                recordMetric(key, value.fhirType(), durationMs, true)
+                logStep(key, value.fhirType(), durationMs)
+                copyWith(result)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                val key = name ?: "unknown"
+                logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
+                recordMetric(key, "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
+            }
+        )
     }
 
     @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
-        var caughtException: Exception? = null
-        val (value, duration) = measureTimedValue {
-            try { builder() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            val key = name ?: default.fhirType().lowercase()
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
-            recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(caughtException!!))
-            parameters.getOrPut(key) { mutableListOf() }.add(default)
-            copyWith(default)
-        } else {
-            val key = name ?: value!!.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
-            recordMetric(key, value.fhirType(), durationMs, true)
-            logStep(key, value.fhirType(), durationMs)
-            copyWith(value!!)
-        }
+        return builderResult.fold(
+            onSuccess = { value ->
+                val key = name ?: value.fhirType().lowercase()
+                parameters.getOrPut(key) { mutableListOf() }.add(value)
+                recordMetric(key, value.fhirType(), durationMs, true)
+                logStep(key, value.fhirType(), durationMs)
+                copyWith(value)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                val key = name ?: default.fhirType().lowercase()
+                logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
+                recordMetric(key, "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                parameters.getOrPut(key) { mutableListOf() }.add(default)
+                copyWith(default)
+            }
+        )
     }
 
     // ── Builder variant with retry ────────────────────────────────────────────
+
+    /**
+     * Executes [block] up to [maxAttempts] times with exponential backoff between retries.
+     * Returns the first successful result, or throws the last caught exception when all
+     * attempts are exhausted or [retryOn] returns `false`.
+     *
+     * Thread interruption during a sleep re-interrupts the thread and triggers an immediate throw.
+     */
+    private fun <R> executeWithRetry(
+        maxAttempts: Int,
+        initialDelayMs: Long,
+        retryOn: (Exception) -> Boolean,
+        block: () -> R
+    ): R {
+        var lastException: Exception? = null
+        var delayMs = initialDelayMs
+        for (attempt in 1..maxAttempts) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                lastException = e
+                if (!retryOn(e) || attempt == maxAttempts) break
+                try {
+                    Thread.sleep(delayMs)
+                } catch (i: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    lastException = i
+                    break
+                }
+                delayMs *= 2
+            }
+        }
+        throw lastException!!
+    }
 
     /**
      * Calls [builder] up to [maxAttempts] times, retrying on transient failures with
@@ -776,30 +803,10 @@ class OperationResult<T> private constructor(
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
         return runBuilderStep(name) {
-            var lastException: Exception? = null
-            var delayMs = initialDelayMs
-            var successValue: R? = null
-            val duration = measureTime {
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        successValue = builder()
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        try {
-                            Thread.sleep(delayMs)
-                        } catch (interrupted: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            lastException = interrupted
-                            break
-                        }
-                        delayMs *= 2
-                    }
-                }
+            val (value, duration) = measureTimedValue {
+                executeWithRetry(maxAttempts, initialDelayMs, retryOn) { builder() }
             }
-            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
-            else throw lastException!!
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -827,30 +834,10 @@ class OperationResult<T> private constructor(
             // IllegalStateException here — caught by runBuilderStep's outer try/catch
             // (Pattern A, one attempt), not inside the retry loop.
             val head = getResult()
-            var lastException: Exception? = null
-            var delayMs = initialDelayMs
-            var successValue: R? = null
-            val duration = measureTime {
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        successValue = builder(head)
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        try {
-                            Thread.sleep(delayMs)
-                        } catch (interrupted: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            lastException = interrupted
-                            break
-                        }
-                        delayMs *= 2
-                    }
-                }
+            val (value, duration) = measureTimedValue {
+                executeWithRetry(maxAttempts, initialDelayMs, retryOn) { builder(head) }
             }
-            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
-            else throw lastException!!
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -1091,9 +1078,7 @@ class OperationResult<T> private constructor(
 
     fun <R : Base> mapValues(transform: (Base) -> R): OperationResult<R> {
         val transformed = parameters.mapValues { (_, values) ->
-            val newList = mutableListOf<Base>()
-            values.forEach { newList.add(transform(it)) }
-            newList
+            values.map(transform).toMutableList<Base>()
         }.toMutableMap()
         return copyWith<R>(null, params = transformed)
     }
@@ -1166,10 +1151,7 @@ class OperationResult<T> private constructor(
      */
     fun rename(oldName: String, newName: String): OperationResult<T> {
         val newParams = shallowCopyParams()
-        val values = newParams.remove(oldName)
-        if (values != null) {
-            newParams.getOrPut(newName) { mutableListOf() }.addAll(values)
-        }
+        newParams.remove(oldName)?.let { newParams.getOrPut(newName) { mutableListOf() }.addAll(it) }
         return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
 
@@ -1200,30 +1182,26 @@ class OperationResult<T> private constructor(
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try { block(subPipeline) } catch (e: Exception) { caughtException = e; null }
-        }
+        val (innerResult, duration) = measureTimedValue { runCatching { block(subPipeline) } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            logger.warn("FHIRMason | step='whenTrue' | WARN: {}", caughtException!!.message)
-            recordMetric("whenTrue", "", durationMs, false)
-            val outcome = when (val ex = caughtException!!) {
-                is BaseServerResponseException -> ex.toOperationOutcome()
-                else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                val newParams = shallowCopyParams()
+                inner.parameters.forEach { (key, values) ->
+                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                }
+                outcomes.addAll(inner.outcomes)
+                recordMetric("whenTrue", "", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='whenTrue' | WARN: {}", t.message)
+                recordMetric("whenTrue", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
-        } else {
-            val newParams = shallowCopyParams()
-            inner!!.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            recordMetric("whenTrue", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        }
+        )
     }
 
     /**
@@ -1239,30 +1217,26 @@ class OperationResult<T> private constructor(
     fun ifPresent(block: (T) -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
         val current = result ?: return copyWith(result)
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try { block(current) } catch (e: Exception) { caughtException = e; null }
-        }
+        val (innerResult, duration) = measureTimedValue { runCatching { block(current) } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            logger.warn("FHIRMason | step='ifPresent' | WARN: {}", caughtException!!.message)
-            recordMetric("ifPresent", "", durationMs, false)
-            val outcome = when (val ex = caughtException!!) {
-                is BaseServerResponseException -> ex.toOperationOutcome()
-                else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                val newParams = shallowCopyParams()
+                inner.parameters.forEach { (key, values) ->
+                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                }
+                outcomes.addAll(inner.outcomes)
+                recordMetric("ifPresent", "", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='ifPresent' | WARN: {}", t.message)
+                recordMetric("ifPresent", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
-        } else {
-            val newParams = shallowCopyParams()
-            inner!!.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            recordMetric("ifPresent", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        }
+        )
     }
 
     /**
@@ -1316,37 +1290,35 @@ class OperationResult<T> private constructor(
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try {
+        val (innerResult, duration) = measureTimedValue {
+            runCatching {
                 if (!FhirPathHelper.matches(head, expression)) null
                 else block(subPipeline)
-            } catch (e: Exception) { caughtException = e; null }
+            }
         }
         val durationMs = duration.inWholeMilliseconds
-        return when {
-            caughtException != null -> {
-                logger.warn("FHIRMason | step='whenPath' | WARN: {}", caughtException!!.message)
-                recordMetric("whenPath", "", durationMs, false)
-                val outcome = when (val ex = caughtException!!) {
-                    is BaseServerResponseException -> ex.toOperationOutcome()
-                    else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                if (inner != null) {
+                    val newParams = shallowCopyParams()
+                    inner.parameters.forEach { (key, values) ->
+                        newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                    }
+                    outcomes.addAll(inner.outcomes)
+                    recordMetric("whenPath", "", durationMs, true)
+                    copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                } else {
+                    copyWith(result)  // expression evaluated to false
                 }
-                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-                outcomes.add(outcome)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='whenPath' | WARN: {}", t.message)
+                recordMetric("whenPath", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
                 copyWith(result)
             }
-            inner != null -> {
-                val newParams = shallowCopyParams()
-                inner.parameters.forEach { (key, values) ->
-                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-                }
-                outcomes.addAll(inner.outcomes)
-                recordMetric("whenPath", "", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-            }
-            else -> copyWith(result)  // expression evaluated to false
-        }
+        )
     }
 
     /**
@@ -1393,12 +1365,7 @@ class OperationResult<T> private constructor(
             }
         } catch (e: Exception) {
             logger.warn("FHIRMason | step='guardPath' | WARN: {}", e.message)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
-            }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
+            outcomes.add(warningOutcome(e))
             copyWith(result)
         }
     }
@@ -1602,15 +1569,9 @@ class OperationResult<T> private constructor(
     // Private helpers
 
     private fun addToParameters(values: List<Base>, name: String?) {
-        if (name != null) {
-            values.forEach { value ->
-                parameters.getOrPut(name) { mutableListOf() }.add(value)
-            }
-        } else {
-            values.forEach { value ->
-                val key = value.fhirType().lowercase()
-                parameters.getOrPut(key) { mutableListOf() }.add(value)
-            }
+        values.forEach { value ->
+            val key = name ?: value.fhirType().lowercase()
+            parameters.getOrPut(key) { mutableListOf() }.add(value)
         }
     }
 
