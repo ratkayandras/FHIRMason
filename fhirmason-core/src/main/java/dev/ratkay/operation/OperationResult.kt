@@ -1,6 +1,5 @@
 package dev.ratkay.operation
 
-import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.BooleanType
@@ -1188,30 +1187,26 @@ class OperationResult<T> private constructor(
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try { block(subPipeline) } catch (e: Exception) { caughtException = e; null }
-        }
+        val (innerResult, duration) = measureTimedValue { runCatching { block(subPipeline) } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            logger.warn("FHIRMason | step='whenTrue' | WARN: {}", caughtException!!.message)
-            recordMetric("whenTrue", "", durationMs, false)
-            val outcome = when (val ex = caughtException!!) {
-                is BaseServerResponseException -> ex.toOperationOutcome()
-                else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                val newParams = shallowCopyParams()
+                inner.parameters.forEach { (key, values) ->
+                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                }
+                outcomes.addAll(inner.outcomes)
+                recordMetric("whenTrue", "", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='whenTrue' | WARN: {}", t.message)
+                recordMetric("whenTrue", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
-        } else {
-            val newParams = shallowCopyParams()
-            inner!!.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            recordMetric("whenTrue", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        }
+        )
     }
 
     /**
@@ -1227,30 +1222,26 @@ class OperationResult<T> private constructor(
     fun ifPresent(block: (T) -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
         val current = result ?: return copyWith(result)
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try { block(current) } catch (e: Exception) { caughtException = e; null }
-        }
+        val (innerResult, duration) = measureTimedValue { runCatching { block(current) } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            logger.warn("FHIRMason | step='ifPresent' | WARN: {}", caughtException!!.message)
-            recordMetric("ifPresent", "", durationMs, false)
-            val outcome = when (val ex = caughtException!!) {
-                is BaseServerResponseException -> ex.toOperationOutcome()
-                else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                val newParams = shallowCopyParams()
+                inner.parameters.forEach { (key, values) ->
+                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                }
+                outcomes.addAll(inner.outcomes)
+                recordMetric("ifPresent", "", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='ifPresent' | WARN: {}", t.message)
+                recordMetric("ifPresent", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
             }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
-            copyWith(result)
-        } else {
-            val newParams = shallowCopyParams()
-            inner!!.parameters.forEach { (key, values) ->
-                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-            }
-            outcomes.addAll(inner.outcomes)
-            recordMetric("ifPresent", "", durationMs, true)
-            copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-        }
+        )
     }
 
     /**
@@ -1304,37 +1295,35 @@ class OperationResult<T> private constructor(
         val subPipeline = OperationResult<T>(
             mutableMapOf(), result, mutableListOf(), errorStrategy, mutableMapOf(), timingEnabled, mutableListOf()
         )
-        var caughtException: Exception? = null
-        val (inner, duration) = measureTimedValue {
-            try {
+        val (innerResult, duration) = measureTimedValue {
+            runCatching {
                 if (!FhirPathHelper.matches(head, expression)) null
                 else block(subPipeline)
-            } catch (e: Exception) { caughtException = e; null }
+            }
         }
         val durationMs = duration.inWholeMilliseconds
-        return when {
-            caughtException != null -> {
-                logger.warn("FHIRMason | step='whenPath' | WARN: {}", caughtException!!.message)
-                recordMetric("whenPath", "", durationMs, false)
-                val outcome = when (val ex = caughtException!!) {
-                    is BaseServerResponseException -> ex.toOperationOutcome()
-                    else -> ex.toOperationOutcome()
+        return innerResult.fold(
+            onSuccess = { inner ->
+                if (inner != null) {
+                    val newParams = shallowCopyParams()
+                    inner.parameters.forEach { (key, values) ->
+                        newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+                    }
+                    outcomes.addAll(inner.outcomes)
+                    recordMetric("whenPath", "", durationMs, true)
+                    copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                } else {
+                    copyWith(result)  // expression evaluated to false
                 }
-                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-                outcomes.add(outcome)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='whenPath' | WARN: {}", t.message)
+                recordMetric("whenPath", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
                 copyWith(result)
             }
-            inner != null -> {
-                val newParams = shallowCopyParams()
-                inner.parameters.forEach { (key, values) ->
-                    newParams.getOrPut(key) { mutableListOf() }.addAll(values)
-                }
-                outcomes.addAll(inner.outcomes)
-                recordMetric("whenPath", "", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
-            }
-            else -> copyWith(result)  // expression evaluated to false
-        }
+        )
     }
 
     /**
@@ -1381,12 +1370,7 @@ class OperationResult<T> private constructor(
             }
         } catch (e: Exception) {
             logger.warn("FHIRMason | step='guardPath' | WARN: {}", e.message)
-            val outcome = when (e) {
-                is BaseServerResponseException -> e.toOperationOutcome()
-                else -> e.toOperationOutcome()
-            }
-            outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-            outcomes.add(outcome)
+            outcomes.add(warningOutcome(e))
             copyWith(result)
         }
     }
