@@ -736,6 +736,40 @@ class OperationResult<T> private constructor(
     // ── Builder variant with retry ────────────────────────────────────────────
 
     /**
+     * Executes [block] up to [maxAttempts] times with exponential backoff between retries.
+     * Returns the first successful result, or throws the last caught exception when all
+     * attempts are exhausted or [retryOn] returns `false`.
+     *
+     * Thread interruption during a sleep re-interrupts the thread and triggers an immediate throw.
+     */
+    private fun <R> executeWithRetry(
+        maxAttempts: Int,
+        initialDelayMs: Long,
+        retryOn: (Exception) -> Boolean,
+        block: () -> R
+    ): R {
+        var lastException: Exception? = null
+        var delayMs = initialDelayMs
+        for (attempt in 1..maxAttempts) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                lastException = e
+                if (!retryOn(e) || attempt == maxAttempts) break
+                try {
+                    Thread.sleep(delayMs)
+                } catch (i: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    lastException = i
+                    break
+                }
+                delayMs *= 2
+            }
+        }
+        throw lastException!!
+    }
+
+    /**
      * Calls [builder] up to [maxAttempts] times, retrying on transient failures with
      * exponential backoff between attempts.
      *
@@ -770,30 +804,10 @@ class OperationResult<T> private constructor(
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
         return runBuilderStep(name) {
-            var lastException: Exception? = null
-            var delayMs = initialDelayMs
-            var successValue: R? = null
-            val duration = measureTime {
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        successValue = builder()
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        try {
-                            Thread.sleep(delayMs)
-                        } catch (interrupted: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            lastException = interrupted
-                            break
-                        }
-                        delayMs *= 2
-                    }
-                }
+            val (value, duration) = measureTimedValue {
+                executeWithRetry(maxAttempts, initialDelayMs, retryOn) { builder() }
             }
-            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
-            else throw lastException!!
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
     }
 
@@ -821,30 +835,10 @@ class OperationResult<T> private constructor(
             // IllegalStateException here — caught by runBuilderStep's outer try/catch
             // (Pattern A, one attempt), not inside the retry loop.
             val head = getResult()
-            var lastException: Exception? = null
-            var delayMs = initialDelayMs
-            var successValue: R? = null
-            val duration = measureTime {
-                for (attempt in 1..maxAttempts) {
-                    try {
-                        successValue = builder(head)
-                        break
-                    } catch (e: Exception) {
-                        lastException = e
-                        if (!retryOn(e) || attempt == maxAttempts) break
-                        try {
-                            Thread.sleep(delayMs)
-                        } catch (interrupted: InterruptedException) {
-                            Thread.currentThread().interrupt()
-                            lastException = interrupted
-                            break
-                        }
-                        delayMs *= 2
-                    }
-                }
+            val (value, duration) = measureTimedValue {
+                executeWithRetry(maxAttempts, initialDelayMs, retryOn) { builder(head) }
             }
-            if (successValue != null) storeAndCopy(name, successValue!!, duration.inWholeMilliseconds)
-            else throw lastException!!
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
     }
 
