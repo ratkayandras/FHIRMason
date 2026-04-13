@@ -165,13 +165,15 @@ class OperationResult<T> private constructor(
         block: () -> OperationResult<R>
     ): OperationResult<R> {
         if (shouldSkip()) return onSkip()
-        var caughtException: Exception? = null
-        val (stepResult, duration) = measureTimedValue {
-            try { block() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (result, duration) = measureTimedValue { runCatching { block() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) onError(caughtException!!, durationMs)
-               else stepResult!!
+        return result.fold(
+            onSuccess = { it },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                onError(t, durationMs)
+            }
+        )
     }
 
     private fun <R> runBuilderStep(name: String?, block: () -> OperationResult<R>): OperationResult<R> =
@@ -179,12 +181,7 @@ class OperationResult<T> private constructor(
             onSkip = { skippedResult() },
             onError = { e, durationMs ->
                 recordMetric(name ?: "unknown", "", durationMs, false)
-                outcomes.add(
-                    when (e) {
-                        is BaseServerResponseException -> e.toOperationOutcome()
-                        else -> e.toOperationOutcome()
-                    }
-                )
+                outcomes.add(errorOutcome(e))
                 skippedResult()
             },
             block = block
@@ -206,12 +203,7 @@ class OperationResult<T> private constructor(
             onError = { e, durationMs ->
                 logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
                 recordMetric(name, "", durationMs, false)
-                val outcome = when (e) {
-                    is BaseServerResponseException -> e.toOperationOutcome()
-                    else -> e.toOperationOutcome()
-                }
-                outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-                outcomes.add(outcome)
+                outcomes.add(warningOutcome(e))
                 copyWith(result)
             },
             block = {
