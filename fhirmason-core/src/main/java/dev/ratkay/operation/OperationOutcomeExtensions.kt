@@ -22,17 +22,29 @@ fun BaseServerResponseException.toOperationOutcome(): OperationOutcome =
     (operationOutcome as? OperationOutcome) ?: (this as Exception).toOperationOutcome()
 
 /**
+ * Dispatches to the correct [toOperationOutcome] overload — preserving the embedded
+ * [OperationOutcome] from [BaseServerResponseException] when present, or creating a
+ * generic ERROR outcome otherwise.
+ *
+ * Both branches look visually identical but call **different** extension function overloads
+ * via Kotlin's static dispatch: the smart-cast in the first branch resolves to
+ * [BaseServerResponseException.toOperationOutcome], while the `else` branch resolves to
+ * [Exception.toOperationOutcome]. This consolidates the dispatch in one place so callers
+ * never need to repeat the `when` pattern inline.
+ */
+internal fun errorOutcome(e: Exception): OperationOutcome = when (e) {
+    is BaseServerResponseException -> e.toOperationOutcome()
+    else -> e.toOperationOutcome()
+}
+
+/**
  * Builds a WARNING-severity [OperationOutcome] from [e], preserving any rich embedded
  * outcome when [e] is a [BaseServerResponseException].
  *
  * Shared by [OperationResult.addOrSkip], [OperationResult.addOrDefault], and the
  * conditional-chaining methods — do not duplicate this logic inline.
  */
-internal fun warningOutcome(e: Exception): OperationOutcome {
-    val base = when (e) {
-        is BaseServerResponseException -> e.toOperationOutcome()
-        else -> e.toOperationOutcome()
+internal fun warningOutcome(e: Exception): OperationOutcome =
+    errorOutcome(e).also { outcome ->
+        outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
     }
-    base.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
-    return base
-}
