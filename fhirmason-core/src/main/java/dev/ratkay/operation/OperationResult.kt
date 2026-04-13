@@ -1078,9 +1078,7 @@ class OperationResult<T> private constructor(
 
     fun <R : Base> mapValues(transform: (Base) -> R): OperationResult<R> {
         val transformed = parameters.mapValues { (_, values) ->
-            val newList = mutableListOf<Base>()
-            values.forEach { newList.add(transform(it)) }
-            newList
+            values.map(transform).toMutableList<Base>()
         }.toMutableMap()
         return copyWith<R>(null, params = transformed)
     }
@@ -1153,10 +1151,7 @@ class OperationResult<T> private constructor(
      */
     fun rename(oldName: String, newName: String): OperationResult<T> {
         val newParams = shallowCopyParams()
-        val values = newParams.remove(oldName)
-        if (values != null) {
-            newParams.getOrPut(newName) { mutableListOf() }.addAll(values)
-        }
+        newParams.remove(oldName)?.let { newParams.getOrPut(newName) { mutableListOf() }.addAll(it) }
         return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
 
@@ -1574,15 +1569,9 @@ class OperationResult<T> private constructor(
     // Private helpers
 
     private fun addToParameters(values: List<Base>, name: String?) {
-        if (name != null) {
-            values.forEach { value ->
-                parameters.getOrPut(name) { mutableListOf() }.add(value)
-            }
-        } else {
-            values.forEach { value ->
-                val key = value.fhirType().lowercase()
-                parameters.getOrPut(key) { mutableListOf() }.add(value)
-            }
+        values.forEach { value ->
+            val key = name ?: value.fhirType().lowercase()
+            parameters.getOrPut(key) { mutableListOf() }.add(value)
         }
     }
 
