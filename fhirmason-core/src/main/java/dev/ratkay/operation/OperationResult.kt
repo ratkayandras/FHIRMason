@@ -688,47 +688,49 @@ class OperationResult<T> private constructor(
 
     @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
-        var caughtException: Exception? = null
-        val (value, duration) = measureTimedValue {
-            try { builder() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            val key = name ?: "unknown"
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
-            recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(caughtException!!))
-            copyWith(result)
-        } else {
-            val key = name ?: value!!.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
-            recordMetric(key, value.fhirType(), durationMs, true)
-            logStep(key, value.fhirType(), durationMs)
-            copyWith(result)
-        }
+        return builderResult.fold(
+            onSuccess = { value ->
+                val key = name ?: value.fhirType().lowercase()
+                parameters.getOrPut(key) { mutableListOf() }.add(value)
+                recordMetric(key, value.fhirType(), durationMs, true)
+                logStep(key, value.fhirType(), durationMs)
+                copyWith(result)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                val key = name ?: "unknown"
+                logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
+                recordMetric(key, "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
+            }
+        )
     }
 
     @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
-        var caughtException: Exception? = null
-        val (value, duration) = measureTimedValue {
-            try { builder() } catch (e: Exception) { caughtException = e; null }
-        }
+        val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
-        return if (caughtException != null) {
-            val key = name ?: default.fhirType().lowercase()
-            logger.warn("FHIRMason | step='{}' | WARN: {}", key, caughtException!!.message)
-            recordMetric(key, "", durationMs, false)
-            outcomes.add(warningOutcome(caughtException!!))
-            parameters.getOrPut(key) { mutableListOf() }.add(default)
-            copyWith(default)
-        } else {
-            val key = name ?: value!!.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value!!)
-            recordMetric(key, value.fhirType(), durationMs, true)
-            logStep(key, value.fhirType(), durationMs)
-            copyWith(value!!)
-        }
+        return builderResult.fold(
+            onSuccess = { value ->
+                val key = name ?: value.fhirType().lowercase()
+                parameters.getOrPut(key) { mutableListOf() }.add(value)
+                recordMetric(key, value.fhirType(), durationMs, true)
+                logStep(key, value.fhirType(), durationMs)
+                copyWith(value)
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                val key = name ?: default.fhirType().lowercase()
+                logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
+                recordMetric(key, "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                parameters.getOrPut(key) { mutableListOf() }.add(default)
+                copyWith(default)
+            }
+        )
     }
 
     // ── Builder variant with retry ────────────────────────────────────────────
