@@ -11,7 +11,7 @@ A Kotlin library that provides a fluent, chainable API for accumulating and tran
 
 Add the module for your FHIR version to your Maven project:
 
-**FHIR R4** (`dev.ratkay.operation.OperationResult`):
+**FHIR R4** (`dev.ratkay.operation.r4.OperationResult`):
 
 ```xml
 <dependency>
@@ -411,7 +411,7 @@ Not every subclass is valid for every FHIR primitive type. Unsupported combinati
 
 #### FhirDateTimeConverter
 
-`FhirDateTimeConverter` is a public Kotlin `object` in `dev.ratkay.operation` that maps common Java/Kotlin date-time types to their HAPI FHIR R4 equivalents. All functions are pure and stateless — they can be used directly without an `OperationResult` pipeline.
+`FhirDateTimeConverter` is a public Kotlin `object` in `dev.ratkay.operation.r4` that maps common Java/Kotlin date-time types to their HAPI FHIR R4 equivalents. All functions are pure and stateless — they can be used directly without an `OperationResult` pipeline.
 
 Each typed overload converts directly; `DateTimeInput`-accepting overloads dispatch to the correct typed converter based on the wrapped subclass.
 
@@ -429,7 +429,7 @@ Each typed overload converts directly; `DateTimeInput`-accepting overloads dispa
 - `Instant` / `java.util.Date` → converted to milliseconds, HAPI renders as UTC; `toFhirDateTime(Instant)` is UTC dateTime, `toFhirInstant(Instant)` is UTC instant
 
 ```kotlin
-import dev.ratkay.operation.FhirDateTimeConverter
+import dev.ratkay.operation.r4.FhirDateTimeConverter
 
 // Standalone usage
 val fhirDate    = FhirDateTimeConverter.toFhirDate(LocalDate.of(1990, 6, 15))   // DateType "1990-06-15"
@@ -455,7 +455,7 @@ val result2 = OperationResult.of(patient)
 
 #### FhirExtensionHelper
 
-`FhirExtensionHelper` is a public Kotlin `object` in `dev.ratkay.operation` for retrieving FHIR extensions from any object that can carry them. All methods search **at every level** of the FHIR object graph — not just the top-level `.extension` list of the source — by recursively traversing FHIR child elements.
+`FhirExtensionHelper` is a public Kotlin `object` in `dev.ratkay.operation.r4` for retrieving FHIR extensions from any object that can carry them. All methods search **at every level** of the FHIR object graph — not just the top-level `.extension` list of the source — by recursively traversing FHIR child elements.
 
 Any object implementing `IBaseHasExtensions` is a valid source: FHIR resources (`Patient`, `Observation`, …), all primitive types (`StringType`, `BooleanType`, …), all complex datatypes (`Coding`, `Reference`, …), and `Extension` itself (for nested sub-extensions).
 
@@ -478,7 +478,7 @@ Each retrieval method has two flavours:
 | `getAllNested(source, url, nestedUrl)` | `List<Extension>` | All nested sub-extensions at any depth |
 
 ```kotlin
-import dev.ratkay.operation.FhirExtensionHelper
+import dev.ratkay.operation.r4.FhirExtensionHelper
 
 val patient = Patient().apply {
     // Extension lives on the nested HumanName element, not on Patient directly
@@ -1535,7 +1535,7 @@ fhirmason-api/
 
 fhirmason-r4/
 └── src/
-    ├── main/java/dev/ratkay/operation/
+    ├── main/java/dev/ratkay/operation/r4/
     │   ├── OperationResult.kt              # Synchronous accumulator builder (R4)
     │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
     │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
@@ -1545,7 +1545,7 @@ fhirmason-r4/
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
-    └── test/java/dev/ratkay/operation/
+    └── test/java/dev/ratkay/operation/r4/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
         ├── OperationResultLinkReferencesTest.kt
