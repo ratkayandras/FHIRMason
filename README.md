@@ -1582,7 +1582,18 @@ fhirmason-dstu3/
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
     └── test/java/dev/ratkay/operation/dstu3/
-        └── OperationResultTest.kt
+        ├── OperationResultTest.kt
+        ├── OperationResultFromTest.kt
+        ├── OperationResultLinkReferencesTest.kt
+        ├── OperationResultMetricsTest.kt
+        ├── OperationResultConditionalTest.kt
+        ├── OperationResultMapHeadTest.kt
+        ├── OperationResultFhirErrorHandlingTest.kt
+        ├── OperationResultRetryTest.kt
+        ├── OperationResultFhirPathTest.kt
+        ├── OperationResultComplexTest.kt
+        ├── FhirDateTimeConverterTest.kt
+        └── FhirExtensionHelperTest.kt
 
 fhirmason-spring/
 └── src/

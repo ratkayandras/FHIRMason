@@ -37,6 +37,12 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
         </dependency>
+        <!-- UCUM units library required by DSTU3 FhirPath engine at runtime -->
+        <dependency>
+            <groupId>org.fhir</groupId>
+            <artifactId>ucum</artifactId>
+            <version>1.0.8</version>
+        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
