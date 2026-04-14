@@ -10,13 +10,17 @@
         <version>0.0.1</version>
     </parent>
 
-    <artifactId>fhirmason-core</artifactId>
+    <artifactId>fhirmason-r4</artifactId>
     <packaging>jar</packaging>
 
-    <name>FHIRMason Core</name>
-    <description>Core builder API for accumulating and transforming FHIR R4 resources using a fluent chainable API.</description>
+    <name>FHIRMason R4</name>
+    <description>FHIR R4 builder API for accumulating and transforming resources using a fluent chainable API.</description>
 
     <dependencies>
+        <dependency>
+            <groupId>dev.ratkay</groupId>
+            <artifactId>fhirmason-api</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>
