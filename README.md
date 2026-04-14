@@ -3,7 +3,43 @@
 <img width="1371" height="380" alt="image" src="https://github.com/user-attachments/assets/5f1a7844-004c-4197-8f2d-fd263308fc64" />
 
 
-A Kotlin library that provides a fluent, chainable API for accumulating and transforming [FHIR R4](https://hl7.org/fhir/R4/) resources. FHIRMason wraps FHIR `Base` objects in an `OperationResult` builder, enabling composable pipelines that collect named resources into a shared parameter map.
+A Kotlin library that provides a fluent, chainable API for accumulating and transforming FHIR resources. FHIRMason wraps FHIR `Base` objects in an `OperationResult` builder, enabling composable pipelines that collect named resources into a shared parameter map. Both [FHIR R4](https://hl7.org/fhir/R4/) and [DSTU3](https://hl7.org/fhir/STU3/) are supported.
+
+---
+
+## Getting Started
+
+Add the module for your FHIR version to your Maven project:
+
+**FHIR R4** (`dev.ratkay.operation.OperationResult`):
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-r4</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+**FHIR DSTU3** (`dev.ratkay.operation.dstu3.OperationResult`):
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-dstu3</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+**Spring Boot auto-configuration** (wires a `FhirMasonFactory` bean automatically):
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-spring</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
 
 ---
 
