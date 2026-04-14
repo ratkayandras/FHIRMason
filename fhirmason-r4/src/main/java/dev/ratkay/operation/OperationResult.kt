@@ -72,13 +72,13 @@ class OperationResult<T> private constructor(
     private val timingEnabled: Boolean = false,
     private val metrics: MutableList<StepMetrics> = mutableListOf(),
     private val extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = mutableMapOf()
-) {
+) : IOperationResult<T> {
 
     // Error state
 
-    fun hasErrors(): Boolean = outcomes.isNotEmpty()
+    override fun hasErrors(): Boolean = outcomes.isNotEmpty()
 
-    fun isSuccessful(): Boolean = outcomes.isEmpty()
+    override fun isSuccessful(): Boolean = outcomes.isEmpty()
 
     fun getOutcomes(): List<OperationOutcome> = outcomes.toList()
 
@@ -96,7 +96,7 @@ class OperationResult<T> private constructor(
         }
     }
 
-    fun throwIfErrors(): OperationResult<T> {
+    override fun throwIfErrors(): OperationResult<T> {
         if (hasErrors()) {
             val outcome = toOperationOutcome()
             val message = outcome.issue.firstOrNull()?.diagnostics ?: "Pipeline completed with errors"
@@ -132,10 +132,10 @@ class OperationResult<T> private constructor(
      * Enables per-step metrics collection for subsequent pipeline steps.
      * When disabled (the default), [getMetrics] returns an empty list.
      */
-    fun timed(): OperationResult<T> = copyWith(result, timingEnabled = true)
+    override fun timed(): OperationResult<T> = copyWith(result, timingEnabled = true)
 
     /** Returns a snapshot of [StepMetrics] collected so far. Empty when [timed] was not called. */
-    fun getMetrics(): List<StepMetrics> = metrics.toList()
+    override fun getMetrics(): List<StepMetrics> = metrics.toList()
 
     // Private logging/metrics helpers
 
@@ -1030,22 +1030,22 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> getByType(): List<R> = getByType(R::class)
 
-    fun containsKey(name: String): Boolean =
+    override fun containsKey(name: String): Boolean =
         parameters.containsKey(name)
 
-    fun getKeys(): Set<String> =
+    override fun getKeys(): Set<String> =
         parameters.keys.toSet()
 
-    fun count(name: String): Int =
+    override fun count(name: String): Int =
         parameters[name]?.size ?: 0
 
-    fun totalCount(): Int =
+    override fun totalCount(): Int =
         parameters.values.sumOf { it.size }
 
-    fun isEmpty(): Boolean =
+    override fun isEmpty(): Boolean =
         parameters.isEmpty()
 
-    fun isNotEmpty(): Boolean =
+    override fun isNotEmpty(): Boolean =
         !isEmpty()
 
     // Functional transformations
