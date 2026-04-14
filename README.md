@@ -1458,7 +1458,7 @@ suspend fun buildOutput(): Parameters {
 | | |
 |---|---|
 | Language | Kotlin 2.1.21 (JVM 11) |
-| FHIR | HAPI FHIR 7.6.1 (R4) |
+| FHIR | HAPI FHIR 7.6.1 (R4 and DSTU3) |
 | Async | Kotlin Coroutines 1.10.2 |
 | Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
 | Spring Boot | 2.7.18 (optional — `fhirmason-spring` module) |
@@ -1471,7 +1471,9 @@ suspend fun buildOutput(): Parameters {
 
 | Module | Artifact ID | Description |
 |---|---|---|
-| `fhirmason-core` | `fhirmason-core` | Core pipeline builders — no Spring dependency |
+| `fhirmason-api` | `fhirmason-api` | Shared building blocks: `IOperationResult<T>`, `ErrorStrategy`, `StepMetrics`, `DateTimeInput` |
+| `fhirmason-r4` | `fhirmason-r4` | R4 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
+| `fhirmason-dstu3` | `fhirmason-dstu3` | DSTU3 pipeline builder (`OperationResult`) |
 | `fhirmason-spring` | `fhirmason-spring` | Spring Boot auto-configuration and base provider class |
 
 ---
@@ -1488,19 +1490,24 @@ mvn clean install       # build, test, and install to local repo
 ## Project Structure
 
 ```
-fhirmason-core/
+fhirmason-api/
+└── src/main/java/dev/ratkay/operation/
+    ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
+    ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+    ├── StepMetrics.kt                  # Per-step timing and outcome data
+    └── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
+
+fhirmason-r4/
 └── src/
     ├── main/java/dev/ratkay/operation/
-    │   ├── OperationResult.kt              # Synchronous accumulator builder
+    │   ├── OperationResult.kt              # Synchronous accumulator builder (R4)
     │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder
-    │   ├── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
     │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
     │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
     │   ├── ReferenceLinkHelper.kt          # Reference linking algorithm helpers (internal)
-    │   ├── StepMetrics.kt                  # Per-step timing and outcome data
-    │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-    │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR type converter
+    │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR R4 type converter
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
+    │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
     └── test/java/dev/ratkay/operation/
         ├── OperationResultTest.kt
@@ -1526,6 +1533,20 @@ fhirmason-core/
         ├── AsyncOperationResultComplexTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
+
+fhirmason-dstu3/
+└── src/
+    ├── main/java/dev/ratkay/operation/dstu3/
+    │   ├── OperationResult.kt              # Synchronous accumulator builder (DSTU3)
+    │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
+    │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
+    │   ├── ReferenceLinkHelper.kt          # Reference linking algorithm helpers (internal)
+    │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR DSTU3 type converter
+    │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
+    │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
+    │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
+    └── test/java/dev/ratkay/operation/dstu3/
+        └── OperationResultTest.kt
 
 fhirmason-spring/
 └── src/
@@ -1707,12 +1728,38 @@ result.addWithRetry(() -> fetchPatientFromServer())
 
 ---
 
-## Core Artifact
+## Artifacts
+
+### FHIR R4
 
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-core</artifactId>
+    <artifactId>fhirmason-r4</artifactId>
     <version>0.0.1</version>
 </dependency>
+```
+
+### FHIR DSTU3
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-dstu3</artifactId>
+    <version>0.0.1</version>
+</dependency>
+```
+
+DSTU3 `OperationResult` lives in package `dev.ratkay.operation.dstu3` and mirrors the R4 API with one exception: `addCanonical` and `addCanonicalUsing` are omitted because `CanonicalType` does not exist in DSTU3.
+
+### Version-agnostic code
+
+Both `OperationResult` variants implement `IOperationResult<T>` from the `fhirmason-api` module, which is a transitive dependency of both `fhirmason-r4` and `fhirmason-dstu3`. Code that only needs to inspect error state, metrics, or key/count information can accept `IOperationResult<*>` without importing a version-specific module:
+
+```kotlin
+import dev.ratkay.operation.IOperationResult
+
+fun validate(result: IOperationResult<*>) {
+    if (result.hasErrors()) result.throwIfErrors()
+}
 ```
