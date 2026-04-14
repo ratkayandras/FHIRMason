@@ -1,7 +1,7 @@
 package dev.ratkay.spring
 
-import dev.ratkay.operation.AsyncOperationResult
-import dev.ratkay.operation.OperationResult
+import dev.ratkay.operation.r4.AsyncOperationResult
+import dev.ratkay.operation.r4.OperationResult
 import org.hl7.fhir.r4.model.Base
 
 /**
