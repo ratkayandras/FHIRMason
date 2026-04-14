@@ -36,7 +36,9 @@
     </scm>
 
     <modules>
-        <module>fhirmason-core</module>
+        <module>fhirmason-api</module>
+        <module>fhirmason-r4</module>
+        <module>fhirmason-dstu3</module>
         <module>fhirmason-spring</module>
     </modules>
 
@@ -73,6 +75,11 @@
             <dependency>
                 <groupId>ca.uhn.hapi.fhir</groupId>
                 <artifactId>hapi-fhir-structures-r4</artifactId>
+                <version>${hapi.fhir.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ca.uhn.hapi.fhir</groupId>
+                <artifactId>hapi-fhir-structures-dstu3</artifactId>
                 <version>${hapi.fhir.version}</version>
             </dependency>
             <dependency>
@@ -143,7 +150,12 @@
             <!-- Internal modules -->
             <dependency>
                 <groupId>dev.ratkay</groupId>
-                <artifactId>fhirmason-core</artifactId>
+                <artifactId>fhirmason-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.ratkay</groupId>
+                <artifactId>fhirmason-r4</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
