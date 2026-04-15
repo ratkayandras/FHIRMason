@@ -1509,7 +1509,7 @@ suspend fun buildOutput(): Parameters {
 |---|---|---|
 | `fhirmason-api` | `fhirmason-api` | Shared building blocks: `IOperationResult<T>`, `ErrorStrategy`, `StepMetrics`, `DateTimeInput` |
 | `fhirmason-r4` | `fhirmason-r4` | R4 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
-| `fhirmason-dstu3` | `fhirmason-dstu3` | DSTU3 pipeline builder (`OperationResult`) |
+| `fhirmason-dstu3` | `fhirmason-dstu3` | DSTU3 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
 | `fhirmason-spring` | `fhirmason-spring` | Spring Boot auto-configuration and base provider class |
 
 ---
@@ -1574,6 +1574,7 @@ fhirmason-dstu3/
 └── src/
     ├── main/java/dev/ratkay/operation/dstu3/
     │   ├── OperationResult.kt              # Synchronous accumulator builder (DSTU3)
+    │   ├── AsyncOperationResult.kt         # Async/coroutine DAG-based builder (DSTU3)
     │   ├── ParameterMapSerializer.kt       # Dot-delimited key flatten / unflatten logic
     │   ├── ReferenceLinkRule.kt            # Explicit reference linking rule descriptor
     │   ├── ReferenceLinkHelper.kt          # Reference linking algorithm helpers (internal)
@@ -1592,6 +1593,18 @@ fhirmason-dstu3/
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
         ├── OperationResultComplexTest.kt
+        ├── AsyncOperationResultTest.kt
+        ├── AsyncOperationResultMetricsTest.kt
+        ├── AsyncOperationResultDescribeTest.kt
+        ├── AsyncOperationResultRetryTest.kt
+        ├── AsyncOperationResultDependentRetryTest.kt
+        ├── AsyncOperationResultMergeTest.kt
+        ├── AsyncOperationResultTimeoutTest.kt
+        ├── AsyncOperationResultDagTimeoutTest.kt
+        ├── AsyncOperationResultConditionalTest.kt
+        ├── AsyncOperationResultDefaultTest.kt
+        ├── AsyncOperationResultComplexTest.kt
+        ├── AsyncOperationResultTypedDepOverloadsTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
