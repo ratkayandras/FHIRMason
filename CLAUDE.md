@@ -125,6 +125,19 @@ Run the full test suite (`mvn test`) before every commit **and** before every pu
 - Fix every failure, even if it appears unrelated to your changes, before committing or pushing.
 - A commit that introduces or leaves a failing test is a policy violation regardless of intent.
 
+## DSTU3 Porting Policy
+
+FHIRMason supports both FHIR R4 (the primary version) and FHIR DSTU3.
+
+**R4 has priority.** All new features are designed and implemented for R4 first.
+
+**New features must be ported to DSTU3 unless impossible.** After a feature is complete and tested in R4, port it to the DSTU3 module with equivalent source and test files. A feature may be skipped for DSTU3 only if it relies on R4-exclusive FHIR constructs (e.g., a resource type or element that does not exist in DSTU3). Document any such exception in the PR or commit message.
+
+Port checklist:
+- Mirror the DSTU3 source file (change package, swap `org.hl7.fhir.r4.model.*` → `org.hl7.fhir.dstu3.model.*`, adjust any DSTU3-specific API differences)
+- Mirror all R4 test files for the feature in the DSTU3 test directory, adapting resource types and imports
+- Ensure all DSTU3 tests pass before committing
+
 ## README Maintenance
 
 Keep `README.md` up to date on every branch. When a branch adds or changes a feature, update the relevant section(s) of the README before committing:
