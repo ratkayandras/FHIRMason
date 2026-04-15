@@ -7,6 +7,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -76,10 +77,13 @@ class AsyncOperationResult {
     /**
      * Sets the [java.util.concurrent.Executor] used to run all tasks in this DAG.
      *
-     * By default no executor is set and tasks inherit the dispatcher of the calling coroutine.
-     * Set an executor to pin tasks to a specific thread pool — for example, use
-     * [java.util.concurrent.Executors.newFixedThreadPool] for a bounded I/O pool, or pass
-     * [kotlinx.coroutines.Dispatchers.IO] directly (it implements [java.util.concurrent.Executor]).
+     * When not called, [run] defaults to [kotlinx.coroutines.Dispatchers.IO], which keeps
+     * up to 64 threads available for blocking HAPI FHIR client calls so independent tasks
+     * execute in parallel regardless of how [run] or [runBlocking] is invoked.
+     *
+     * Pass a custom executor to override the thread pool — for example, use
+     * [java.util.concurrent.Executors.newFixedThreadPool] for a bounded pool, or pass
+     * [kotlinx.coroutines.Dispatchers.IO] explicitly to make the choice visible at the call site.
      *
      * @param executor the executor that all DAG tasks will run on
      */
@@ -809,7 +813,7 @@ class AsyncOperationResult {
      * `TIMEOUT`-coded [OperationOutcome] is returned with no task results.
      */
     suspend fun run(): OperationResult<Base> {
-        val ctx = executor?.asCoroutineDispatcher()
+        val ctx = executor?.asCoroutineDispatcher() ?: Dispatchers.IO
         val execute: suspend () -> OperationResult<Base> = {
             val t = dagTimeoutMs
             if (t != null) {
@@ -822,7 +826,7 @@ class AsyncOperationResult {
                 runInternal()
             }
         }
-        return if (ctx != null) withContext(ctx) { execute() } else execute()
+        return withContext(ctx) { execute() }
     }
 
     private suspend fun runInternal(): OperationResult<Base> = coroutineScope {

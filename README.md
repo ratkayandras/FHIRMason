@@ -1244,19 +1244,18 @@ Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the dur
 
 ### Executor / Thread Pool
 
-By default, DAG tasks inherit the dispatcher of the calling coroutine. Call `withExecutor(Executor)` to pin all tasks to a specific thread pool.
+By default, `run()` and `runBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `runBlocking()`.
 
-`withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller. From Kotlin, `CoroutineDispatcher` implements `Executor`, so you can pass `Dispatchers.IO` directly.
+Call `withExecutor(Executor)` to replace the default with a custom thread pool. `withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller.
 
 ```kotlin
-// Kotlin — use the shared IO dispatcher for FHIR client calls
+// Default — Dispatchers.IO is used automatically; no withExecutor needed
 val result = AsyncOperationResult()
-    .withExecutor(Dispatchers.IO)
-    .add("patient") { fhirClient.fetchPatient(id) }
-    .add("coverage") { fhirClient.fetchCoverage(id) }
+    .add("patient") { fhirClient.fetchPatient(id) }   // runs on IO pool
+    .add("coverage") { fhirClient.fetchCoverage(id) }  // runs in parallel on IO pool
     .run()
 
-// Kotlin — use a bounded fixed thread pool
+// Custom bounded pool
 val pool = Executors.newFixedThreadPool(4)
 val result = AsyncOperationResult()
     .withExecutor(pool)
@@ -1265,7 +1264,13 @@ val result = AsyncOperationResult()
 ```
 
 ```java
-// Java — bounded thread pool, no coroutine import needed
+// Java — default Dispatchers.IO gives true parallelism from runBlocking()
+OperationResult<Base> result = new AsyncOperationResult()
+    .add("patient", () -> fetchPatient())
+    .add("coverage", () -> fetchCoverage())
+    .runBlocking();                         // tasks run in parallel on IO pool
+
+// Java — override with a bounded pool
 ExecutorService pool = Executors.newFixedThreadPool(4);
 OperationResult<Base> result = new AsyncOperationResult()
     .withExecutor(pool)
