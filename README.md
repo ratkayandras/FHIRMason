@@ -1242,6 +1242,44 @@ if (result.hasErrors()) {
 
 Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the duration assignment inside the execution body is interrupted before it can run.
 
+### Executor / Thread Pool
+
+By default, `run()` and `runBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `runBlocking()`.
+
+Call `withExecutor(Executor)` to replace the default with a custom thread pool. `withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller.
+
+```kotlin
+// Default — Dispatchers.IO is used automatically; no withExecutor needed
+val result = AsyncOperationResult()
+    .add("patient") { fhirClient.fetchPatient(id) }   // runs on IO pool
+    .add("coverage") { fhirClient.fetchCoverage(id) }  // runs in parallel on IO pool
+    .run()
+
+// Custom bounded pool
+val pool = Executors.newFixedThreadPool(4)
+val result = AsyncOperationResult()
+    .withExecutor(pool)
+    .add("patient") { fetchPatient() }
+    .run()
+```
+
+```java
+// Java — default Dispatchers.IO gives true parallelism from runBlocking()
+OperationResult<Base> result = new AsyncOperationResult()
+    .add("patient", () -> fetchPatient())
+    .add("coverage", () -> fetchCoverage())
+    .runBlocking();                         // tasks run in parallel on IO pool
+
+// Java — override with a bounded pool
+ExecutorService pool = Executors.newFixedThreadPool(4);
+OperationResult<Base> result = new AsyncOperationResult()
+    .withExecutor(pool)
+    .add("patient", () -> fetchPatient())
+    .runBlocking();
+```
+
+`runBlocking()` inherits the executor automatically (it calls `run()` internally).
+
 ### DAG Composition (`merge`)
 
 `merge` combines an independently built sub-DAG into the current DAG. All task nodes from the
