@@ -5,11 +5,14 @@ import dev.ratkay.operation.StepMetrics
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Executor
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.OperationOutcome
 import org.slf4j.LoggerFactory
@@ -24,6 +27,7 @@ class AsyncOperationResult {
 
     private var timingEnabled: Boolean = false
     private var dagTimeoutMs: Long? = null
+    private var executor: Executor? = null
 
     private val taskMetrics = ConcurrentHashMap<String, StepMetrics>()
     private var totalDurationMs: Long = 0L
@@ -67,6 +71,20 @@ class AsyncOperationResult {
     fun timeout(durationMs: Long): AsyncOperationResult = also {
         require(durationMs > 0) { "durationMs must be positive" }
         dagTimeoutMs = durationMs
+    }
+
+    /**
+     * Sets the [java.util.concurrent.Executor] used to run all tasks in this DAG.
+     *
+     * By default no executor is set and tasks inherit the dispatcher of the calling coroutine.
+     * Set an executor to pin tasks to a specific thread pool — for example, use
+     * [java.util.concurrent.Executors.newFixedThreadPool] for a bounded I/O pool, or pass
+     * [kotlinx.coroutines.Dispatchers.IO] directly (it implements [java.util.concurrent.Executor]).
+     *
+     * @param executor the executor that all DAG tasks will run on
+     */
+    fun withExecutor(executor: Executor): AsyncOperationResult = also {
+        this.executor = executor
     }
 
     /** Returns a snapshot of [StepMetrics] collected per task after [run] or [runBlocking]. */
@@ -791,16 +809,20 @@ class AsyncOperationResult {
      * `TIMEOUT`-coded [OperationOutcome] is returned with no task results.
      */
     suspend fun run(): OperationResult<Base> {
-        val t = dagTimeoutMs
-        return if (t != null) {
-            try {
-                withTimeout(t) { runInternal() }
-            } catch (e: TimeoutCancellationException) {
-                OperationResult.fromMap(emptyMap(), listOf(dagTimeoutOutcome(t)), emptyMap())
+        val ctx = executor?.asCoroutineDispatcher()
+        val execute: suspend () -> OperationResult<Base> = {
+            val t = dagTimeoutMs
+            if (t != null) {
+                try {
+                    withTimeout(t) { runInternal() }
+                } catch (e: TimeoutCancellationException) {
+                    OperationResult.fromMap(emptyMap(), listOf(dagTimeoutOutcome(t)), emptyMap())
+                }
+            } else {
+                runInternal()
             }
-        } else {
-            runInternal()
         }
+        return if (ctx != null) withContext(ctx) { execute() } else execute()
     }
 
     private suspend fun runInternal(): OperationResult<Base> = coroutineScope {

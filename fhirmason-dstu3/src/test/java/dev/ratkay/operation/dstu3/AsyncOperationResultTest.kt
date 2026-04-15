@@ -9,10 +9,13 @@ import org.hamcrest.Matchers.hasSize
 import org.hamcrest.Matchers.instanceOf
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.not
+import org.hamcrest.Matchers.sameInstance
+import org.hamcrest.Matchers.startsWith
 import org.hl7.fhir.dstu3.model.Appointment
 import org.hl7.fhir.dstu3.model.Basic
 import org.hl7.fhir.dstu3.model.Claim
 import org.hl7.fhir.dstu3.model.Coverage
+import org.hl7.fhir.dstu3.model.DiagnosticReport
 import org.hl7.fhir.dstu3.model.Group
 import org.hl7.fhir.dstu3.model.Observation
 import org.hl7.fhir.dstu3.model.OperationOutcome
@@ -435,5 +438,57 @@ class AsyncOperationResultTest {
             .run()
 
         assertThat(result.count("observations"), `is`(1))
+    }
+
+    // ── Group: withExecutor ───────────────────────────────────────────────────
+
+    @Test
+    fun `withExecutor runs tasks on the specified thread`() = runBlocking {
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "fhirmason-test-thread").also { it.isDaemon = true }
+        }
+        var threadName = ""
+        try {
+            val result = AsyncOperationResult()
+                .withExecutor(executor)
+                .add("patient") {
+                    threadName = Thread.currentThread().name
+                    Patient()
+                }
+                .run()
+            assertThat(result.containsKey("patient"), `is`(true))
+            assertThat(threadName, startsWith("fhirmason-test-thread"))
+        } finally {
+            executor.shutdown()
+        }
+    }
+
+    @Test
+    fun `withExecutor returns this for fluent chaining`() {
+        val dag = AsyncOperationResult()
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            assertThat(dag.withExecutor(executor), sameInstance(dag))
+        } finally {
+            executor.shutdown()
+        }
+    }
+
+    @Test
+    fun `withExecutor does not affect result correctness`() = runBlocking {
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val result = AsyncOperationResult()
+                .withExecutor(executor)
+                .add("patient") { Patient() }
+                .add("observation") { Observation() }
+                .addAfter("report", "patient", "observation") { _ -> DiagnosticReport() }
+                .run()
+            assertThat(result.containsKey("patient"), `is`(true))
+            assertThat(result.containsKey("observation"), `is`(true))
+            assertThat(result.containsKey("report"), `is`(true))
+        } finally {
+            executor.shutdown()
+        }
     }
 }

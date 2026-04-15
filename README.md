@@ -1242,6 +1242,39 @@ if (result.hasErrors()) {
 
 Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the duration assignment inside the execution body is interrupted before it can run.
 
+### Executor / Thread Pool
+
+By default, DAG tasks inherit the dispatcher of the calling coroutine. Call `withExecutor(Executor)` to pin all tasks to a specific thread pool.
+
+`withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller. From Kotlin, `CoroutineDispatcher` implements `Executor`, so you can pass `Dispatchers.IO` directly.
+
+```kotlin
+// Kotlin — use the shared IO dispatcher for FHIR client calls
+val result = AsyncOperationResult()
+    .withExecutor(Dispatchers.IO)
+    .add("patient") { fhirClient.fetchPatient(id) }
+    .add("coverage") { fhirClient.fetchCoverage(id) }
+    .run()
+
+// Kotlin — use a bounded fixed thread pool
+val pool = Executors.newFixedThreadPool(4)
+val result = AsyncOperationResult()
+    .withExecutor(pool)
+    .add("patient") { fetchPatient() }
+    .run()
+```
+
+```java
+// Java — bounded thread pool, no coroutine import needed
+ExecutorService pool = Executors.newFixedThreadPool(4);
+OperationResult<Base> result = new AsyncOperationResult()
+    .withExecutor(pool)
+    .add("patient", () -> fetchPatient())
+    .runBlocking();
+```
+
+`runBlocking()` inherits the executor automatically (it calls `run()` internally).
+
 ### DAG Composition (`merge`)
 
 `merge` combines an independently built sub-DAG into the current DAG. All task nodes from the
