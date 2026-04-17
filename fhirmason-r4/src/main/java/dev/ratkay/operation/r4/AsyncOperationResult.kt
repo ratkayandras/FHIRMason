@@ -106,7 +106,7 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Independent(key) { listOf(block()) })
     }
 
-    fun addList(key: String, block: suspend () -> List<Base>): AsyncOperationResult = also {
+    fun <R : Base> addList(key: String, block: suspend () -> List<R>): AsyncOperationResult = also {
         registerNode(key, TaskNode.Independent(key) { block() })
     }
 
@@ -121,15 +121,15 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Dependent(key, depList) { map -> listOf(block(map)) })
     }
 
-    fun addListAfter(
+    fun <R : Base> addListAfter(
         key: String,
         vararg deps: String,
-        block: suspend (Map<String, List<Base>>) -> List<Base>
+        block: suspend (Map<String, List<Base>>) -> List<R>
     ): AsyncOperationResult = also {
         val depList = deps.toList()
         requireKeysExist(depList)
         requireNoCycle(key, depList)
-        registerNode(key, TaskNode.Dependent(key, depList, block))
+        registerNode(key, TaskNode.Dependent(key, depList) { map -> block(map) })
     }
 
     // Type-safe single-dependency convenience methods
@@ -144,11 +144,11 @@ class AsyncOperationResult {
         block(value)
     }
 
-    fun <T : Base> addListAfter(
+    fun <T : Base, R : Base> addListAfter(
         key: String,
         dep: String,
         type: KClass<T>,
-        block: suspend (T) -> List<Base>
+        block: suspend (T) -> List<R>
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
         val value = deps[dep]!!.filterIsInstance(type.java).first()
         block(value)
@@ -166,11 +166,11 @@ class AsyncOperationResult {
         block(values)
     }
 
-    fun <T : Base> addListAfterAll(
+    fun <T : Base, R : Base> addListAfterAll(
         key: String,
         dep: String,
         type: KClass<T>,
-        block: suspend (List<T>) -> List<Base>
+        block: suspend (List<T>) -> List<R>
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
@@ -273,7 +273,7 @@ class AsyncOperationResult {
      * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
      * @param block the suspending lambda to execute within the timeout
      */
-    fun addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> List<Base>): AsyncOperationResult = also {
+    fun <R : Base> addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> List<R>): AsyncOperationResult = also {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
         registerNode(key, TaskNode.Independent(key) {
             withTimeout(timeoutMs) { block() }
@@ -319,11 +319,11 @@ class AsyncOperationResult {
      * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
      * @param block the suspending lambda to execute within the timeout
      */
-    fun addListAfterWithTimeout(
+    fun <R : Base> addListAfterWithTimeout(
         key: String,
         vararg deps: String,
         timeoutMs: Long,
-        block: suspend (Map<String, List<Base>>) -> List<Base>
+        block: suspend (Map<String, List<Base>>) -> List<R>
     ): AsyncOperationResult = also {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
         val depList = deps.toList()
@@ -371,12 +371,12 @@ class AsyncOperationResult {
      * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
      * @param block the suspending lambda to execute within the timeout; receives the typed dep value
      */
-    fun <T : Base> addListAfterWithTimeout(
+    fun <T : Base, R : Base> addListAfterWithTimeout(
         key: String,
         dep: String,
         type: KClass<T>,
         timeoutMs: Long,
-        block: suspend (T) -> List<Base>
+        block: suspend (T) -> List<R>
     ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
         val value = deps[dep]!!.filterIsInstance(type.java).first()
         block(value)
@@ -415,12 +415,12 @@ class AsyncOperationResult {
      * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
      * @param block the suspending lambda to execute within the timeout; receives the typed dep list
      */
-    fun <T : Base> addListAfterAllWithTimeout(
+    fun <T : Base, R : Base> addListAfterAllWithTimeout(
         key: String,
         dep: String,
         type: KClass<T>,
         timeoutMs: Long,
-        block: suspend (List<T>) -> List<Base>
+        block: suspend (List<T>) -> List<R>
     ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
@@ -480,13 +480,14 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives resolved dependency results
      */
-    fun addListAfterWithRetry(
+    @JvmOverloads
+    fun <R : Base> addListAfterWithRetry(
         key: String,
         vararg deps: String,
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (Map<String, List<Base>>) -> List<Base>
+        block: suspend (Map<String, List<Base>>) -> List<R>
     ): AsyncOperationResult {
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
@@ -549,14 +550,15 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives the typed dep value
      */
-    fun <T : Base> addListAfterWithRetry(
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterWithRetry(
         key: String,
         dep: String,
         type: KClass<T>,
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (T) -> List<Base>
+        block: suspend (T) -> List<R>
     ): AsyncOperationResult = addListAfterWithRetry(
         key, dep,
         maxAttempts = maxAttempts,
@@ -611,14 +613,15 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives the typed dep list
      */
-    fun <T : Base> addListAfterAllWithRetry(
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterAllWithRetry(
         key: String,
         dep: String,
         type: KClass<T>,
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (List<T>) -> List<Base>
+        block: suspend (List<T>) -> List<R>
     ): AsyncOperationResult = addListAfterWithRetry(
         key, dep,
         maxAttempts = maxAttempts,
@@ -709,7 +712,7 @@ class AsyncOperationResult {
      * Registers an independent list-producing DAG task via [addList] only when [condition] is `true`.
      * When [condition] is `false`, returns `this` unchanged. See [addIf] for full contract.
      */
-    fun addListIf(condition: Boolean, key: String, block: suspend () -> List<Base>): AsyncOperationResult =
+    fun <R : Base> addListIf(condition: Boolean, key: String, block: suspend () -> List<R>): AsyncOperationResult =
         if (condition) addList(key, block) else this
 
     // ── DAG composition ──────────────────────────────────────────────────────
