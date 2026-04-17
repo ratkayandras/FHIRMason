@@ -965,7 +965,7 @@ result.containsKey("observations")  // true
 ```kotlin
 AsyncOperationResult()
     .add("patient") { fetchPatient() }        // suspending lambda → single Base
-    .addList("observations") { fetchObs() }   // suspending lambda → List<Base>
+    .addList("observations") { fetchObs() }   // suspending lambda → List<R>
 ```
 
 #### Dependent tasks — raw Map API
@@ -992,28 +992,28 @@ When a task has exactly one dependency, use the typed overloads to skip the manu
 | Method | Lambda receives | Returns |
 |---|---|---|
 | `addAfter(key, dep, type) { t -> Base }` | single typed value | `Base` |
-| `addListAfter(key, dep, type) { t -> List<Base> }` | single typed value | `List<Base>` |
+| `addListAfter(key, dep, type) { t -> List<R> }` | single typed value | `List<R>` |
 | `addAfterAll(key, dep, type) { list -> Base }` | typed list | `Base` |
-| `addListAfterAll(key, dep, type) { list -> List<Base> }` | typed list | `List<Base>` |
+| `addListAfterAll(key, dep, type) { list -> List<R> }` | typed list | `List<R>` |
 | `addWithRetry(key, …) { Base }` | none | `Base` |
 | `addAfterWithRetry(key, *deps, …) { Map → Base }` | dep map | `Base` |
-| `addListAfterWithRetry(key, *deps, …) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addListAfterWithRetry(key, *deps, …) { Map → List<R> }` | dep map | `List<R>` |
 | `addAfterWithRetry(key, dep, type, …) { t -> Base }` | single typed value | `Base` |
-| `addListAfterWithRetry(key, dep, type, …) { t -> List<Base> }` | single typed value | `List<Base>` |
+| `addListAfterWithRetry(key, dep, type, …) { t -> List<R> }` | single typed value | `List<R>` |
 | `addAfterAllWithRetry(key, dep, type, …) { list -> Base }` | typed list | `Base` |
-| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<Base> }` | typed list | `List<Base>` |
+| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<R> }` | typed list | `List<R>` |
 | `addWithTimeout(key, timeoutMs) { Base }` | none | `Base` |
-| `addListWithTimeout(key, timeoutMs) { List<Base> }` | none | `List<Base>` |
+| `addListWithTimeout(key, timeoutMs) { List<R> }` | none | `List<R>` |
 | `addAfterWithTimeout(key, *deps, timeoutMs) { Map → Base }` | dep map | `Base` |
-| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<R> }` | dep map | `List<R>` |
 | `addAfterWithTimeout(key, dep, type, timeoutMs) { t -> Base }` | single typed value | `Base` |
-| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<Base> }` | single typed value | `List<Base>` |
+| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<R> }` | single typed value | `List<R>` |
 | `addAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> Base }` | typed list | `Base` |
-| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<Base> }` | typed list | `List<Base>` |
+| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<R> }` | typed list | `List<R>` |
 | `addIf(condition, key) { Base }` | none | `Base` (or no-op) |
-| `addListIf(condition, key) { List<Base> }` | none | `List<Base>` (or no-op) |
+| `addListIf(condition, key) { List<R> }` | none | `List<R>` (or no-op) |
 | `addWithDefault(key, default) { Base }` | none | `Base` |
-| `addListWithDefault(key, default) { List<Base> }` | none | `List<Base>` |
+| `addListWithDefault(key, default) { List<R> }` | none | `List<R>` |
 | `merge { AsyncOperationResult() … }` | — (lambda builds inner DAG) | `this` |
 | `merge(other: AsyncOperationResult)` | — (pre-built inner DAG) | `this` |
 
@@ -1125,9 +1125,9 @@ When a task has exactly one dependency, use the typed overloads to avoid the man
 | Method | Lambda receives |
 |---|---|
 | `addAfterWithRetry(key, dep, type, …) { t -> Base }` | single typed value |
-| `addListAfterWithRetry(key, dep, type, …) { t -> List<Base> }` | single typed value |
+| `addListAfterWithRetry(key, dep, type, …) { t -> List<R> }` | single typed value |
 | `addAfterAllWithRetry(key, dep, type, …) { list -> Base }` | typed list |
-| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<Base> }` | typed list |
+| `addListAfterAllWithRetry(key, dep, type, …) { list -> List<R> }` | typed list |
 
 ```kotlin
 val dag = AsyncOperationResult()
@@ -1149,9 +1149,9 @@ Wrap any task in a coroutine timeout. If the block does not finish within the de
 | Method | Lambda input | Result |
 |---|---|---|
 | `addWithTimeout(key, timeoutMs) { Base }` | none | `Base` |
-| `addListWithTimeout(key, timeoutMs) { List<Base> }` | none | `List<Base>` |
+| `addListWithTimeout(key, timeoutMs) { List<R> }` | none | `List<R>` |
 | `addAfterWithTimeout(key, *deps, timeoutMs) { Map → Base }` | dep map | `Base` |
-| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<Base> }` | dep map | `List<Base>` |
+| `addListAfterWithTimeout(key, *deps, timeoutMs) { Map → List<R> }` | dep map | `List<R>` |
 
 ```kotlin
 val dag = AsyncOperationResult()
@@ -1174,9 +1174,9 @@ When a task has exactly one dependency, use the typed overloads to avoid the man
 | Method | Lambda receives |
 |---|---|
 | `addAfterWithTimeout(key, dep, type, timeoutMs) { t -> Base }` | single typed value |
-| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<Base> }` | single typed value |
+| `addListAfterWithTimeout(key, dep, type, timeoutMs) { t -> List<R> }` | single typed value |
 | `addAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> Base }` | typed list |
-| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<Base> }` | typed list |
+| `addListAfterAllWithTimeout(key, dep, type, timeoutMs) { list -> List<R> }` | typed list |
 
 ```kotlin
 val dag = AsyncOperationResult()
@@ -1605,6 +1605,8 @@ fhirmason-r4/
         ├── AsyncOperationResultConditionalTest.kt
         ├── AsyncOperationResultDefaultTest.kt
         ├── AsyncOperationResultComplexTest.kt
+        ├── AsyncOperationResultTypedDepOverloadsTest.kt
+        ├── AsyncOperationResultTypedListOutputTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
@@ -1643,6 +1645,7 @@ fhirmason-dstu3/
         ├── AsyncOperationResultDefaultTest.kt
         ├── AsyncOperationResultComplexTest.kt
         ├── AsyncOperationResultTypedDepOverloadsTest.kt
+        ├── AsyncOperationResultTypedListOutputTest.kt
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
