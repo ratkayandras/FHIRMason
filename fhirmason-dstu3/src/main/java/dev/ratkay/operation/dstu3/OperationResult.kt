@@ -52,6 +52,7 @@ import kotlin.time.measureTimedValue
  * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
  * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
+ * | Identifier filters | `addFromHavingIdentifierWithSystem`, `addFromHavingIdentifierWithValue`, `addFromHavingIdentifier`, `addAllFrom…` |
  * | FHIRPath filters | `addFromMatching`, `addAllFromMatching` |
  * | Core builders | `add`, `addUsing`, `addAll`, `addAllUsing`, `addFrom`, `addAllFrom`, `addOrSkip`, `addOrDefault`, `addWithRetry`, `addWithRetryUsing` |
  * | Primitive values | `addString`, `addBoolean`, `addInteger`, `addDecimal`, `addDate([DateTimeInput])`, `addDateTime([DateTimeInput])`, `addInstant([DateTimeInput])`, `addTime([DateTimeInput])`, `addCoding`, `addReference`, `addIdentifier`, `addPeriod`, `addQuantity`, `addCodeableConcept` |
@@ -559,6 +560,255 @@ class OperationResult<T> private constructor(
         noinline predicate: (V) -> Boolean,
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromHavingExtensionValueMatching(I::class, url, V::class, predicate, builder)
+
+    // Builder methods — filter all accumulated parameters by type and FHIR Identifier fields
+
+    private fun <I : Base> collectByIdentifierSystem(type: KClass<I>, system: String): List<I> =
+        filterByIdentifierSystem(parameters.values.flatten(), type, system)
+
+    private fun <I : Base> collectByIdentifierValue(type: KClass<I>, identifierValue: String): List<I> =
+        filterByIdentifierValue(parameters.values.flatten(), type, identifierValue)
+
+    private fun <I : Base> collectByIdentifier(type: KClass<I>, system: String, identifierValue: String): List<I> =
+        filterByIdentifier(parameters.values.flatten(), type, system, identifierValue)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * [Identifier] whose [Identifier.system] equals [system], passes the typed list to [builder],
+     * and stores the single result under the result's fhirType (lowercase).
+     *
+     * Resources with no `identifier` property (e.g. `OperationOutcome`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingIdentifierWithSystem] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingIdentifierWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifierSystem(type, system)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /**
+     * Like [addFromHavingIdentifierWithSystem] but stores the result under the explicit [name].
+     * [name] is placed before [system] so the Java call-site remains unambiguous.
+     */
+    fun <I : Base, R : Base> addFromHavingIdentifierWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifierSystem(type, system)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /**
+     * Like [addFromHavingIdentifierWithSystem] but [builder] returns a `List<R>`.
+     * The output name defaults to the result elements' fhirType (lowercase).
+     */
+    fun <I : Base, R : Base> addAllFromHavingIdentifierWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifierSystem(type, system)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingIdentifierWithSystem] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingIdentifierWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifierSystem(type, system)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /**
+     * Reified overload of [addFromHavingIdentifierWithSystem] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified overload whose first argument
+     * is a `String` would be ambiguous with this one. Use the KClass overload when an explicit
+     * output key is required.
+     */
+    inline fun <reified I : Base, R : Base> addFromHavingIdentifierWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingIdentifierWithSystem(I::class, system, builder)
+
+    /** Reified overload of [addAllFromHavingIdentifierWithSystem] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingIdentifierWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingIdentifierWithSystem(I::class, system, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * [Identifier] whose [Identifier.value] equals [identifierValue], passes the typed list
+     * to [builder], and stores the single result under the result's fhirType (lowercase).
+     *
+     * Resources with no `identifier` property are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingIdentifierWithValue] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingIdentifierWithValue(
+        type: KClass<I>,
+        identifierValue: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifierValue(type, identifierValue)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingIdentifierWithValue] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingIdentifierWithValue(
+        name: String,
+        type: KClass<I>,
+        identifierValue: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifierValue(type, identifierValue)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingIdentifierWithValue] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingIdentifierWithValue(
+        type: KClass<I>,
+        identifierValue: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifierValue(type, identifierValue)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingIdentifierWithValue] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingIdentifierWithValue(
+        name: String,
+        type: KClass<I>,
+        identifierValue: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifierValue(type, identifierValue)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /**
+     * Reified overload of [addFromHavingIdentifierWithValue] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified overload whose first argument
+     * is a `String` would be ambiguous with this one. Use the KClass overload when an explicit
+     * output key is required.
+     */
+    inline fun <reified I : Base, R : Base> addFromHavingIdentifierWithValue(
+        identifierValue: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingIdentifierWithValue(I::class, identifierValue, builder)
+
+    /** Reified overload of [addAllFromHavingIdentifierWithValue] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingIdentifierWithValue(
+        identifierValue: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingIdentifierWithValue(I::class, identifierValue, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * [Identifier] whose [Identifier.system] equals [system] **and** [Identifier.value] equals
+     * [identifierValue], passes the typed list to [builder], and stores the single result under
+     * the result's fhirType (lowercase).
+     *
+     * Resources with no `identifier` property are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingIdentifier] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingIdentifier(
+        type: KClass<I>,
+        system: String,
+        identifierValue: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifier(type, system, identifierValue)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingIdentifier] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingIdentifier(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        identifierValue: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByIdentifier(type, system, identifierValue)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingIdentifier] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingIdentifier(
+        type: KClass<I>,
+        system: String,
+        identifierValue: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifier(type, system, identifierValue)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingIdentifier] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingIdentifier(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        identifierValue: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByIdentifier(type, system, identifierValue)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /**
+     * Reified overload of [addFromHavingIdentifier] (unnamed output key).
+     *
+     * **Named variants are intentionally not reified** — a reified overload whose first argument
+     * is a `String` would be ambiguous with this one. Use the KClass overload when an explicit
+     * output key is required.
+     */
+    inline fun <reified I : Base, R : Base> addFromHavingIdentifier(
+        system: String,
+        identifierValue: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingIdentifier(I::class, system, identifierValue, builder)
+
+    /** Reified overload of [addAllFromHavingIdentifier] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingIdentifier(
+        system: String,
+        identifierValue: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingIdentifier(I::class, system, identifierValue, builder)
 
     // Builder methods — filter all accumulated parameters by type and FHIRPath expression
 
