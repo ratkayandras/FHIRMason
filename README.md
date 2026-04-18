@@ -294,6 +294,64 @@ val result4 = OperationResult.of(patients, "patients")
     }
 ```
 
+#### From all parameters, filtered by meta.tag / meta.security / meta.profile
+
+`meta` is present on every FHIR resource. Three field groups are supported, each mirroring the identifier method shape. Non-resource objects (which have no `meta`) are excluded automatically.
+
+**meta.tag / meta.security** — each is a `List<Coding>` with `system` and `code` fields:
+
+| Method | Filters by | Returns |
+|---|---|---|
+| `addFromHavingMetaTagWithSystem(type, system) { list -> R }` | `meta.tag.system` | `OperationResult<R>` |
+| `addFromHavingMetaTagWithSystem(name, type, system) { list -> R }` | `meta.tag.system` (named) | `OperationResult<R>` |
+| `addAllFromHavingMetaTagWithSystem(type, system) { list -> List<R> }` | `meta.tag.system` | `OperationResult<List<R>>` |
+| `addAllFromHavingMetaTagWithSystem(name, type, system) { list -> List<R> }` | `meta.tag.system` (named) | `OperationResult<List<R>>` |
+| `addFromHavingMetaTagWithCode(type, code) { list -> R }` | `meta.tag.code` | `OperationResult<R>` |
+| `addFromHavingMetaTagWithCode(name, type, code) { list -> R }` | `meta.tag.code` (named) | `OperationResult<R>` |
+| `addAllFromHavingMetaTagWithCode(type, code) { list -> List<R> }` | `meta.tag.code` | `OperationResult<List<R>>` |
+| `addAllFromHavingMetaTagWithCode(name, type, code) { list -> List<R> }` | `meta.tag.code` (named) | `OperationResult<List<R>>` |
+| `addFromHavingMetaTag(type, system, code) { list -> R }` | system + code exact pair | `OperationResult<R>` |
+| `addFromHavingMetaTag(name, type, system, code) { list -> R }` | system + code exact pair (named) | `OperationResult<R>` |
+| `addAllFromHavingMetaTag(type, system, code) { list -> List<R> }` | system + code exact pair | `OperationResult<List<R>>` |
+| `addAllFromHavingMetaTag(name, type, system, code) { list -> List<R> }` | system + code exact pair (named) | `OperationResult<List<R>>` |
+
+The same 12 overloads exist for `meta.security` with method names `addFromHavingMetaSecurityWithSystem`, `addFromHavingMetaSecurityWithCode`, and `addFromHavingMetaSecurity`.
+
+**meta.profile** — a list of canonical URI strings:
+
+| Method | Filters by | Returns |
+|---|---|---|
+| `addFromHavingMetaProfile(type, url) { list -> R }` | profile URL | `OperationResult<R>` |
+| `addFromHavingMetaProfile(name, type, url) { list -> R }` | profile URL (named) | `OperationResult<R>` |
+| `addAllFromHavingMetaProfile(type, url) { list -> List<R> }` | profile URL | `OperationResult<List<R>>` |
+| `addAllFromHavingMetaProfile(name, type, url) { list -> List<R> }` | profile URL (named) | `OperationResult<List<R>>` |
+
+All unnamed variants have reified inline overloads (omit the `KClass` argument in Kotlin). Named variants intentionally have no reified overload to avoid ambiguity.
+
+```kotlin
+// Filter by tag system
+val result = OperationResult.of(resources, "resources")
+    .addAllFromHavingMetaTagWithSystem<Patient, Patient>("http://example.org/workflow-tags") { it }
+
+// Filter by exact tag (system + code)
+val result2 = OperationResult.of(resources, "resources")
+    .addFromHavingMetaTag(Patient::class, "http://example.org/workflow-tags", "reviewed") { filtered ->
+        OperationOutcome().apply { addIssue().diagnostics = "reviewed=${filtered.size}" }
+    }
+
+// Filter by security label
+val result3 = OperationResult.of(resources, "resources")
+    .addAllFromHavingMetaSecurity<Patient, Patient>(
+        "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"
+    ) { it }
+
+// Filter by declared profile
+val result4 = OperationResult.of(resources, "resources")
+    .addAllFromHavingMetaProfile<Patient, Patient>(
+        "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
+    ) { it }
+```
+
 #### From all parameters, filtered by FHIRPath expression
 
 `addFromMatching` and `addAllFromMatching` evaluate a FHIRPath expression against every accumulated resource of a given type and pass only those that evaluate to `true` to the builder. The expression is relative to each candidate resource (write `"active = true"`, not `"Patient.active = true"`).
@@ -1628,7 +1686,8 @@ fhirmason-r4/
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
-    │   └── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
+    │   ├── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
+    │   └── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
     └── test/java/dev/ratkay/operation/r4/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1640,6 +1699,7 @@ fhirmason-r4/
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
         ├── OperationResultIdentifierTest.kt
+        ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
@@ -1669,7 +1729,8 @@ fhirmason-dstu3/
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
-    │   └── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
+    │   ├── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
+    │   └── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
     └── test/java/dev/ratkay/operation/dstu3/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1681,6 +1742,7 @@ fhirmason-dstu3/
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
         ├── OperationResultIdentifierTest.kt
+        ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
