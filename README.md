@@ -249,6 +249,51 @@ val result4 = OperationResult.of(patients, "patients")
     }
 ```
 
+#### From all parameters, filtered by FHIR Identifier
+
+Three method families filter accumulated resources by their `identifier` property. Resources with no `identifier` element (e.g. `OperationOutcome`) are excluded automatically. A resource is included when **any** of its identifiers satisfies the filter.
+
+| Method | Filters by | Returns |
+|---|---|---|
+| `addFromHavingIdentifierWithSystem(type, system) { list -> R }` | `identifier.system` | `OperationResult<R>` |
+| `addFromHavingIdentifierWithSystem(name, type, system) { list -> R }` | `identifier.system` (named) | `OperationResult<R>` |
+| `addAllFromHavingIdentifierWithSystem(type, system) { list -> List<R> }` | `identifier.system` | `OperationResult<List<R>>` |
+| `addAllFromHavingIdentifierWithSystem(name, type, system) { list -> List<R> }` | `identifier.system` (named) | `OperationResult<List<R>>` |
+| `addFromHavingIdentifierWithValue(type, identifierValue) { list -> R }` | `identifier.value` | `OperationResult<R>` |
+| `addFromHavingIdentifierWithValue(name, type, identifierValue) { list -> R }` | `identifier.value` (named) | `OperationResult<R>` |
+| `addAllFromHavingIdentifierWithValue(type, identifierValue) { list -> List<R> }` | `identifier.value` | `OperationResult<List<R>>` |
+| `addAllFromHavingIdentifierWithValue(name, type, identifierValue) { list -> List<R> }` | `identifier.value` (named) | `OperationResult<List<R>>` |
+| `addFromHavingIdentifier(type, system, identifierValue) { list -> R }` | system + value exact pair | `OperationResult<R>` |
+| `addFromHavingIdentifier(name, type, system, identifierValue) { list -> R }` | system + value exact pair (named) | `OperationResult<R>` |
+| `addAllFromHavingIdentifier(type, system, identifierValue) { list -> List<R> }` | system + value exact pair | `OperationResult<List<R>>` |
+| `addAllFromHavingIdentifier(name, type, system, identifierValue) { list -> List<R> }` | system + value exact pair (named) | `OperationResult<List<R>>` |
+
+All unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified overload whose first argument is a `String` would be ambiguous with the unnamed reified overload.
+
+```kotlin
+// System only — all Patients from this hospital's MRN namespace
+val result = OperationResult.of(patients, "patients")
+    .addFromHavingIdentifierWithSystem(Patient::class, "http://hospital.org/mrn") { filtered ->
+        OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+    }
+
+// Value only — any Patient with this identifier value regardless of system
+val result2 = OperationResult.of(patients, "patients")
+    .addAllFromHavingIdentifierWithValue<Patient, Patient>("MRN-001") { it }
+
+// Exact match — system + value
+val result3 = OperationResult.of(patients, "patients")
+    .addFromHavingIdentifier(Patient::class, "http://hospital.org/mrn", "MRN-001") { filtered ->
+        filtered.firstOrNull() ?: error("Patient not found")
+    }
+
+// Named output key (KClass form required)
+val result4 = OperationResult.of(patients, "patients")
+    .addFromHavingIdentifier("matched-patient", Patient::class, "http://hospital.org/mrn", "MRN-001") { filtered ->
+        buildResponse(filtered)
+    }
+```
+
 #### From all parameters, filtered by FHIRPath expression
 
 `addFromMatching` and `addAllFromMatching` evaluate a FHIRPath expression against every accumulated resource of a given type and pass only those that evaluate to `true` to the builder. The expression is relative to each candidate resource (write `"active = true"`, not `"Patient.active = true"`).
@@ -1582,7 +1627,8 @@ fhirmason-r4/
     │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR R4 type converter
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
-    │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
+    │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
+    │   └── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
     └── test/java/dev/ratkay/operation/r4/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1593,6 +1639,7 @@ fhirmason-r4/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── OperationResultIdentifierTest.kt
         ├── OperationResultComplexTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
@@ -1621,7 +1668,8 @@ fhirmason-dstu3/
     │   ├── FhirDateTimeConverter.kt        # Java/Kotlin date-time → FHIR DSTU3 type converter
     │   ├── OperationOutcomeExtensions.kt   # Exception → OperationOutcome helpers
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
-    │   └── FhirExtensionHelper.kt          # Deep extension retrieval utility
+    │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
+    │   └── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
     └── test/java/dev/ratkay/operation/dstu3/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1632,6 +1680,7 @@ fhirmason-dstu3/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── OperationResultIdentifierTest.kt
         ├── OperationResultComplexTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
