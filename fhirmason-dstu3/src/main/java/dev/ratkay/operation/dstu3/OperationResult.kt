@@ -810,6 +810,524 @@ class OperationResult<T> private constructor(
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromHavingIdentifier(I::class, system, identifierValue, builder)
 
+    // Builder methods — filter all accumulated parameters by type and meta.tag / meta.security / meta.profile
+
+    private fun <I : Base> collectByMetaTagSystem(type: KClass<I>, system: String): List<I> =
+        filterByMetaTagSystem(parameters.values.flatten(), type, system)
+
+    private fun <I : Base> collectByMetaTagCode(type: KClass<I>, code: String): List<I> =
+        filterByMetaTagCode(parameters.values.flatten(), type, code)
+
+    private fun <I : Base> collectByMetaTag(type: KClass<I>, system: String, code: String): List<I> =
+        filterByMetaTag(parameters.values.flatten(), type, system, code)
+
+    private fun <I : Base> collectByMetaSecuritySystem(type: KClass<I>, system: String): List<I> =
+        filterByMetaSecuritySystem(parameters.values.flatten(), type, system)
+
+    private fun <I : Base> collectByMetaSecurityCode(type: KClass<I>, code: String): List<I> =
+        filterByMetaSecurityCode(parameters.values.flatten(), type, code)
+
+    private fun <I : Base> collectByMetaSecurity(type: KClass<I>, system: String, code: String): List<I> =
+        filterByMetaSecurity(parameters.values.flatten(), type, system, code)
+
+    private fun <I : Base> collectByMetaProfile(type: KClass<I>, url: String): List<I> =
+        filterByMetaProfile(parameters.values.flatten(), type, url)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.tag` [Coding] whose [Coding.system] equals [system], passes the typed list to [builder],
+     * and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaTagWithSystem] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaTagWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTagSystem(type, system)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTagWithSystem] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaTagWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTagSystem(type, system)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTagWithSystem] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTagWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTagSystem(type, system)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaTagWithSystem] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTagWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTagSystem(type, system)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaTagWithSystem] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaTagWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaTagWithSystem(I::class, system, builder)
+
+    /** Reified overload of [addAllFromHavingMetaTagWithSystem] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaTagWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaTagWithSystem(I::class, system, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.tag` [Coding] whose [Coding.code] equals [code], passes the typed list to [builder],
+     * and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaTagWithCode] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaTagWithCode(
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTagCode(type, code)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTagWithCode] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaTagWithCode(
+        name: String,
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTagCode(type, code)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTagWithCode] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTagWithCode(
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTagCode(type, code)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaTagWithCode] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTagWithCode(
+        name: String,
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTagCode(type, code)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaTagWithCode] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaTagWithCode(
+        code: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaTagWithCode(I::class, code, builder)
+
+    /** Reified overload of [addAllFromHavingMetaTagWithCode] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaTagWithCode(
+        code: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaTagWithCode(I::class, code, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.tag` [Coding] whose [Coding.system] equals [system] **and** [Coding.code] equals [code],
+     * passes the typed list to [builder], and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaTag] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaTag(
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTag(type, system, code)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTag] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaTag(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaTag(type, system, code)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaTag] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTag(
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTag(type, system, code)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaTag] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaTag(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaTag(type, system, code)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaTag] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaTag(
+        system: String,
+        code: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaTag(I::class, system, code, builder)
+
+    /** Reified overload of [addAllFromHavingMetaTag] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaTag(
+        system: String,
+        code: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaTag(I::class, system, code, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.security` [Coding] whose [Coding.system] equals [system], passes the typed list to [builder],
+     * and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaSecurityWithSystem] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaSecurityWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecuritySystem(type, system)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurityWithSystem] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaSecurityWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecuritySystem(type, system)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurityWithSystem] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurityWithSystem(
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecuritySystem(type, system)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaSecurityWithSystem] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurityWithSystem(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecuritySystem(type, system)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaSecurityWithSystem] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaSecurityWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaSecurityWithSystem(I::class, system, builder)
+
+    /** Reified overload of [addAllFromHavingMetaSecurityWithSystem] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaSecurityWithSystem(
+        system: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaSecurityWithSystem(I::class, system, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.security` [Coding] whose [Coding.code] equals [code], passes the typed list to [builder],
+     * and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaSecurityWithCode] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaSecurityWithCode(
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecurityCode(type, code)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurityWithCode] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaSecurityWithCode(
+        name: String,
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecurityCode(type, code)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurityWithCode] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurityWithCode(
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecurityCode(type, code)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaSecurityWithCode] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurityWithCode(
+        name: String,
+        type: KClass<I>,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecurityCode(type, code)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaSecurityWithCode] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaSecurityWithCode(
+        code: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaSecurityWithCode(I::class, code, builder)
+
+    /** Reified overload of [addAllFromHavingMetaSecurityWithCode] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaSecurityWithCode(
+        code: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaSecurityWithCode(I::class, code, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that have at least one
+     * `meta.security` [Coding] whose [Coding.system] equals [system] **and** [Coding.code] equals [code],
+     * passes the typed list to [builder], and stores the single result under the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaSecurity] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaSecurity(
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecurity(type, system, code)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurity] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaSecurity(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaSecurity(type, system, code)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaSecurity] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurity(
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecurity(type, system, code)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaSecurity] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaSecurity(
+        name: String,
+        type: KClass<I>,
+        system: String,
+        code: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaSecurity(type, system, code)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaSecurity] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaSecurity(
+        system: String,
+        code: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaSecurity(I::class, system, code, builder)
+
+    /** Reified overload of [addAllFromHavingMetaSecurity] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaSecurity(
+        system: String,
+        code: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaSecurity(I::class, system, code, builder)
+
+    /**
+     * Searches **all** accumulated parameters for instances of [type] that declare [url] in their
+     * `meta.profile` list, passes the typed list to [builder], and stores the single result under
+     * the result's fhirType (lowercase).
+     *
+     * Non-resource objects (which carry no `meta`) are excluded automatically.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     *
+     * Use [addAllFromHavingMetaProfile] when [builder] returns a `List<R>`.
+     */
+    fun <I : Base, R : Base> addFromHavingMetaProfile(
+        type: KClass<I>,
+        url: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(null) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaProfile(type, url)) }
+            storeAndCopy(null, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaProfile] but stores the result under the explicit [name]. */
+    fun <I : Base, R : Base> addFromHavingMetaProfile(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        builder: (List<I>) -> R
+    ): OperationResult<R> =
+        runBuilderStep(name) {
+            val (value, duration) = measureTimedValue { builder(collectByMetaProfile(type, url)) }
+            storeAndCopy(name, value, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addFromHavingMetaProfile] but [builder] returns a `List<R>`. */
+    fun <I : Base, R : Base> addAllFromHavingMetaProfile(
+        type: KClass<I>,
+        url: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(null) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaProfile(type, url)) }
+            storeListAndCopy(null, values, duration.inWholeMilliseconds)
+        }
+
+    /** Like [addAllFromHavingMetaProfile] but stores the result list under the explicit [name]. */
+    fun <I : Base, R : Base> addAllFromHavingMetaProfile(
+        name: String,
+        type: KClass<I>,
+        url: String,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> =
+        runBuilderStep(name) {
+            val (values, duration) = measureTimedValue { builder(collectByMetaProfile(type, url)) }
+            storeListAndCopy(name, values, duration.inWholeMilliseconds)
+        }
+
+    /** Reified overload of [addFromHavingMetaProfile] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addFromHavingMetaProfile(
+        url: String,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromHavingMetaProfile(I::class, url, builder)
+
+    /** Reified overload of [addAllFromHavingMetaProfile] (unnamed output key). */
+    inline fun <reified I : Base, R : Base> addAllFromHavingMetaProfile(
+        url: String,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromHavingMetaProfile(I::class, url, builder)
+
     // Builder methods — filter all accumulated parameters by type and FHIRPath expression
 
     private fun <I : Base> collectByPath(type: KClass<I>, expression: String): List<I> =
