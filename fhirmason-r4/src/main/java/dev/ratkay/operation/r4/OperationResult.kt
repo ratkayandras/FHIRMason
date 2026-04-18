@@ -259,8 +259,7 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> R
     ): OperationResult<R> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
             storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
@@ -293,8 +292,7 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> R
     ): OperationResult<R> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (value, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
             storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
@@ -323,8 +321,7 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = true)) }
             storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
@@ -351,8 +348,7 @@ class OperationResult<T> private constructor(
         vararg extUrls: String,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (values, duration) = measureTimedValue { builder(collectByExtension(type, extUrls, matchAll = false)) }
             storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
@@ -492,8 +488,7 @@ class OperationResult<T> private constructor(
         predicate: (V) -> Boolean,
         builder: (List<I>) -> R
     ): OperationResult<R> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (value, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
             storeAndCopy(null, value, duration.inWholeMilliseconds)
         }
@@ -526,8 +521,7 @@ class OperationResult<T> private constructor(
         predicate: (V) -> Boolean,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
-        val stepName = type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(null) {
             val (values, duration) = measureTimedValue { builder(collectByExtensionAndValueType(type, url, valueType, predicate)) }
             storeListAndCopy(null, values, duration.inWholeMilliseconds)
         }
@@ -593,8 +587,7 @@ class OperationResult<T> private constructor(
         expression: String,
         builder: (List<I>) -> R
     ): OperationResult<R> {
-        val stepName = name ?: type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(name) {
             val (value, duration) = measureTimedValue { builder(collectByPath(type, expression)) }
             storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
@@ -612,8 +605,7 @@ class OperationResult<T> private constructor(
         expression: String,
         builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> {
-        val stepName = name ?: type.java.simpleName.lowercase()
-        return runBuilderStep(stepName) {
+        return runBuilderStep(name) {
             val (values, duration) = measureTimedValue { builder(collectByPath(type, expression)) }
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
