@@ -163,12 +163,14 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
 
 `addFromFiltered` and `addAllFromFiltered` search **all** accumulated parameters, keep only resources of type `I` that satisfy `predicate`, and pass the typed list to a builder. Use predicates from `FhirFilter` or any `(I) -> Boolean` lambda.
 
-| Method | Returns |
-|---|---|
-| `addFromFiltered(name?, type, predicate) { list -> R }` | `OperationResult<R>` |
-| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `OperationResult<List<R>>` |
+| Method | `type` param | Returns |
+|---|---|---|
+| `addFromFiltered(name?, type, predicate) { list -> R }` | `KClass<I>` | `OperationResult<R>` |
+| `addFromFiltered(name?, type, predicate) { list -> R }` | `Class<I>` *(Java)* | `OperationResult<R>` |
+| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `KClass<I>` | `OperationResult<List<R>>` |
+| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `Class<I>` *(Java)* | `OperationResult<List<R>>` |
 
-Both methods have reified Kotlin overloads (omit `type`). `name` defaults to the output value's `fhirType()` when omitted. Error handling follows Pattern A.
+Both methods have reified Kotlin overloads (omit `type` entirely). `name` defaults to the output value's `fhirType()` when omitted. Error handling follows Pattern A.
 
 **`FhirFilter` predicate factories**
 

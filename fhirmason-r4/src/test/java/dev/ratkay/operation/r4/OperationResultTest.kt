@@ -2476,6 +2476,28 @@ class OperationResultTest {
         assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
     }
 
+    @Test
+    fun `addFromFiltered Class overload works identically to KClass overload`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertFalse(result.hasErrors())
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addAllFromFiltered Class overload works identically to KClass overload`() {
+        val p1 = patient()
+        val p2 = patient()
+        val result = OperationResult.of(listOf(p1, p2, appointment()), "items")
+            .addAllFromFiltered(type = Patient::class.java, predicate = { true }) { it }
+
+        assertThat(result.getResultList(), hasSize(2))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {

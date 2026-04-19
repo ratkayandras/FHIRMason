@@ -267,6 +267,15 @@ class OperationResult<T> private constructor(
         noinline builder: (List<I>) -> R
     ): OperationResult<R> = addFromFiltered(name, I::class, predicate, builder)
 
+    /** Java-friendly overload of [addFromFiltered] — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <I : Base, R : Base> addFromFiltered(
+        name: String? = null,
+        type: Class<I>,
+        predicate: (I) -> Boolean,
+        builder: (List<I>) -> R
+    ): OperationResult<R> = addFromFiltered(name, type.kotlin, predicate, builder)
+
     /**
      * Like [addFromFiltered] but [builder] returns a `List<R>`, making the new
      * pipeline head `List<R>`.
@@ -290,6 +299,15 @@ class OperationResult<T> private constructor(
         noinline predicate: (I) -> Boolean,
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromFiltered(name, I::class, predicate, builder)
+
+    /** Java-friendly overload of [addAllFromFiltered] — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <I : Base, R : Base> addAllFromFiltered(
+        name: String? = null,
+        type: Class<I>,
+        predicate: (I) -> Boolean,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromFiltered(name, type.kotlin, predicate, builder)
 
     // Builder methods — filter all accumulated parameters by type and FHIRPath expression
 
