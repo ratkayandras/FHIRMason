@@ -159,197 +159,105 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
     }
 ```
 
-#### From all parameters, filtered by type and extension URLs
+#### From all parameters, filtered by a predicate
 
-These methods search **all** accumulated parameters (regardless of key), keep only resources of the given type, and — if extension URLs are supplied — further filter by extension-URL presence. Two matching strategies are available, encoded directly in the method name:
+`addFromFiltered` and `addAllFromFiltered` search **all** accumulated parameters, keep only resources of type `I` that satisfy `predicate`, and pass the typed list to a builder. Use predicates from `FhirFilter` or any `(I) -> Boolean` lambda.
 
-| Method | Semantics | Description |
+| Method | `type` param | Returns |
 |---|---|---|
-| `addFromHavingAllExtensions(type, extUrls...) { list -> R }` | AND | Resource must carry **every** supplied URL; builder returns a single `R` stored under the type's simple name |
-| `addFromHavingAllExtensions(name, type, extUrls...) { list -> R }` | AND | Same, explicit output `name` |
-| `addFromHavingAnyExtension(type, extUrls...) { list -> R }` | OR | Resource must carry **at least one** of the URLs; single `R` result |
-| `addFromHavingAnyExtension(name, type, extUrls...) { list -> R }` | OR | Same, explicit output `name` |
-| `addAllFromHavingAllExtensions(type, extUrls...) { list -> List<R> }` | AND | Builder returns a list |
-| `addAllFromHavingAllExtensions(name, type, extUrls...) { list -> List<R> }` | AND | Named list variant |
-| `addAllFromHavingAnyExtension(type, extUrls...) { list -> List<R> }` | OR | Builder returns a list |
-| `addAllFromHavingAnyExtension(name, type, extUrls...) { list -> List<R> }` | OR | Named list variant |
+| `addFromFiltered(name?, type, predicate) { list -> R }` | `KClass<I>` | `OperationResult<R>` |
+| `addFromFiltered(name?, type, predicate) { list -> R }` | `Class<I>` *(Java)* | `OperationResult<R>` |
+| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `KClass<I>` | `OperationResult<List<R>>` |
+| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `Class<I>` *(Java)* | `OperationResult<List<R>>` |
 
-When no URLs are supplied, all resources of the given type are passed to the builder regardless of which variant is used.
+Both methods have reified Kotlin overloads (omit `type` entirely). `name` defaults to the output value's `fhirType()` when omitted. Error handling follows Pattern A.
 
-All unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified `addFromHavingAllExtensions(name, extUrls…)` would be ambiguous with the unnamed reified overload when the first argument is a `String`. Use the KClass overload when an explicit output key is needed.
+**`FhirFilter` predicate factories**
+
+`FhirFilter` is an object that produces `(Base) -> Boolean` predicates. Because function types are contravariant, a `(Base) -> Boolean` is assignable to `(I) -> Boolean` for any `I : Base`.
+
+| Factory | Filters by |
+|---|---|
+| `FhirFilter.hasAllExtensions("url1", "url2")` | Resource carries **every** given extension URL |
+| `FhirFilter.hasAnyExtension("url1", "url2")` | Resource carries **at least one** given URL |
+| `FhirFilter.hasExtensionWithValueType("url", StringType::class)` | Extension value is an instance of the given type |
+| `FhirFilter.hasExtensionWithValueType<StringType>("url")` | Reified form |
+| `FhirFilter.hasExtensionValueMatching("url", BooleanType::class) { it.booleanValue() }` | Extension value satisfies a predicate |
+| `FhirFilter.hasExtensionValueMatching<BooleanType>("url") { it.booleanValue() }` | Reified form |
+| `FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")` | Any identifier has the given system |
+| `FhirFilter.hasIdentifierWithValue("MRN-001")` | Any identifier has the given value |
+| `FhirFilter.hasIdentifier("http://example.org/mrn", "MRN-001")` | Exact system + value match |
+| `FhirFilter.hasMetaTagWithSystem("http://example.org/tags")` | `meta.tag` has the given system |
+| `FhirFilter.hasMetaTagWithCode("reviewed")` | `meta.tag` has the given code |
+| `FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")` | Exact tag system + code match |
+| `FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")` | `meta.security` has the given system |
+| `FhirFilter.hasMetaSecurityWithCode("R")` | `meta.security` has the given code |
+| `FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")` | Exact security system + code match |
+| `FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")` | Profile URL is declared in `meta.profile` |
+
+Predicates can be combined using the built-in combinators `FhirFilter.and`, `FhirFilter.or`, and `FhirFilter.not`, which work identically from Kotlin and Java:
 
 ```kotlin
-// AND — Patients that carry both extensions
-val result = OperationResult.of(patients, "patients")
-    .addFromHavingAllExtensions(Patient::class, "http://ext/enrolled", "http://ext/consented") { filtered ->
-        OperationOutcome().apply { addIssue().diagnostics = "Eligible: ${filtered.size}" }
-    }
-
-// OR — Patients that carry at least one of the extensions
-val result2 = OperationResult.of(patients, "patients")
-    .addFromHavingAnyExtension(Patient::class, "http://ext/high-priority", "http://ext/urgent") { filtered ->
-        buildAlertFor(filtered)
-    }
-
-// Reified — no KClass needed
-val result3 = OperationResult.of(patients, "patients")
-    .addFromHavingAllExtensions<Patient, OperationOutcome>("http://ext/enrolled") { filtered ->
-        buildSummary(filtered)
-    }
-
-// Named output key
-val result4 = OperationResult.of(patients, "patients")
-    .addFromHavingAllExtensions("enrolled-summary", Patient::class, "http://ext/enrolled") { filtered ->
-        buildSummary(filtered)
-    }
+// Kotlin
+result.addFromFiltered(
+    type = Patient::class,
+    predicate = FhirFilter.and(
+        FhirFilter.hasAllExtensions("http://ext/enrolled"),
+        FhirFilter.hasMetaProfile("http://example.org/profile/v1")
+    )
+) { patients -> ... }
 ```
 
-#### From all parameters, filtered by extension URL + value type or value predicate
-
-These methods extend the URL-presence filters above by also inspecting the **value** of the matched extension. Two sub-families are available:
-
-| Method | Filters by | Description |
-|---|---|---|
-| `addFromHavingExtensionWithValueType(type, url, valueType) { list -> R }` | URL + value type | Resource must have an extension at `url` with a value of `valueType`; single `R` result |
-| `addFromHavingExtensionWithValueType(name, type, url, valueType) { list -> R }` | URL + value type | Same, explicit output `name` |
-| `addAllFromHavingExtensionWithValueType(type, url, valueType) { list -> List<R> }` | URL + value type | Builder returns a list |
-| `addAllFromHavingExtensionWithValueType(name, type, url, valueType) { list -> List<R> }` | URL + value type | Named list variant |
-| `addFromHavingExtensionValueMatching(type, url, valueType, predicate) { list -> R }` | URL + typed predicate | Resource must have an extension at `url` with a value of `valueType` satisfying `predicate`; single `R` result |
-| `addFromHavingExtensionValueMatching(name, type, url, valueType, predicate) { list -> R }` | URL + typed predicate | Same, explicit output `name` |
-| `addAllFromHavingExtensionValueMatching(type, url, valueType, predicate) { list -> List<R> }` | URL + typed predicate | Builder returns a list |
-| `addAllFromHavingExtensionValueMatching(name, type, url, valueType, predicate) { list -> List<R> }` | URL + typed predicate | Named list variant |
-
-When the extension appears more than once at a URL, the resource is included if **any** of its values satisfies the condition. All unnamed variants have reified inline overloads. Named variants intentionally have no reified overload for the same reason as above.
-
-`addFromHavingExtensionWithValueType` is a convenience shorthand for `addFromHavingExtensionValueMatching` with a trivially true predicate — prefer the latter when you need to inspect the value itself.
-
-```kotlin
-// Type check — Patients whose "enrolled" extension carries a StringType value
-val result = OperationResult.of(patients, "patients")
-    .addFromHavingExtensionWithValueType(Patient::class, "http://ext/enrolled", StringType::class) { filtered ->
-        buildSummary(filtered)
-    }
-
-// Reified type check
-val result2 = OperationResult.of(patients, "patients")
-    .addFromHavingExtensionWithValueType<Patient, StringType, OperationOutcome>("http://ext/enrolled") { filtered ->
-        buildSummary(filtered)
-    }
-
-// Value predicate — only Patients enrolled (StringType "true")
-val result3 = OperationResult.of(patients, "patients")
-    .addFromHavingExtensionValueMatching(Patient::class, "http://ext/enrolled", StringType::class, { it.value == "true" }) { filtered ->
-        buildEnrolledSummary(filtered)
-    }
-
-// Reified predicate
-val result4 = OperationResult.of(patients, "patients")
-    .addFromHavingExtensionValueMatching<Patient, BooleanType, OperationOutcome>("http://ext/active", { it.booleanValue() }) { filtered ->
-        buildActiveSummary(filtered)
-    }
+```java
+// Java
+result.addFromFiltered(Patient.class,
+    FhirFilter.and(
+        FhirFilter.hasAllExtensions("http://ext/enrolled"),
+        FhirFilter.hasMetaProfile("http://example.org/profile/v1")
+    ),
+    patients -> ...);
 ```
 
-#### From all parameters, filtered by FHIR Identifier
-
-Three method families filter accumulated resources by their `identifier` property. Resources with no `identifier` element (e.g. `OperationOutcome`) are excluded automatically. A resource is included when **any** of its identifiers satisfies the filter.
-
-| Method | Filters by | Returns |
-|---|---|---|
-| `addFromHavingIdentifierWithSystem(type, system) { list -> R }` | `identifier.system` | `OperationResult<R>` |
-| `addFromHavingIdentifierWithSystem(name, type, system) { list -> R }` | `identifier.system` (named) | `OperationResult<R>` |
-| `addAllFromHavingIdentifierWithSystem(type, system) { list -> List<R> }` | `identifier.system` | `OperationResult<List<R>>` |
-| `addAllFromHavingIdentifierWithSystem(name, type, system) { list -> List<R> }` | `identifier.system` (named) | `OperationResult<List<R>>` |
-| `addFromHavingIdentifierWithValue(type, identifierValue) { list -> R }` | `identifier.value` | `OperationResult<R>` |
-| `addFromHavingIdentifierWithValue(name, type, identifierValue) { list -> R }` | `identifier.value` (named) | `OperationResult<R>` |
-| `addAllFromHavingIdentifierWithValue(type, identifierValue) { list -> List<R> }` | `identifier.value` | `OperationResult<List<R>>` |
-| `addAllFromHavingIdentifierWithValue(name, type, identifierValue) { list -> List<R> }` | `identifier.value` (named) | `OperationResult<List<R>>` |
-| `addFromHavingIdentifier(type, system, identifierValue) { list -> R }` | system + value exact pair | `OperationResult<R>` |
-| `addFromHavingIdentifier(name, type, system, identifierValue) { list -> R }` | system + value exact pair (named) | `OperationResult<R>` |
-| `addAllFromHavingIdentifier(type, system, identifierValue) { list -> List<R> }` | system + value exact pair | `OperationResult<List<R>>` |
-| `addAllFromHavingIdentifier(name, type, system, identifierValue) { list -> List<R> }` | system + value exact pair (named) | `OperationResult<List<R>>` |
-
-All unnamed variants have reified inline overloads so the `KClass` argument can be omitted in Kotlin. Named variants intentionally have no reified overload — a reified overload whose first argument is a `String` would be ambiguous with the unnamed reified overload.
+From Kotlin you can also compose with standard lambdas:
+```kotlin
+val p = { r: Base ->
+    FhirFilter.hasAllExtensions("http://ext/enrolled")(r) &&
+        FhirFilter.hasMetaProfile("http://example.org/profile/v1")(r)
+}
+result.addFromFiltered(type = Patient::class, predicate = p) { patients -> ... }
+```
 
 ```kotlin
-// System only — all Patients from this hospital's MRN namespace
+// Extension — enrolled patients (BooleanType value = true)
 val result = OperationResult.of(patients, "patients")
-    .addFromHavingIdentifierWithSystem(Patient::class, "http://hospital.org/mrn") { filtered ->
-        OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
-    }
+    .addAllFromFiltered(
+        type = Patient::class,
+        predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://ext/enrolled") { it.booleanValue() }
+    ) { it }
 
-// Value only — any Patient with this identifier value regardless of system
+// Identifier — exact system + value match
 val result2 = OperationResult.of(patients, "patients")
-    .addAllFromHavingIdentifierWithValue<Patient, Patient>("MRN-001") { it }
-
-// Exact match — system + value
-val result3 = OperationResult.of(patients, "patients")
-    .addFromHavingIdentifier(Patient::class, "http://hospital.org/mrn", "MRN-001") { filtered ->
+    .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://hospital.org/mrn", "MRN-001")) { filtered ->
         filtered.firstOrNull() ?: error("Patient not found")
     }
 
-// Named output key (KClass form required)
-val result4 = OperationResult.of(patients, "patients")
-    .addFromHavingIdentifier("matched-patient", Patient::class, "http://hospital.org/mrn", "MRN-001") { filtered ->
+// Named output key
+val result3 = OperationResult.of(patients, "patients")
+    .addFromFiltered("matched-patient", Patient::class, FhirFilter.hasIdentifier("http://hospital.org/mrn", "MRN-001")) { filtered ->
         buildResponse(filtered)
     }
-```
 
-#### From all parameters, filtered by meta.tag / meta.security / meta.profile
-
-`meta` is present on every FHIR resource. Three field groups are supported, each mirroring the identifier method shape. Non-resource objects (which have no `meta`) are excluded automatically.
-
-**meta.tag / meta.security** — each is a `List<Coding>` with `system` and `code` fields:
-
-| Method | Filters by | Returns |
-|---|---|---|
-| `addFromHavingMetaTagWithSystem(type, system) { list -> R }` | `meta.tag.system` | `OperationResult<R>` |
-| `addFromHavingMetaTagWithSystem(name, type, system) { list -> R }` | `meta.tag.system` (named) | `OperationResult<R>` |
-| `addAllFromHavingMetaTagWithSystem(type, system) { list -> List<R> }` | `meta.tag.system` | `OperationResult<List<R>>` |
-| `addAllFromHavingMetaTagWithSystem(name, type, system) { list -> List<R> }` | `meta.tag.system` (named) | `OperationResult<List<R>>` |
-| `addFromHavingMetaTagWithCode(type, code) { list -> R }` | `meta.tag.code` | `OperationResult<R>` |
-| `addFromHavingMetaTagWithCode(name, type, code) { list -> R }` | `meta.tag.code` (named) | `OperationResult<R>` |
-| `addAllFromHavingMetaTagWithCode(type, code) { list -> List<R> }` | `meta.tag.code` | `OperationResult<List<R>>` |
-| `addAllFromHavingMetaTagWithCode(name, type, code) { list -> List<R> }` | `meta.tag.code` (named) | `OperationResult<List<R>>` |
-| `addFromHavingMetaTag(type, system, code) { list -> R }` | system + code exact pair | `OperationResult<R>` |
-| `addFromHavingMetaTag(name, type, system, code) { list -> R }` | system + code exact pair (named) | `OperationResult<R>` |
-| `addAllFromHavingMetaTag(type, system, code) { list -> List<R> }` | system + code exact pair | `OperationResult<List<R>>` |
-| `addAllFromHavingMetaTag(name, type, system, code) { list -> List<R> }` | system + code exact pair (named) | `OperationResult<List<R>>` |
-
-The same 12 overloads exist for `meta.security` with method names `addFromHavingMetaSecurityWithSystem`, `addFromHavingMetaSecurityWithCode`, and `addFromHavingMetaSecurity`.
-
-**meta.profile** — a list of canonical URI strings:
-
-| Method | Filters by | Returns |
-|---|---|---|
-| `addFromHavingMetaProfile(type, url) { list -> R }` | profile URL | `OperationResult<R>` |
-| `addFromHavingMetaProfile(name, type, url) { list -> R }` | profile URL (named) | `OperationResult<R>` |
-| `addAllFromHavingMetaProfile(type, url) { list -> List<R> }` | profile URL | `OperationResult<List<R>>` |
-| `addAllFromHavingMetaProfile(name, type, url) { list -> List<R> }` | profile URL (named) | `OperationResult<List<R>>` |
-
-All unnamed variants have reified inline overloads (omit the `KClass` argument in Kotlin). Named variants intentionally have no reified overload to avoid ambiguity.
-
-```kotlin
-// Filter by tag system
-val result = OperationResult.of(resources, "resources")
-    .addAllFromHavingMetaTagWithSystem<Patient, Patient>("http://example.org/workflow-tags") { it }
-
-// Filter by exact tag (system + code)
-val result2 = OperationResult.of(resources, "resources")
-    .addFromHavingMetaTag(Patient::class, "http://example.org/workflow-tags", "reviewed") { filtered ->
-        OperationOutcome().apply { addIssue().diagnostics = "reviewed=${filtered.size}" }
-    }
-
-// Filter by security label
-val result3 = OperationResult.of(resources, "resources")
-    .addAllFromHavingMetaSecurity<Patient, Patient>(
-        "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"
-    ) { it }
-
-// Filter by declared profile
+// Meta tag — resources tagged "reviewed" (reified, KClass omitted)
 val result4 = OperationResult.of(resources, "resources")
-    .addAllFromHavingMetaProfile<Patient, Patient>(
-        "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
-    ) { it }
+    .addAllFromFiltered<Patient, Patient>(predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { it }
+
+// Meta security — restricted resources
+val result5 = OperationResult.of(resources, "resources")
+    .addAllFromFiltered<Patient, Patient>(predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { it }
+
+// Meta profile — resources declaring a specific profile
+val result6 = OperationResult.of(resources, "resources")
+    .addAllFromFiltered<Patient, Patient>(predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { it }
 ```
 
 #### From all parameters, filtered by FHIRPath expression
@@ -481,7 +389,7 @@ val p: Patient = result.getResult()  // head type unchanged
 
 #### DateTimeInput
 
-`DateTimeInput` is a sealed class that wraps any supported Java/Kotlin date-time value for use with `addDate`, `addDateTime`, `addInstant`, and `addTime`. It replaces the old per-type overload families, which could not be named uniformly because lambda return types share the same JVM signature after erasure.
+`DateTimeInput` is a sealed class that wraps any supported Java/Kotlin date-time value for use with `addDate`, `addDateTime`, `addInstant`, and `addTime`.
 
 | Subclass | Wrapped type |
 |---|---|
@@ -1687,7 +1595,8 @@ fhirmason-r4/
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
     │   ├── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
-    │   └── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
+    │   ├── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
+    │   └── FhirFilter.kt                   # Predicate factory for addFromFiltered / addAllFromFiltered
     └── test/java/dev/ratkay/operation/r4/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1701,6 +1610,7 @@ fhirmason-r4/
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
+        ├── FhirFilterTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
@@ -1730,7 +1640,8 @@ fhirmason-dstu3/
     │   ├── FhirPathHelper.kt               # FhirPath evaluation helpers (internal)
     │   ├── FhirExtensionHelper.kt          # Deep extension retrieval utility
     │   ├── FhirIdentifierHelper.kt         # Identifier filtering helpers (internal)
-    │   └── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
+    │   ├── FhirMetaHelper.kt               # meta.tag / meta.security / meta.profile filtering helpers (internal)
+    │   └── FhirFilter.kt                   # Predicate factory for addFromFiltered / addAllFromFiltered
     └── test/java/dev/ratkay/operation/dstu3/
         ├── OperationResultTest.kt
         ├── OperationResultFromTest.kt
@@ -1744,6 +1655,7 @@ fhirmason-dstu3/
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
+        ├── FhirFilterTest.kt
         ├── AsyncOperationResultTest.kt
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt

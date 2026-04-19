@@ -1,6 +1,7 @@
 package dev.ratkay.operation.r4
 
 import dev.ratkay.operation.ErrorStrategy
+import dev.ratkay.operation.r4.FhirFilter
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.hasSize
 import org.hamcrest.Matchers.`is`
@@ -20,7 +21,7 @@ class OperationResultMetaTest {
         val withTag = patientWithTag("http://example.org/tags", "reviewed")
         val otherSystem = patientWithTag("http://other.org/tags", "reviewed")
         val result = OperationResult.of(listOf(withTag, otherSystem), "patients")
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -33,7 +34,7 @@ class OperationResultMetaTest {
         val a = patientWithTag("http://example.org/tags", "a")
         val b = patientWithTag("http://example.org/tags", "b")
         val result = OperationResult.of(listOf(a, b), "patients")
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -43,7 +44,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithSystem with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoMeta(), "patients")
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -54,7 +55,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithSystem stores result under fhirType when name is null`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients")
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 OperationOutcome()
             }
 
@@ -65,7 +66,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithSystem named overload stores result under explicit key`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients")
-            .addFromHavingMetaTagWithSystem("tagged", Patient::class, "http://example.org/tags") { _ ->
+            .addFromFiltered("tagged", Patient::class, FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 OperationOutcome()
             }
 
@@ -77,7 +78,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaTagWithSystem reified overload works without KClass argument`() {
         val withTag = patientWithTag("http://example.org/tags", "x")
         val result = OperationResult.of(listOf(withTag, patientNoMeta()), "patients")
-            .addFromHavingMetaTagWithSystem<Patient, OperationOutcome>("http://example.org/tags") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -87,7 +88,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithSystem records ERROR outcome when builder throws`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients")
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -99,10 +100,10 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaTagWithSystem respects FAIL_FAST and skips when already errored`() {
         var builderCalled = false
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients", ErrorStrategy.FAIL_FAST)
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 throw RuntimeException("first failure")
             }
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 builderCalled = true
                 OperationOutcome()
             }
@@ -117,7 +118,7 @@ class OperationResultMetaTest {
         val b = patientWithTag("http://example.org/tags", "y")
         val result = OperationResult.of(a, "group-a")
             .add("group-b") { b }
-            .addFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -132,7 +133,7 @@ class OperationResultMetaTest {
         val b = patientWithTag("http://example.org/tags", "y")
         val other = patientWithTag("http://other.org/tags", "x")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaTagWithSystem(Patient::class, "http://example.org/tags") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -140,7 +141,7 @@ class OperationResultMetaTest {
     @Test
     fun `addAllFromHavingMetaTagWithSystem named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients")
-            .addAllFromHavingMetaTagWithSystem("tagged-patients", Patient::class, "http://example.org/tags") { it }
+            .addAllFromFiltered("tagged-patients", Patient::class, FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { it }
 
         assertTrue(result.containsKey("tagged-patients"))
     }
@@ -149,7 +150,7 @@ class OperationResultMetaTest {
     fun `addAllFromHavingMetaTagWithSystem reified overload works`() {
         val a = patientWithTag("http://example.org/tags", "x")
         val result = OperationResult.of(listOf(a, patientNoMeta()), "patients")
-            .addAllFromHavingMetaTagWithSystem<Patient, Patient>("http://example.org/tags") { it }
+            .addAllFromFiltered<Patient, Patient>(predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { it }
 
         assertThat(result.getResult(), hasSize(1))
     }
@@ -161,7 +162,7 @@ class OperationResultMetaTest {
         val target = patientWithTag("http://example.org/tags", "reviewed")
         val other = patientWithTag("http://example.org/tags", "draft")
         val result = OperationResult.of(listOf(target, other), "patients")
-            .addFromHavingMetaTagWithCode(Patient::class, "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithCode("reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -171,7 +172,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithCode with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoMeta(), "patients")
-            .addFromHavingMetaTagWithCode(Patient::class, "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithCode("reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -182,7 +183,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithCode named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "reviewed"), "patients")
-            .addFromHavingMetaTagWithCode("reviewed-result", Patient::class, "reviewed") { _ -> OperationOutcome() }
+            .addFromFiltered("reviewed-result", Patient::class, FhirFilter.hasMetaTagWithCode("reviewed")) { _ -> OperationOutcome() }
 
         assertTrue(result.containsKey("reviewed-result"))
     }
@@ -191,7 +192,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaTagWithCode reified overload works`() {
         val target = patientWithTag("http://example.org/tags", "reviewed")
         val result = OperationResult.of(listOf(target, patientNoMeta()), "patients")
-            .addFromHavingMetaTagWithCode<Patient, OperationOutcome>("reviewed") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaTagWithCode("reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -204,7 +205,7 @@ class OperationResultMetaTest {
         val b = patientWithTag("http://sys2.org", "reviewed")
         val other = patientWithTag("http://sys1.org", "draft")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaTagWithCode(Patient::class, "reviewed") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithCode("reviewed")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -217,7 +218,7 @@ class OperationResultMetaTest {
         val wrongCode = patientWithTag("http://example.org/tags", "draft")
         val wrongSystem = patientWithTag("http://other.org/tags", "reviewed")
         val result = OperationResult.of(listOf(exact, wrongCode, wrongSystem), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -227,7 +228,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag does not match when system matches but code does not`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "draft"), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -237,7 +238,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag does not match when code matches but system does not`() {
         val result = OperationResult.of(patientWithTag("http://other.org/tags", "reviewed"), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -251,7 +252,7 @@ class OperationResultMetaTest {
             meta.addTag().apply { system = "http://example.org/tags"; code = "reviewed" }
         }
         val result = OperationResult.of(multiTag, "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -261,7 +262,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoMeta(), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -272,7 +273,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag stores result under fhirType when name is null`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "reviewed"), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { _ -> OperationOutcome() }
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { _ -> OperationOutcome() }
 
         assertTrue(result.containsKey("operationoutcome"))
         assertFalse(result.containsKey("patient"))
@@ -281,7 +282,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "reviewed"), "patients")
-            .addFromHavingMetaTag("matched", Patient::class, "http://example.org/tags", "reviewed") { _ ->
+            .addFromFiltered("matched", Patient::class, FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { _ ->
                 OperationOutcome()
             }
 
@@ -293,7 +294,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaTag reified overload works without KClass argument`() {
         val exact = patientWithTag("http://example.org/tags", "reviewed")
         val result = OperationResult.of(listOf(exact, patientNoMeta()), "patients")
-            .addFromHavingMetaTag<Patient, OperationOutcome>("http://example.org/tags", "reviewed") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -303,7 +304,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTag records ERROR outcome when builder throws`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "reviewed"), "patients")
-            .addFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -317,7 +318,7 @@ class OperationResultMetaTest {
         val b = patientWithTag("http://example.org/tags", "reviewed")
         val other = patientWithTag("http://example.org/tags", "draft")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaTag(Patient::class, "http://example.org/tags", "reviewed") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -325,7 +326,7 @@ class OperationResultMetaTest {
     @Test
     fun `addAllFromHavingMetaTag named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithTag("http://example.org/tags", "reviewed"), "patients")
-            .addAllFromHavingMetaTag("exact-matches", Patient::class, "http://example.org/tags", "reviewed") { it }
+            .addAllFromFiltered("exact-matches", Patient::class, FhirFilter.hasMetaTag("http://example.org/tags", "reviewed")) { it }
 
         assertTrue(result.containsKey("exact-matches"))
     }
@@ -337,7 +338,7 @@ class OperationResultMetaTest {
         val restricted = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val other = patientWithSecurity("http://other.org/security", "R")
         val result = OperationResult.of(listOf(restricted, other), "patients")
-            .addFromHavingMetaSecurityWithSystem(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -347,7 +348,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurityWithSystem with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoMeta(), "patients")
-            .addFromHavingMetaSecurityWithSystem(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -358,7 +359,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurityWithSystem named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"), "patients")
-            .addFromHavingMetaSecurityWithSystem("restricted", Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode") { _ ->
+            .addFromFiltered("restricted", Patient::class, FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")) { _ ->
                 OperationOutcome()
             }
 
@@ -369,7 +370,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaSecurityWithSystem reified overload works`() {
         val restricted = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val result = OperationResult.of(listOf(restricted, patientNoMeta()), "patients")
-            .addFromHavingMetaSecurityWithSystem<Patient, OperationOutcome>("http://terminology.hl7.org/CodeSystem/v3-ActCode") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -382,7 +383,7 @@ class OperationResultMetaTest {
         val b = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "N")
         val other = patientWithSecurity("http://other.org/security", "R")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaSecurityWithSystem(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurityWithSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -394,7 +395,7 @@ class OperationResultMetaTest {
         val restricted = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val normal = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "N")
         val result = OperationResult.of(listOf(restricted, normal), "patients")
-            .addFromHavingMetaSecurityWithCode(Patient::class, "R") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurityWithCode("R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -404,7 +405,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurityWithCode named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"), "patients")
-            .addFromHavingMetaSecurityWithCode("restricted-result", Patient::class, "R") { _ -> OperationOutcome() }
+            .addFromFiltered("restricted-result", Patient::class, FhirFilter.hasMetaSecurityWithCode("R")) { _ -> OperationOutcome() }
 
         assertTrue(result.containsKey("restricted-result"))
     }
@@ -413,7 +414,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaSecurityWithCode reified overload works`() {
         val restricted = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val result = OperationResult.of(listOf(restricted, patientNoMeta()), "patients")
-            .addFromHavingMetaSecurityWithCode<Patient, OperationOutcome>("R") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaSecurityWithCode("R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -426,7 +427,7 @@ class OperationResultMetaTest {
         val b = patientWithSecurity("http://sys2.org", "R")
         val other = patientWithSecurity("http://sys1.org", "N")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaSecurityWithCode(Patient::class, "R") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurityWithCode("R")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -439,7 +440,7 @@ class OperationResultMetaTest {
         val wrongCode = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "N")
         val wrongSystem = patientWithSecurity("http://other.org/security", "R")
         val result = OperationResult.of(listOf(exact, wrongCode, wrongSystem), "patients")
-            .addFromHavingMetaSecurity(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -449,7 +450,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurity does not match when system matches but code does not`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "N"), "patients")
-            .addFromHavingMetaSecurity(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -463,7 +464,7 @@ class OperationResultMetaTest {
             meta.addSecurity().apply { system = "http://terminology.hl7.org/CodeSystem/v3-ActCode"; code = "R" }
         }
         val result = OperationResult.of(multiSec, "patients")
-            .addFromHavingMetaSecurity(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -473,7 +474,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurity named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"), "patients")
-            .addFromHavingMetaSecurity("restricted", Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { _ ->
+            .addFromFiltered("restricted", Patient::class, FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { _ ->
                 OperationOutcome()
             }
 
@@ -485,7 +486,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaSecurity reified overload works`() {
         val exact = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val result = OperationResult.of(listOf(exact, patientNoMeta()), "patients")
-            .addFromHavingMetaSecurity<Patient, OperationOutcome>("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -495,7 +496,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaSecurity records ERROR outcome when builder throws`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"), "patients")
-            .addFromHavingMetaSecurity(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -509,7 +510,7 @@ class OperationResultMetaTest {
         val b = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")
         val other = patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "N")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaSecurity(Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -517,7 +518,7 @@ class OperationResultMetaTest {
     @Test
     fun `addAllFromHavingMetaSecurity named overload stores under explicit key`() {
         val result = OperationResult.of(patientWithSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R"), "patients")
-            .addAllFromHavingMetaSecurity("restricted-patients", Patient::class, "http://terminology.hl7.org/CodeSystem/v3-ActCode", "R") { it }
+            .addAllFromFiltered("restricted-patients", Patient::class, FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")) { it }
 
         assertTrue(result.containsKey("restricted-patients"))
     }
@@ -529,7 +530,7 @@ class OperationResultMetaTest {
         val conforming = patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")
         val other = patientWithProfile("http://example.org/fhir/StructureDefinition/custom-patient")
         val result = OperationResult.of(listOf(conforming, other), "patients")
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -541,7 +542,7 @@ class OperationResultMetaTest {
         val a = patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")
         val b = patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")
         val result = OperationResult.of(listOf(a, b), "patients")
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -551,7 +552,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaProfile with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoMeta(), "patients")
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -564,7 +565,7 @@ class OperationResultMetaTest {
         val result = OperationResult.of(
             patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"), "patients"
         )
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { _ ->
                 OperationOutcome()
             }
 
@@ -577,7 +578,7 @@ class OperationResultMetaTest {
         val result = OperationResult.of(
             patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"), "patients"
         )
-            .addFromHavingMetaProfile("us-core-result", Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { _ ->
+            .addFromFiltered("us-core-result", Patient::class, FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { _ ->
                 OperationOutcome()
             }
 
@@ -589,7 +590,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaProfile reified overload works without KClass argument`() {
         val conforming = patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")
         val result = OperationResult.of(listOf(conforming, patientNoMeta()), "patients")
-            .addFromHavingMetaProfile<Patient, OperationOutcome>("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -603,7 +604,7 @@ class OperationResultMetaTest {
             meta.addProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")
         }
         val result = OperationResult.of(multiProfile, "patients")
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -615,7 +616,7 @@ class OperationResultMetaTest {
         val result = OperationResult.of(
             patientWithProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"), "patients"
         )
-            .addFromHavingMetaProfile(Patient::class, "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -628,10 +629,10 @@ class OperationResultMetaTest {
         var builderCalled = false
         val url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
         val result = OperationResult.of(patientWithProfile(url), "patients", ErrorStrategy.FAIL_FAST)
-            .addFromHavingMetaProfile(Patient::class, url) { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { _ ->
                 throw RuntimeException("first failure")
             }
-            .addFromHavingMetaProfile(Patient::class, url) { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { _ ->
                 builderCalled = true
                 OperationOutcome()
             }
@@ -647,7 +648,7 @@ class OperationResultMetaTest {
         val b = patientWithProfile(url)
         val result = OperationResult.of(a, "group-a")
             .add("group-b") { b }
-            .addFromHavingMetaProfile(Patient::class, url) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -663,7 +664,7 @@ class OperationResultMetaTest {
         val b = patientWithProfile(url)
         val other = patientWithProfile("http://example.org/fhir/StructureDefinition/other")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromHavingMetaProfile(Patient::class, url) { it }
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -672,7 +673,7 @@ class OperationResultMetaTest {
     fun `addAllFromHavingMetaProfile named overload stores under explicit key`() {
         val url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
         val result = OperationResult.of(patientWithProfile(url), "patients")
-            .addAllFromHavingMetaProfile("us-core-patients", Patient::class, url) { it }
+            .addAllFromFiltered("us-core-patients", Patient::class, FhirFilter.hasMetaProfile(url)) { it }
 
         assertTrue(result.containsKey("us-core-patients"))
     }
@@ -681,7 +682,7 @@ class OperationResultMetaTest {
     fun `addAllFromHavingMetaProfile reified overload works`() {
         val url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
         val result = OperationResult.of(listOf(patientWithProfile(url), patientNoMeta()), "patients")
-            .addAllFromHavingMetaProfile<Patient, Patient>(url) { it }
+            .addAllFromFiltered<Patient, Patient>(predicate = FhirFilter.hasMetaProfile(url)) { it }
 
         assertThat(result.getResult(), hasSize(1))
     }
@@ -692,7 +693,7 @@ class OperationResultMetaTest {
     fun `meta filter methods compose with subsequent pipeline steps`() {
         val url = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient"
         val result = OperationResult.of(listOf(patientWithProfile(url), patientNoMeta()), "patients")
-            .addFromHavingMetaProfile(Patient::class, url) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
             .add("flag") { org.hl7.fhir.r4.model.StringType("done") }

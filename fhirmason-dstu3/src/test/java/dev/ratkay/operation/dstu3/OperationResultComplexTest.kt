@@ -1,6 +1,7 @@
 package dev.ratkay.operation.dstu3
 
 import dev.ratkay.operation.ErrorStrategy
+import dev.ratkay.operation.dstu3.FhirFilter
 
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.hasSize
@@ -37,11 +38,9 @@ class OperationResultComplexTest {
         val p3 = patient("p3") // not enrolled — must be excluded
 
         val result = OperationResult.of(listOf(p1, p2, p3), "patients")
-            .addAllFromHavingExtensionValueMatching(
-                Patient::class,
-                "http://example.org/enrolled",
-                BooleanType::class,
-                { it.booleanValue() }
+            .addAllFromFiltered(
+                type = Patient::class,
+                predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://example.org/enrolled") { it.booleanValue() }
             ) { enrolled ->
                 enrolled.map { p ->
                     Observation().apply {
@@ -376,11 +375,9 @@ class OperationResultComplexTest {
 
         // First filter: enrolled patients only → produces List<Patient> as head
         val afterExtFilter = OperationResult.of(listOf(activeEnrolled, inactiveEnrolled, activeNotEnrolled), "patients")
-            .addAllFromHavingExtensionValueMatching(
-                Patient::class,
-                "http://example.org/enrolled",
-                BooleanType::class,
-                { it.booleanValue() }
+            .addAllFromFiltered(
+                type = Patient::class,
+                predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://example.org/enrolled") { it.booleanValue() }
             ) { enrolled ->
                 // Store enrolled patients back so FHIRPath filter can find them
                 enrolled
