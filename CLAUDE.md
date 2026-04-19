@@ -82,6 +82,28 @@ fun <V : Type> hasExtensionValueMatching(
 
 The same rule applies to any helper or factory object (e.g. `FhirFilter`) whose methods are part of the public API. When adding a new method that takes `KClass`, always add the `Class` sibling in the same commit.
 
+## Java Interop: Kotlin function types in the public API
+
+Kotlin function types such as `(Base) -> Boolean` compile to `kotlin.jvm.functions.Function1<Base, Boolean>` at the JVM level. Java callers can pass a lambda where one is expected, but they **cannot** compose or combine them using familiar Java idioms — `Function1` has no `.and()`, `.or()`, or `.negate()` methods, and `java.util.function.Predicate` composition is not available.
+
+When the public API exposes a functional parameter or return type that Java callers are expected to combine, provide `@JvmStatic` combinator methods that accept and return the same Kotlin function type:
+
+```kotlin
+@JvmStatic
+fun and(vararg predicates: (Base) -> Boolean): (Base) -> Boolean =
+    { r -> predicates.all { it(r) } }
+
+@JvmStatic
+fun or(vararg predicates: (Base) -> Boolean): (Base) -> Boolean =
+    { r -> predicates.any { it(r) } }
+
+@JvmStatic
+fun not(predicate: (Base) -> Boolean): (Base) -> Boolean =
+    { r -> !predicate(r) }
+```
+
+This keeps the function type consistent (any lambda — plain or `FhirFilter`-produced — works with the combinators) and avoids introducing a wrapper class that would create a two-tier predicate system. Do **not** introduce a wrapper type (e.g. `FhirPredicate`) solely to enable method chaining — it restricts callers to values produced by the wrapper's factory and prevents plain lambdas from entering the chain on equal footing.
+
 ## Exception Handling Rules
 
 Every builder method that catches exceptions must follow one of two established patterns. Do not invent new patterns.
