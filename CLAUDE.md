@@ -67,6 +67,21 @@ Exceptions — do **not** add these annotations to:
 - **No wildcard imports** (`import foo.*`) anywhere in source or test files. Import every symbol individually.
 - If two overloads would be identical after JVM type erasure (e.g. lambdas differing only in return type both erase to `Function1`), Kotlin's overload resolution cannot pick between them at call sites. Do **not** use `@JvmName` as a workaround — instead, give each overload a distinct, descriptive name that encodes the input type. Update README when adding such methods.
 
+## Java Interop: No Kotlin-specific types in the public API
+
+Java callers must never be required to reference Kotlin-specific types such as `KClass`, `KFunction`, or anything from `kotlin.reflect.*`. If a public method accepts a `KClass<T>` parameter, a `Class<T>` overload **must** exist alongside it. The `Class<T>` overload delegates to the `KClass<T>` variant via `.kotlin`:
+
+```kotlin
+@JvmStatic
+fun <V : Type> hasExtensionValueMatching(
+    url: String,
+    valueType: Class<V>,
+    predicate: (V) -> Boolean
+): (Base) -> Boolean = hasExtensionValueMatchingInternal(url, valueType.kotlin, predicate)
+```
+
+The same rule applies to any helper or factory object (e.g. `FhirFilter`) whose methods are part of the public API. When adding a new method that takes `KClass`, always add the `Class` sibling in the same commit.
+
 ## Exception Handling Rules
 
 Every builder method that catches exceptions must follow one of two established patterns. Do not invent new patterns.
