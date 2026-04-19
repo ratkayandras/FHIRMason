@@ -144,3 +144,4 @@ Keep `README.md` up to date on every branch. When a branch adds or changes a fea
 - Add new methods to the appropriate table or code block
 - Add or update usage examples that demonstrate the new behaviour
 - **Update the Project Structure section whenever any file is added, removed, or renamed** — this includes test files (`src/test/…`), not just production source files. The tree in the README must exactly match the files on disk.
+- **Never describe previous behaviour or change history in the README.** The README documents the current state only; design rationale and migration notes belong in commit messages or PR descriptions.

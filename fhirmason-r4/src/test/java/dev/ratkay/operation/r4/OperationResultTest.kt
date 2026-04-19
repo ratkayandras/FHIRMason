@@ -58,6 +58,7 @@ import java.time.ZonedDateTime
 import java.util.Calendar
 import java.util.Date
 import java.util.TimeZone
+import dev.ratkay.operation.r4.FhirFilter
 
 class OperationResultTest {
 
@@ -252,14 +253,14 @@ class OperationResultTest {
         assertThat(result.getByType<OperationOutcome>(), hasSize(1))
     }
 
-    // ── addFromHavingAllExtensions / addFromHavingAnyExtension ────────────────
+    // ── addFromFiltered (extension filters) ──────────────────────────────────
 
     @Test
     fun `addFromHavingAllExtensions returns only resources that have the matching extension URL`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val notEnrolled = patient()
         val result = OperationResult.of(listOf(enrolled, notEnrolled), "patients")
-            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -276,7 +277,7 @@ class OperationResultTest {
         }
         val onlyFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val result = OperationResult.of(listOf(both, onlyFirst), "patients")
-            .addFromHavingAllExtensions(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/url1", "http://example.org/url2")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -295,7 +296,7 @@ class OperationResultTest {
         }
         val hasNeither = patient()
         val result = OperationResult.of(listOf(hasFirst, hasSecond, hasBoth, hasNeither), "patients")
-            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/url1", "http://example.org/url2")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -309,7 +310,7 @@ class OperationResultTest {
         val hasIt = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val hasNot = patient()
         val result = OperationResult.of(listOf(hasIt, hasNot), "patients")
-            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/url1")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -319,7 +320,7 @@ class OperationResultTest {
     @Test
     fun `addFromHavingAllExtensions with no extUrls returns all resources of that type`() {
         val result = OperationResult.of(listOf(patient(), patient(), appointment()), "items")
-            .addFromHavingAllExtensions(Patient::class) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions()) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -331,7 +332,7 @@ class OperationResultTest {
     @Test
     fun `addFromHavingAllExtensions produces empty list when no resources match`() {
         val result = OperationResult.of(listOf(patient(), patient()), "patients")
-            .addFromHavingAllExtensions(Patient::class, "http://example.org/nonexistent") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/nonexistent")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -343,7 +344,7 @@ class OperationResultTest {
     @Test
     fun `addFromHavingAnyExtension produces empty list when no resources match any URL`() {
         val result = OperationResult.of(listOf(patient(), patient()), "patients")
-            .addFromHavingAnyExtension(Patient::class, "http://example.org/nonexistent") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/nonexistent")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -356,7 +357,7 @@ class OperationResultTest {
         val enrolled2 = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(enrolled1, "group-a")
             .add("group-b") { enrolled2 }
-            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -369,7 +370,7 @@ class OperationResultTest {
     fun `addAllFromHavingAllExtensions returns list result built from AND-filtered input`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addAllFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -382,7 +383,7 @@ class OperationResultTest {
         val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
         val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
-            .addAllFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/url1", "http://example.org/url2")) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -393,7 +394,7 @@ class OperationResultTest {
     fun `addFromHavingAllExtensions reified overload works correctly`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addFromHavingAllExtensions<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -407,7 +408,7 @@ class OperationResultTest {
         val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
         val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
-            .addFromHavingAnyExtension<Patient, OperationOutcome>("http://example.org/url1", "http://example.org/url2") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasAnyExtension("http://example.org/url1", "http://example.org/url2")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -417,7 +418,7 @@ class OperationResultTest {
     @Test
     fun `addFromHavingAllExtensions records error outcome when builder throws`() {
         val result = OperationResult.of(patient(), "patients")
-            .addFromHavingAllExtensions(Patient::class) { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions()) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -429,7 +430,7 @@ class OperationResultTest {
     fun `addFromHavingAllExtensions unnamed overload stores result under output fhirType not input type`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -442,7 +443,7 @@ class OperationResultTest {
     fun `addFromHavingAnyExtension unnamed overload stores result under output fhirType not input type`() {
         val hasExt = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val result = OperationResult.of(listOf(hasExt, patient()), "patients")
-            .addFromHavingAnyExtension(Patient::class, "http://example.org/url1") { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/url1")) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -454,7 +455,7 @@ class OperationResultTest {
     fun `addFromHavingAllExtensions named overload stores result under explicit name`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addFromHavingAllExtensions("enrolled-summary", Patient::class, "http://example.org/enrolled") { filtered ->
+            .addFromFiltered("enrolled-summary", Patient::class, FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 OperationOutcome().apply {
                     addIssue().diagnostics = "count=${filtered.size}"
                 }
@@ -469,7 +470,7 @@ class OperationResultTest {
     fun `addAllFromHavingAllExtensions reified overload returns list result`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient(), patient()), "patients")
-            .addAllFromHavingAllExtensions<Patient, OperationOutcome>("http://example.org/enrolled") { filtered ->
+            .addAllFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -480,7 +481,7 @@ class OperationResultTest {
     fun `addAllFromHavingAllExtensions unnamed overload stores results under output fhirType not input type`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addAllFromHavingAllExtensions(Patient::class, "http://example.org/enrolled") { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -493,7 +494,7 @@ class OperationResultTest {
         val hasFirst = patient().apply { addExtension("http://example.org/url1", StringType("a")) }
         val hasSecond = patient().apply { addExtension("http://example.org/url2", StringType("b")) }
         val result = OperationResult.of(listOf(hasFirst, hasSecond, patient()), "patients")
-            .addAllFromHavingAnyExtension(Patient::class, "http://example.org/url1", "http://example.org/url2") { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasAnyExtension("http://example.org/url1", "http://example.org/url2")) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -509,7 +510,7 @@ class OperationResultTest {
         val withBoolean = patient().apply { addExtension("http://example.org/flag", BooleanType(true)) }
         val noExtension = patient()
         val result = OperationResult.of(listOf(withString, withBoolean, noExtension), "patients")
-            .addFromHavingExtensionWithValueType(Patient::class, "http://example.org/flag", StringType::class) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class)) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -520,7 +521,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionWithValueType returns empty list when no resources have that value type at URL`() {
         val withBoolean = patient().apply { addExtension("http://example.org/flag", BooleanType(false)) }
         val result = OperationResult.of(listOf(withBoolean, patient()), "patients")
-            .addFromHavingExtensionWithValueType(Patient::class, "http://example.org/flag", StringType::class) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class)) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -531,7 +532,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionWithValueType named variant stores result under explicit name`() {
         val withString = patient().apply { addExtension("http://example.org/flag", StringType("active")) }
         val result = OperationResult.of(listOf(withString, patient()), "patients")
-            .addFromHavingExtensionWithValueType("flag-summary", Patient::class, "http://example.org/flag", StringType::class) { filtered ->
+            .addFromFiltered("flag-summary", Patient::class, FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class)) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -546,7 +547,7 @@ class OperationResultTest {
         val withString2 = patient().apply { addExtension("http://example.org/flag", StringType("b")) }
         val withBoolean = patient().apply { addExtension("http://example.org/flag", BooleanType(true)) }
         val result = OperationResult.of(listOf(withString1, withString2, withBoolean), "patients")
-            .addAllFromHavingExtensionWithValueType(Patient::class, "http://example.org/flag", StringType::class) { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class)) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -557,7 +558,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionWithValueType reified overload works correctly`() {
         val withString = patient().apply { addExtension("http://example.org/flag", StringType("x")) }
         val result = OperationResult.of(listOf(withString, patient()), "patients")
-            .addFromHavingExtensionWithValueType<Patient, StringType, OperationOutcome>("http://example.org/flag") { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasExtensionWithValueType<StringType>("http://example.org/flag")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -570,7 +571,7 @@ class OperationResultTest {
         val notEnrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("false")) }
         val noExt = patient()
         val result = OperationResult.of(listOf(enrolled, notEnrolled, noExt), "patients")
-            .addFromHavingExtensionValueMatching(Patient::class, "http://example.org/enrolled", StringType::class, { it.value == "true" }) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/enrolled") { it.value == "true" }) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -581,7 +582,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionValueMatching returns empty list when predicate never satisfied`() {
         val patient1 = patient().apply { addExtension("http://example.org/enrolled", StringType("false")) }
         val result = OperationResult.of(listOf(patient1, patient()), "patients")
-            .addFromHavingExtensionValueMatching(Patient::class, "http://example.org/enrolled", StringType::class, { it.value == "true" }) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/enrolled") { it.value == "true" }) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -592,7 +593,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionValueMatching named variant stores result under explicit name`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addFromHavingExtensionValueMatching("enrolled-patients", Patient::class, "http://example.org/enrolled", StringType::class, { it.value == "true" }) { filtered ->
+            .addFromFiltered("enrolled-patients", Patient::class, FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/enrolled") { it.value == "true" }) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -607,7 +608,7 @@ class OperationResultTest {
         val low = patient().apply { addExtension("http://example.org/priority", IntegerType(1)) }
         val none = patient()
         val result = OperationResult.of(listOf(high, low, none), "patients")
-            .addAllFromHavingExtensionValueMatching(Patient::class, "http://example.org/priority", IntegerType::class, { it.value > 5 }) { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<IntegerType>("http://example.org/priority") { it.value > 5 }) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -619,7 +620,7 @@ class OperationResultTest {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", BooleanType(true)) }
         val notEnrolled = patient().apply { addExtension("http://example.org/enrolled", BooleanType(false)) }
         val result = OperationResult.of(listOf(enrolled, notEnrolled), "patients")
-            .addFromHavingExtensionValueMatching<Patient, BooleanType, OperationOutcome>("http://example.org/enrolled", { it.booleanValue() }) { filtered ->
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://example.org/enrolled") { it.booleanValue() }) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -634,7 +635,7 @@ class OperationResultTest {
         }
         val userOnly = patient().apply { addExtension("http://example.org/role", StringType("user")) }
         val result = OperationResult.of(listOf(multiExt, userOnly, patient()), "patients")
-            .addFromHavingExtensionValueMatching(Patient::class, "http://example.org/role", StringType::class, { it.value == "admin" }) { filtered ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/role") { it.value == "admin" }) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -645,7 +646,7 @@ class OperationResultTest {
     fun `addFromHavingExtensionValueMatching unnamed overload stores result under output fhirType not input type`() {
         val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
         val result = OperationResult.of(listOf(enrolled, patient()), "patients")
-            .addFromHavingExtensionValueMatching(Patient::class, "http://example.org/enrolled", StringType::class, { it.value == "true" }) { _ ->
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/enrolled") { it.value == "true" }) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -657,7 +658,7 @@ class OperationResultTest {
     fun `addAllFromHavingExtensionValueMatching unnamed overload stores results under output fhirType not input type`() {
         val high = patient().apply { addExtension("http://example.org/priority", IntegerType(10)) }
         val result = OperationResult.of(listOf(high, patient()), "patients")
-            .addAllFromHavingExtensionValueMatching(Patient::class, "http://example.org/priority", IntegerType::class, { it.value > 5 }) { filtered ->
+            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasExtensionValueMatching<IntegerType>("http://example.org/priority") { it.value > 5 }) { filtered ->
                 filtered.map { OperationOutcome() }
             }
 
@@ -2375,6 +2376,104 @@ class OperationResultTest {
         assertEquals(1, statusParam.extension.size)
         assertEquals("http://example.com/added", statusParam.extension.first().url)
         assertEquals("new", (statusParam.extension.first().value as StringType).value)
+    }
+
+    // ── addFromFiltered / addAllFromFiltered ──────────────────────────────────
+
+    @Test
+    fun `addFromFiltered stores result under output fhirType when name is null`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertTrue(result.containsKey("operationoutcome"))
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered with explicit name stores under that name`() {
+        val result = OperationResult.of(listOf(patient()), "patients")
+            .addFromFiltered("my-key", Patient::class, { true }) { patients ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${patients.size}" }
+            }
+
+        assertTrue(result.containsKey("my-key"))
+    }
+
+    @Test
+    fun `addFromFiltered reified overload works without explicit KClass`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(listOf(enrolled, patient()), "patients")
+            .addFromFiltered<Patient, OperationOutcome>(predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered with no matching resources passes empty list to builder`() {
+        val result = OperationResult.of(listOf(patient()), "patients")
+            .addFromFiltered(type = Patient::class, predicate = { false }) { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertFalse(result.hasErrors())
+        assertEquals("count=0", result.getResult().issueFirstRep.diagnostics)
+    }
+
+    @Test
+    fun `addFromFiltered builder exception records ERROR outcome (Pattern A)`() {
+        val result = OperationResult.of(listOf(patient()), "patients")
+            .addFromFiltered(type = Patient::class, predicate = { true }) { _ -> throw RuntimeException("boom") }
+
+        assertTrue(result.hasErrors())
+        assertEquals(
+            OperationOutcome.IssueSeverity.ERROR,
+            result.getOutcomes().first().issueFirstRep.severity
+        )
+    }
+
+    @Test
+    fun `addFromFiltered stores result under output type not input type`() {
+        val result = OperationResult.of(listOf(patient()), "patients")
+            .addFromFiltered(type = Patient::class, predicate = { true }) { _ -> OperationOutcome() }
+
+        assertTrue(result.containsKey("operationoutcome"))
+        assertFalse(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `addAllFromFiltered returns list head and stores under output fhirType`() {
+        val p1 = patient()
+        val p2 = patient()
+        val result = OperationResult.of(listOf(p1, p2, appointment()), "items")
+            .addAllFromFiltered(type = Patient::class, predicate = { true }) { filtered -> filtered }
+
+        assertThat(result.getResultList(), hasSize(2))
+        assertTrue(result.containsKey("patient"))
+    }
+
+    @Test
+    fun `addAllFromFiltered with explicit name groups all items under that name`() {
+        val result = OperationResult.of(listOf(patient(), appointment()), "items")
+            .addAllFromFiltered("mixed", Base::class, { true }) { items -> items }
+
+        assertEquals(2, result.count("mixed"))
+    }
+
+    @Test
+    fun `addFromFiltered predicate filters correctly across multiple accumulated keys`() {
+        val enrolled = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val result = OperationResult.of(enrolled, "p1")
+            .add { patient() }
+            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasAllExtensions("http://example.org/enrolled")) { filtered ->
+                OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
+            }
+
+        assertEquals("count=1", result.getResult().issueFirstRep.diagnostics)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
