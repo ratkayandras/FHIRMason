@@ -150,6 +150,23 @@ object FhirFilter {
     fun hasMetaSecurity(system: String, code: String): (Base) -> Boolean =
         { filterByMetaSecurity(listOf(it), Base::class, system, code).isNotEmpty() }
 
+    // ── Combinators ───────────────────────────────────────────────────────────
+
+    /** Returns a predicate that is `true` when **all** of the given predicates are satisfied. */
+    @JvmStatic
+    fun and(vararg predicates: (Base) -> Boolean): (Base) -> Boolean =
+        { r -> predicates.all { it(r) } }
+
+    /** Returns a predicate that is `true` when **at least one** of the given predicates is satisfied. */
+    @JvmStatic
+    fun or(vararg predicates: (Base) -> Boolean): (Base) -> Boolean =
+        { r -> predicates.any { it(r) } }
+
+    /** Returns a predicate that is `true` when the given predicate is **not** satisfied. */
+    @JvmStatic
+    fun not(predicate: (Base) -> Boolean): (Base) -> Boolean =
+        { r -> !predicate(r) }
+
     // ── Meta profile predicate ────────────────────────────────────────────────
 
     /** Returns `true` when the resource has the given [url] in meta.profile. */

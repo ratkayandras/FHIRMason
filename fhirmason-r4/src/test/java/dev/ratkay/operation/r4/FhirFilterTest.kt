@@ -242,6 +242,69 @@ class FhirFilterTest {
         assertFalse(composed(noIdentifier))
     }
 
+    // ── Combinators ───────────────────────────────────────────────────────────
+
+    @Test
+    fun `and returns true only when all predicates are satisfied`() {
+        val patient = patient().apply {
+            addExtension("http://example.org/enrolled", StringType("true"))
+            addIdentifier(Identifier().setSystem("http://example.org/mrn").setValue("123"))
+        }
+        val combined = FhirFilter.and(
+            FhirFilter.hasAllExtensions("http://example.org/enrolled"),
+            FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")
+        )
+        assertTrue(combined(patient))
+
+        val missingIdentifier = patient().apply {
+            addExtension("http://example.org/enrolled", StringType("true"))
+        }
+        assertFalse(combined(missingIdentifier))
+    }
+
+    @Test
+    fun `or returns true when at least one predicate is satisfied`() {
+        val withExtOnly = patient().apply {
+            addExtension("http://example.org/enrolled", StringType("true"))
+        }
+        val combined = FhirFilter.or(
+            FhirFilter.hasAllExtensions("http://example.org/enrolled"),
+            FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")
+        )
+        assertTrue(combined(withExtOnly))
+        assertFalse(combined(patient()))
+    }
+
+    @Test
+    fun `not inverts the predicate`() {
+        val withExt = patient().apply { addExtension("http://example.org/enrolled", StringType("true")) }
+        val notEnrolled = FhirFilter.not(FhirFilter.hasAllExtensions("http://example.org/enrolled"))
+        assertFalse(notEnrolled(withExt))
+        assertTrue(notEnrolled(patient()))
+    }
+
+    @Test
+    fun `and and or and not compose together`() {
+        val enrolledMrn = patient().apply {
+            addExtension("http://example.org/enrolled", StringType("true"))
+            addIdentifier(Identifier().setSystem("http://example.org/mrn").setValue("1"))
+        }
+        val enrolledOther = patient().apply {
+            addExtension("http://example.org/enrolled", StringType("true"))
+            addIdentifier(Identifier().setSystem("http://other.org/id").setValue("2"))
+        }
+        // enrolled AND (mrn OR not-enrolled) — the second branch is always false for enrolled patients
+        val combined = FhirFilter.and(
+            FhirFilter.hasAllExtensions("http://example.org/enrolled"),
+            FhirFilter.or(
+                FhirFilter.hasIdentifierWithSystem("http://example.org/mrn"),
+                FhirFilter.not(FhirFilter.hasAllExtensions("http://example.org/enrolled"))
+            )
+        )
+        assertTrue(combined(enrolledMrn))
+        assertFalse(combined(enrolledOther))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient()

@@ -195,7 +195,30 @@ Both methods have reified Kotlin overloads (omit `type` entirely). `name` defaul
 | `FhirFilter.hasMetaSecurity("http://terminology.hl7.org/CodeSystem/v3-ActCode", "R")` | Exact security system + code match |
 | `FhirFilter.hasMetaProfile("http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient")` | Profile URL is declared in `meta.profile` |
 
-Predicates compose naturally with standard Kotlin lambdas:
+Predicates can be combined using the built-in combinators `FhirFilter.and`, `FhirFilter.or`, and `FhirFilter.not`, which work identically from Kotlin and Java:
+
+```kotlin
+// Kotlin
+result.addFromFiltered(
+    type = Patient::class,
+    predicate = FhirFilter.and(
+        FhirFilter.hasAllExtensions("http://ext/enrolled"),
+        FhirFilter.hasMetaProfile("http://example.org/profile/v1")
+    )
+) { patients -> ... }
+```
+
+```java
+// Java
+result.addFromFiltered(Patient.class,
+    FhirFilter.and(
+        FhirFilter.hasAllExtensions("http://ext/enrolled"),
+        FhirFilter.hasMetaProfile("http://example.org/profile/v1")
+    ),
+    patients -> ...);
+```
+
+From Kotlin you can also compose with standard lambdas:
 ```kotlin
 val p = { r: Base ->
     FhirFilter.hasAllExtensions("http://ext/enrolled")(r) &&
