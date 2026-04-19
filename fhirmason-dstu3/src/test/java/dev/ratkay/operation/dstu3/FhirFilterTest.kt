@@ -59,6 +59,12 @@ class FhirFilterTest {
     }
 
     @Test
+    fun `hasExtensionWithValueType Class overload returns true when value type matches`() {
+        val patient = patient().apply { addExtension("http://example.org/flag", StringType("yes")) }
+        assertTrue(FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class.java)(patient))
+    }
+
+    @Test
     fun `hasExtensionWithValueType returns false when URL absent`() {
         val patient = patient()
         assertFalse(FhirFilter.hasExtensionWithValueType<StringType>("http://example.org/missing")(patient))
@@ -71,6 +77,14 @@ class FhirFilterTest {
         val patient = patient().apply { addExtension("http://example.org/score", StringType("high")) }
         assertTrue(
             FhirFilter.hasExtensionValueMatching<StringType>("http://example.org/score") { it.value == "high" }(patient)
+        )
+    }
+
+    @Test
+    fun `hasExtensionValueMatching Class overload returns true when value satisfies predicate`() {
+        val patient = patient().apply { addExtension("http://example.org/score", StringType("high")) }
+        assertTrue(
+            FhirFilter.hasExtensionValueMatching("http://example.org/score", StringType::class.java) { it.value == "high" }(patient)
         )
     }
 

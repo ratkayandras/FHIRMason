@@ -47,6 +47,11 @@ object FhirFilter {
     inline fun <reified V : Type> hasExtensionWithValueType(url: String): (Base) -> Boolean =
         hasExtensionWithValueType(url, V::class)
 
+    /** Java-friendly overload of [hasExtensionWithValueType] — accepts [Class] instead of [KClass]. */
+    @JvmStatic
+    fun <V : Type> hasExtensionWithValueType(url: String, valueType: Class<V>): (Base) -> Boolean =
+        hasExtensionWithValueType(url, valueType.kotlin)
+
     /**
      * Returns `true` when the resource has an extension at [url] whose value is an instance
      * of [valueType] and satisfies [predicate].
@@ -75,6 +80,15 @@ object FhirFilter {
         noinline predicate: (V) -> Boolean
     ): (Base) -> Boolean =
         hasExtensionValueMatchingInternal(url, V::class, predicate)
+
+    /** Java-friendly overload of [hasExtensionValueMatching] — accepts [Class] instead of [KClass]. */
+    @JvmStatic
+    fun <V : Type> hasExtensionValueMatching(
+        url: String,
+        valueType: Class<V>,
+        predicate: (V) -> Boolean
+    ): (Base) -> Boolean =
+        hasExtensionValueMatchingInternal(url, valueType.kotlin, predicate)
 
     @PublishedApi
     @JvmSynthetic
