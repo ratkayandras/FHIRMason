@@ -1343,6 +1343,77 @@ val result = AsyncOperationResult()
 
 ---
 
+## FhirPath Expression Builder
+
+`FhirPath` (in `fhirmason-api`, package `dev.ratkay.operation`) is a fluent, immutable builder for constructing FHIRPath expression strings. It is version-agnostic — the same class is shared by both R4 and DSTU3.
+
+HAPI FHIR provides no API for constructing FHIRPath expressions programmatically. `FhirPath` fills that gap: each step returns a new `FhirPath` instance and the final expression string is retrieved via `build()` (or `toString()`).
+
+```kotlin
+// Absolute path
+val path = FhirPath.from("Patient")
+    .navigate("name")
+    .where(FhirPath.relative().navigate("use").eq("'official'"))
+    .navigate("given")
+    .first()
+    .build()
+// → "Patient.name.where(use = 'official').given.first()"
+
+// Compose conditions with boolean operators
+val condition = FhirPath.from("active").eq("true")
+    .and(FhirPath.from("name").exists())
+    .build()
+// → "(active = true) and (name.exists())"
+
+// Use with existing OperationResult FHIRPath methods
+val result = OperationResult.of(patient)
+    .guardPath(FhirPath.from("active").eq("true").build(), "Patient must be active")
+    .selectByPath<HumanName>(
+        FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("'official'")).first().build(),
+        "official-name"
+    )
+```
+
+### Factory methods
+
+| Method | Description |
+|--------|-------------|
+| `FhirPath.from(segment)` | Start from a named root segment (resource type or first field) |
+| `FhirPath.relative()` | Start with an empty base for condition/predicate expressions used inside `where`, `all`, `exists` |
+
+### Available operations
+
+| Category | Methods |
+|----------|---------|
+| Navigation | `navigate`, `union` |
+| Subsetting | `where`, `select`, `ofType` |
+| Collection | `first`, `last`, `tail`, `take`, `skip`, `count`, `empty`, `exists`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `distinct`, `isDistinct`, `subsetOf`, `supersetOf`, `children`, `descendants` |
+| Boolean | `not`, `and`, `or`, `xor`, `implies` |
+| Equality / comparison | `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, `memberOf`, `containsValue` |
+| Type | `isType`, `asType` |
+| String | `length`, `upper`, `lower`, `trim`, `startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `substring`, `replace`, `replaceMatches`, `split`, `join` |
+| Math | `abs`, `ceiling`, `floor`, `round`, `sqrt`, `power`, `truncate` |
+| Arithmetic | `plus`, `minus`, `times`, `dividedBy`, `div`, `mod`, `concat` |
+| Type conversion | `toBoolean`, `toInteger`, `toDecimal`, `toDate`, `toDateTime`, `toTime`, `toQuantity` |
+| FHIR-specific | `extension`, `hasExtension`, `resolve` |
+
+`is` and `as` are Kotlin keywords and are exposed as `isType` / `asType`. Similarly, `in` is exposed as `memberOf`.
+
+### Java usage
+
+```java
+String path = FhirPath.from("Patient")
+    .navigate("name")
+    .where(FhirPath.relative().navigate("use").eq("'official'"))
+    .navigate("given")
+    .first()
+    .build();
+
+result.guardPath(FhirPath.from("active").eq("true").build(), "Patient must be active");
+```
+
+---
+
 ## Usage Examples
 
 ### 1. Simple accumulation
@@ -1576,11 +1647,14 @@ mvn clean install       # build, test, and install to local repo
 
 ```
 fhirmason-api/
-└── src/main/java/dev/ratkay/operation/
-    ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
-    ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-    ├── StepMetrics.kt                  # Per-step timing and outcome data
-    └── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
+├── src/main/java/dev/ratkay/operation/
+│   ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
+│   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+│   ├── StepMetrics.kt                  # Per-step timing and outcome data
+│   ├── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
+│   └── FhirPath.kt                     # Fluent FHIRPath expression builder (version-agnostic)
+└── src/test/java/dev/ratkay/operation/
+    └── FhirPathTest.kt
 
 fhirmason-r4/
 └── src/
