@@ -50,7 +50,7 @@ class FhirPathEvaluationTest {
             addName().apply { use = HumanName.NameUse.NICKNAME; family = "Smitty" }
         }
         val path = FhirPath.from("name")
-            .where(FhirPath.relative().navigate("use").eq("'official'"))
+            .where(FhirPath.relative().navigate("use").eq("official"))
             .navigate("family")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -70,7 +70,7 @@ class FhirPathEvaluationTest {
             addName().apply { use = HumanName.NameUse.NICKNAME; addGiven("Johnny") }
         }
         val path = FhirPath.from("name")
-            .where(FhirPath.relative().navigate("use").eq("'official'"))
+            .where(FhirPath.relative().navigate("use").eq("official"))
             .navigate("given")
             .first()
 
@@ -85,7 +85,7 @@ class FhirPathEvaluationTest {
             addName().apply { use = HumanName.NameUse.OFFICIAL }     // no family
             addName().apply { use = HumanName.NameUse.NICKNAME; family = "Smitty" }
         }
-        val condition = FhirPath.relative().navigate("use").eq("'official'")
+        val condition = FhirPath.relative().navigate("use").eq("official")
             .and(FhirPath.relative().navigate("family").exists())
         val path = FhirPath.from("name").where(condition).navigate("family")
 
@@ -101,8 +101,8 @@ class FhirPathEvaluationTest {
             addTelecom().apply { system = ContactPoint.ContactPointSystem.EMAIL; value = "j@example.org" }
             addTelecom().apply { system = ContactPoint.ContactPointSystem.FAX; value = "555-0000" }
         }
-        val phoneOrEmail = FhirPath.relative().navigate("system").eq("'phone'")
-            .or(FhirPath.relative().navigate("system").eq("'email'"))
+        val phoneOrEmail = FhirPath.relative().navigate("system").eq("phone")
+            .or(FhirPath.relative().navigate("system").eq("email"))
         val path = FhirPath.from("telecom").where(phoneOrEmail).navigate("value")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -116,7 +116,7 @@ class FhirPathEvaluationTest {
             addIdentifier().apply { system = "http://example.org/ssn"; value = "123-45-6789" }
         }
         val path = FhirPath.from("identifier")
-            .where(FhirPath.relative().navigate("system").eq("'http://example.org/mrn'"))
+            .where(FhirPath.relative().navigate("system").eq("http://example.org/mrn"))
             .navigate("value")
 
         val result = evaluateFirst(patient, path, StringType::class.java)
@@ -130,8 +130,8 @@ class FhirPathEvaluationTest {
             addIdentifier().apply { system = "http://example.org/mrn"; value = "OLD-001" }
             addIdentifier().apply { system = "http://example.org/ssn"; value = "MRN-999" }
         }
-        val condition = FhirPath.relative().navigate("system").eq("'http://example.org/mrn'")
-            .and(FhirPath.relative().navigate("value").startsWith("'MRN-'"))
+        val condition = FhirPath.relative().navigate("system").eq("http://example.org/mrn")
+            .and(FhirPath.relative().navigate("value").startsWith("MRN-"))
         val path = FhirPath.from("identifier").where(condition).navigate("value")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -149,7 +149,7 @@ class FhirPathEvaluationTest {
             addName().apply { use = HumanName.NameUse.NICKNAME; family = "Smitty" }
         }
         val path = FhirPath.from("name")
-            .where(FhirPath.relative().navigate("use").eq("'official'"))
+            .where(FhirPath.relative().navigate("use").eq("official"))
             .count()
 
         val result = evaluateFirst(patient, path, IntegerType::class.java)
@@ -162,7 +162,7 @@ class FhirPathEvaluationTest {
             addName().apply { use = HumanName.NameUse.OFFICIAL; family = "Smith" }
             addName().apply { use = HumanName.NameUse.NICKNAME; family = "Smitty" }
         }
-        assertTrue(matches(patient, FhirPath.from("name").exists(FhirPath.relative().navigate("use").eq("'official'"))))
+        assertTrue(matches(patient, FhirPath.from("name").exists(FhirPath.relative().navigate("use").eq("official"))))
     }
 
     @Test
@@ -170,7 +170,7 @@ class FhirPathEvaluationTest {
         val patient = Patient().apply {
             addName().apply { use = HumanName.NameUse.NICKNAME; family = "Smitty" }
         }
-        assertFalse(matches(patient, FhirPath.from("name").exists(FhirPath.relative().navigate("use").eq("'official'"))))
+        assertFalse(matches(patient, FhirPath.from("name").exists(FhirPath.relative().navigate("use").eq("official"))))
     }
 
     @Test
@@ -222,7 +222,7 @@ class FhirPathEvaluationTest {
             addName().apply { family = "Smithfield" }
         }
         val path = FhirPath.from("name")
-            .where(FhirPath.relative().navigate("family").startsWith("'Sm'"))
+            .where(FhirPath.relative().navigate("family").startsWith("Sm"))
             .navigate("family")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -236,7 +236,7 @@ class FhirPathEvaluationTest {
             addName().apply { family = "Jones" }
         }
         val path = FhirPath.from("name")
-            .where(FhirPath.relative().navigate("family").upper().eq("'SMITH'"))
+            .where(FhirPath.relative().navigate("family").upper().eq("SMITH"))
             .navigate("family")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -254,7 +254,7 @@ class FhirPathEvaluationTest {
             addIdentifier().apply { system = "http://example.org/id"; value = "MRN-099" }
         }
         val path = FhirPath.from("identifier")
-            .where(FhirPath.relative().navigate("value").matches("'MRN-[0-9]+'"))
+            .where(FhirPath.relative().navigate("value").matches("MRN-[0-9]+"))
             .navigate("value")
 
         val results = evaluate(patient, path, StringType::class.java)
@@ -282,9 +282,9 @@ class FhirPathEvaluationTest {
             addIdentifier().apply { system = "http://b.org"; value = "passive-mrn" }
             addIdentifier().apply { system = "http://c.org"; value = "something-else" }
         }
-        val sysA = FhirPath.relative().navigate("system").eq("'http://a.org'")
-        val sysB = FhirPath.relative().navigate("system").eq("'http://b.org'")
-        val endsWithMrn = FhirPath.relative().navigate("value").endsWith("'-mrn'")
+        val sysA = FhirPath.relative().navigate("system").eq("http://a.org")
+        val sysB = FhirPath.relative().navigate("system").eq("http://b.org")
+        val endsWithMrn = FhirPath.relative().navigate("value").endsWith("-mrn")
         val path = FhirPath.from("identifier")
             .where(sysA.or(sysB).and(endsWithMrn))
             .navigate("value")
@@ -314,7 +314,7 @@ class FhirPathEvaluationTest {
             addExtension("http://example.org/color", StringType("blue"))
         }
         val path = FhirPath.from("extension")
-            .where(FhirPath.relative().navigate("url").eq("'http://example.org/color'"))
+            .where(FhirPath.relative().navigate("url").eq("http://example.org/color"))
             .exists()
         assertTrue(matches(patient, path))
     }
@@ -322,7 +322,7 @@ class FhirPathEvaluationTest {
     @Test
     fun `extension where url is false when extension is absent`() {
         val path = FhirPath.from("extension")
-            .where(FhirPath.relative().navigate("url").eq("'http://example.org/color'"))
+            .where(FhirPath.relative().navigate("url").eq("http://example.org/color"))
             .exists()
         assertFalse(matches(Patient(), path))
     }
@@ -347,7 +347,7 @@ class FhirPathEvaluationTest {
             active = true
             addName().apply { family = "Smith" }
         }
-        val path = FhirPath.from("active").eq("true")
+        val path = FhirPath.from("active").eq(true)
             .and(FhirPath.from("name").exists())
         assertTrue(matches(patient, path))
     }
@@ -355,7 +355,7 @@ class FhirPathEvaluationTest {
     @Test
     fun `and short-circuits when second condition is false`() {
         val patient = Patient().apply { active = true }
-        val path = FhirPath.from("active").eq("true")
+        val path = FhirPath.from("active").eq(true)
             .and(FhirPath.from("name").exists())
         assertFalse(matches(patient, path))
     }
@@ -398,7 +398,7 @@ class FhirPathEvaluationTest {
         val patient = Patient().apply {
             addName().apply { use = HumanName.NameUse.OFFICIAL; family = "Smith"; addGiven("John") }
         }
-        val base = FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("'official'"))
+        val base = FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("official"))
 
         val family = evaluateFirst(patient, base.navigate("family"), StringType::class.java)
         val given = evaluateFirst(patient, base.navigate("given").first(), StringType::class.java)

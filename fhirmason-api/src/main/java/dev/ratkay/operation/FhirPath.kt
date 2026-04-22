@@ -15,13 +15,13 @@ package dev.ratkay.operation
  * // Absolute path
  * val path = FhirPath.from("Patient")
  *     .navigate("name")
- *     .where(FhirPath.relative().navigate("use").eq("'official'"))
+ *     .where(FhirPath.relative().navigate("use").eq("official"))
  *     .first()
  *     .build()
  * // → "Patient.name.where(use = 'official').first()"
  *
  * // Relative condition for use inside where()
- * val isActive = FhirPath.relative().navigate("active").eq("true")
+ * val isActive = FhirPath.relative().navigate("active").eq(true)
  * result.whenPath(isActive.build()) { ... }
  * ```
  *
@@ -29,7 +29,7 @@ package dev.ratkay.operation
  * ```java
  * String path = FhirPath.from("Patient")
  *     .navigate("name")
- *     .where(FhirPath.relative().navigate("use").eq("'official'"))
+ *     .where(FhirPath.relative().navigate("use").eq("official"))
  *     .first()
  *     .build();
  * ```
@@ -110,25 +110,52 @@ class FhirPath private constructor(private val expr: String) {
     fun implies(other: String): FhirPath = FhirPath("($expr) implies ($other)")
 
     // ── Equality / comparison operators ──────────────────────────────────────
+    //
+    // String overloads auto-quote: eq("official") → = 'official'
+    // Typed overloads emit the literal directly: eq(true) → = true, eq(18) → = 18
 
-    fun eq(value: String): FhirPath = FhirPath("$expr = $value")
-    fun ne(value: String): FhirPath = FhirPath("$expr != $value")
-    fun lt(value: String): FhirPath = FhirPath("$expr < $value")
-    fun gt(value: String): FhirPath = FhirPath("$expr > $value")
-    fun le(value: String): FhirPath = FhirPath("$expr <= $value")
-    fun ge(value: String): FhirPath = FhirPath("$expr >= $value")
+    fun eq(value: String): FhirPath = FhirPath("$expr = '$value'")
+    fun eq(value: Int): FhirPath = FhirPath("$expr = $value")
+    fun eq(value: Double): FhirPath = FhirPath("$expr = $value")
+    fun eq(value: Boolean): FhirPath = FhirPath("$expr = $value")
+
+    fun ne(value: String): FhirPath = FhirPath("$expr != '$value'")
+    fun ne(value: Int): FhirPath = FhirPath("$expr != $value")
+    fun ne(value: Double): FhirPath = FhirPath("$expr != $value")
+    fun ne(value: Boolean): FhirPath = FhirPath("$expr != $value")
+
+    fun lt(value: String): FhirPath = FhirPath("$expr < '$value'")
+    fun lt(value: Int): FhirPath = FhirPath("$expr < $value")
+    fun lt(value: Double): FhirPath = FhirPath("$expr < $value")
+
+    fun gt(value: String): FhirPath = FhirPath("$expr > '$value'")
+    fun gt(value: Int): FhirPath = FhirPath("$expr > $value")
+    fun gt(value: Double): FhirPath = FhirPath("$expr > $value")
+
+    fun le(value: String): FhirPath = FhirPath("$expr <= '$value'")
+    fun le(value: Int): FhirPath = FhirPath("$expr <= $value")
+    fun le(value: Double): FhirPath = FhirPath("$expr <= $value")
+
+    fun ge(value: String): FhirPath = FhirPath("$expr >= '$value'")
+    fun ge(value: Int): FhirPath = FhirPath("$expr >= $value")
+    fun ge(value: Double): FhirPath = FhirPath("$expr >= $value")
 
     /** FHIRPath equivalence (`~`): matches regardless of insignificant whitespace, case, etc. */
-    fun equiv(value: String): FhirPath = FhirPath("$expr ~ $value")
+    fun equiv(value: String): FhirPath = FhirPath("$expr ~ '$value'")
+    fun equiv(value: Int): FhirPath = FhirPath("$expr ~ $value")
+    fun equiv(value: Double): FhirPath = FhirPath("$expr ~ $value")
 
     /** FHIRPath non-equivalence (`!~`). */
-    fun notEquiv(value: String): FhirPath = FhirPath("$expr !~ $value")
+    fun notEquiv(value: String): FhirPath = FhirPath("$expr !~ '$value'")
+    fun notEquiv(value: Int): FhirPath = FhirPath("$expr !~ $value")
+    fun notEquiv(value: Double): FhirPath = FhirPath("$expr !~ $value")
 
-    /** FHIRPath `in` membership: `expr in collection`. (`in` is a Kotlin keyword, so this is named `memberOf`.) */
+    /** FHIRPath `in` membership: `expr in collection`. (`in` is a Kotlin keyword, so this is named `memberOf`.)
+     *  [collection] is a FHIRPath expression (path or set name) — not auto-quoted. */
     fun memberOf(collection: String): FhirPath = FhirPath("$expr in $collection")
 
-    /** FHIRPath `contains` membership: `expr contains value`. */
-    fun containsValue(value: String): FhirPath = FhirPath("$expr contains $value")
+    /** FHIRPath `contains` membership: `expr contains value`. [value] is auto-quoted as a string literal. */
+    fun containsValue(value: String): FhirPath = FhirPath("$expr contains '$value'")
 
     // ── Type functions ────────────────────────────────────────────────────────
 
@@ -139,22 +166,24 @@ class FhirPath private constructor(private val expr: String) {
     fun asType(type: String): FhirPath = FhirPath("$expr.as($type)")
 
     // ── String functions ──────────────────────────────────────────────────────
+    //
+    // All string-parameter functions auto-quote: startsWith("Sm") → .startsWith('Sm')
 
     fun length(): FhirPath = FhirPath("$expr.length()")
     fun upper(): FhirPath = FhirPath("$expr.upper()")
     fun lower(): FhirPath = FhirPath("$expr.lower()")
     fun trim(): FhirPath = FhirPath("$expr.trim()")
-    fun startsWith(prefix: String): FhirPath = FhirPath("$expr.startsWith($prefix)")
-    fun endsWith(suffix: String): FhirPath = FhirPath("$expr.endsWith($suffix)")
-    fun contains(substring: String): FhirPath = FhirPath("$expr.contains($substring)")
-    fun matches(regex: String): FhirPath = FhirPath("$expr.matches($regex)")
-    fun indexOf(substring: String): FhirPath = FhirPath("$expr.indexOf($substring)")
+    fun startsWith(prefix: String): FhirPath = FhirPath("$expr.startsWith('$prefix')")
+    fun endsWith(suffix: String): FhirPath = FhirPath("$expr.endsWith('$suffix')")
+    fun contains(substring: String): FhirPath = FhirPath("$expr.contains('$substring')")
+    fun matches(regex: String): FhirPath = FhirPath("$expr.matches('$regex')")
+    fun indexOf(substring: String): FhirPath = FhirPath("$expr.indexOf('$substring')")
     fun substring(start: Int): FhirPath = FhirPath("$expr.substring($start)")
     fun substring(start: Int, length: Int): FhirPath = FhirPath("$expr.substring($start, $length)")
-    fun replace(pattern: String, substitution: String): FhirPath = FhirPath("$expr.replace($pattern, $substitution)")
-    fun replaceMatches(regex: String, substitution: String): FhirPath = FhirPath("$expr.replaceMatches($regex, $substitution)")
-    fun split(separator: String): FhirPath = FhirPath("$expr.split($separator)")
-    fun join(separator: String): FhirPath = FhirPath("$expr.join($separator)")
+    fun replace(pattern: String, substitution: String): FhirPath = FhirPath("$expr.replace('$pattern', '$substitution')")
+    fun replaceMatches(regex: String, substitution: String): FhirPath = FhirPath("$expr.replaceMatches('$regex', '$substitution')")
+    fun split(separator: String): FhirPath = FhirPath("$expr.split('$separator')")
+    fun join(separator: String): FhirPath = FhirPath("$expr.join('$separator')")
 
     // ── Math functions ────────────────────────────────────────────────────────
 

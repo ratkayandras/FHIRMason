@@ -1353,23 +1353,23 @@ HAPI FHIR provides no API for constructing FHIRPath expressions programmatically
 // Absolute path
 val path = FhirPath.from("Patient")
     .navigate("name")
-    .where(FhirPath.relative().navigate("use").eq("'official'"))
+    .where(FhirPath.relative().navigate("use").eq("official"))
     .navigate("given")
     .first()
     .build()
 // → "Patient.name.where(use = 'official').given.first()"
 
 // Compose conditions with boolean operators
-val condition = FhirPath.from("active").eq("true")
+val condition = FhirPath.from("active").eq(true)
     .and(FhirPath.from("name").exists())
     .build()
 // → "(active = true) and (name.exists())"
 
 // Use with existing OperationResult FHIRPath methods
 val result = OperationResult.of(patient)
-    .guardPath(FhirPath.from("active").eq("true").build(), "Patient must be active")
+    .guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active")
     .selectByPath<HumanName>(
-        FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("'official'")).first().build(),
+        FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("official")).first().build(),
         "official-name"
     )
 ```
@@ -1399,17 +1399,32 @@ val result = OperationResult.of(patient)
 
 `is` and `as` are Kotlin keywords and are exposed as `isType` / `asType`. Similarly, `in` is exposed as `memberOf`.
 
+**String auto-quoting.** Methods whose FHIRPath parameter is always a string literal (`startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `replace`, `replaceMatches`, `split`, `join`, `extension`, `hasExtension`) automatically wrap the argument in single quotes. Pass the plain string — no embedded quotes needed:
+```kotlin
+.startsWith("Sm")   // → .startsWith('Sm')
+.extension("http://example.org/ext")  // → .extension('http://example.org/ext')
+```
+
+**Typed comparison overloads.** `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, and `containsValue` provide overloads for `String` (auto-quoted), `Int`, `Double`, and (for `eq`/`ne`) `Boolean`:
+```kotlin
+.eq("official")   // → = 'official'
+.eq(true)         // → = true
+.eq(18)           // → = 18
+.lt(65.5)         // → < 65.5
+```
+`memberOf` takes a raw FHIRPath expression (collection path or set name) and is never quoted.
+
 ### Java usage
 
 ```java
 String path = FhirPath.from("Patient")
     .navigate("name")
-    .where(FhirPath.relative().navigate("use").eq("'official'"))
+    .where(FhirPath.relative().navigate("use").eq("official"))
     .navigate("given")
     .first()
     .build();
 
-result.guardPath(FhirPath.from("active").eq("true").build(), "Patient must be active");
+result.guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active");
 ```
 
 ---

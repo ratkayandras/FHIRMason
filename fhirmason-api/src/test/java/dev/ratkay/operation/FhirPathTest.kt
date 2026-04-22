@@ -68,7 +68,7 @@ class FhirPathTest {
 
     @Test
     fun `where with FhirPath condition`() {
-        val condition = FhirPath.relative().navigate("use").eq("'official'")
+        val condition = FhirPath.relative().navigate("use").eq("official")
         assertThat(
             FhirPath.from("name").where(condition).build(),
             `is`("name.where(use = 'official')")
@@ -134,7 +134,7 @@ class FhirPathTest {
 
     @Test
     fun `exists with FhirPath criteria`() {
-        val criteria = FhirPath.relative().navigate("use").eq("'official'")
+        val criteria = FhirPath.relative().navigate("use").eq("official")
         assertThat(FhirPath.from("name").exists(criteria).build(), `is`("name.exists(use = 'official')"))
     }
 
@@ -145,7 +145,7 @@ class FhirPathTest {
 
     @Test
     fun `all with FhirPath criteria`() {
-        val criteria = FhirPath.relative().navigate("use").eq("'official'")
+        val criteria = FhirPath.relative().navigate("use").eq("official")
         assertThat(FhirPath.from("name").all(criteria).build(), `is`("name.all(use = 'official')"))
     }
 
@@ -208,102 +208,167 @@ class FhirPathTest {
 
     @Test
     fun `and with FhirPath wraps both sides`() {
-        val left = FhirPath.from("active").eq("true")
+        val left = FhirPath.from("active").eq(true)
         val right = FhirPath.from("name").exists()
         assertThat(left.and(right).build(), `is`("(active = true) and (name.exists())"))
     }
 
     @Test
     fun `and with string wraps both sides`() {
-        assertThat(FhirPath.from("active").eq("true").and("name.exists()").build(), `is`("(active = true) and (name.exists())"))
+        assertThat(FhirPath.from("active").eq(true).and("name.exists()").build(), `is`("(active = true) and (name.exists())"))
     }
 
     @Test
     fun `or with FhirPath wraps both sides`() {
-        val left = FhirPath.from("active").eq("true")
+        val left = FhirPath.from("active").eq(true)
         val right = FhirPath.from("name").exists()
         assertThat(left.or(right).build(), `is`("(active = true) or (name.exists())"))
     }
 
     @Test
     fun `or with string wraps both sides`() {
-        assertThat(FhirPath.from("active").eq("true").or("name.exists()").build(), `is`("(active = true) or (name.exists())"))
+        assertThat(FhirPath.from("active").eq(true).or("name.exists()").build(), `is`("(active = true) or (name.exists())"))
     }
 
     @Test
     fun `xor with FhirPath wraps both sides`() {
-        val left = FhirPath.from("a").eq("true")
-        val right = FhirPath.from("b").eq("true")
+        val left = FhirPath.from("a").eq(true)
+        val right = FhirPath.from("b").eq(true)
         assertThat(left.xor(right).build(), `is`("(a = true) xor (b = true)"))
     }
 
     @Test
     fun `xor with string wraps both sides`() {
-        assertThat(FhirPath.from("a").eq("true").xor("b = true").build(), `is`("(a = true) xor (b = true)"))
+        assertThat(FhirPath.from("a").eq(true).xor("b = true").build(), `is`("(a = true) xor (b = true)"))
     }
 
     @Test
     fun `implies with FhirPath wraps both sides`() {
-        val left = FhirPath.from("active").eq("true")
+        val left = FhirPath.from("active").eq(true)
         val right = FhirPath.from("name").exists()
         assertThat(left.implies(right).build(), `is`("(active = true) implies (name.exists())"))
     }
 
     @Test
     fun `implies with string wraps both sides`() {
-        assertThat(FhirPath.from("active").eq("true").implies("name.exists()").build(), `is`("(active = true) implies (name.exists())"))
+        assertThat(FhirPath.from("active").eq(true).implies("name.exists()").build(), `is`("(active = true) implies (name.exists())"))
     }
 
     // ── Equality / comparison operators ──────────────────────────────────────
 
     @Test
-    fun `eq produces equality expression`() {
-        assertThat(FhirPath.from("active").eq("true").build(), `is`("active = true"))
+    fun `eq with String auto-quotes the value`() {
+        assertThat(FhirPath.from("use").eq("official").build(), `is`("use = 'official'"))
     }
 
     @Test
-    fun `ne produces not-equal expression`() {
-        assertThat(FhirPath.from("active").ne("true").build(), `is`("active != true"))
+    fun `eq with Boolean emits literal`() {
+        assertThat(FhirPath.from("active").eq(true).build(), `is`("active = true"))
     }
 
     @Test
-    fun `lt produces less-than expression`() {
-        assertThat(FhirPath.from("age").lt("18").build(), `is`("age < 18"))
+    fun `eq with Int emits literal`() {
+        assertThat(FhirPath.from("count").eq(5).build(), `is`("count = 5"))
     }
 
     @Test
-    fun `gt produces greater-than expression`() {
-        assertThat(FhirPath.from("age").gt("18").build(), `is`("age > 18"))
+    fun `eq with Double emits literal`() {
+        assertThat(FhirPath.from("score").eq(3.14).build(), `is`("score = 3.14"))
     }
 
     @Test
-    fun `le produces less-or-equal expression`() {
-        assertThat(FhirPath.from("age").le("18").build(), `is`("age <= 18"))
+    fun `ne with String auto-quotes the value`() {
+        assertThat(FhirPath.from("use").ne("official").build(), `is`("use != 'official'"))
     }
 
     @Test
-    fun `ge produces greater-or-equal expression`() {
-        assertThat(FhirPath.from("age").ge("18").build(), `is`("age >= 18"))
+    fun `ne with Boolean emits literal`() {
+        assertThat(FhirPath.from("active").ne(false).build(), `is`("active != false"))
     }
 
     @Test
-    fun `equiv produces tilde expression`() {
-        assertThat(FhirPath.from("name").equiv("'Smith'").build(), `is`("name ~ 'Smith'"))
+    fun `ne with Int emits literal`() {
+        assertThat(FhirPath.from("age").ne(0).build(), `is`("age != 0"))
     }
 
     @Test
-    fun `notEquiv produces bang-tilde expression`() {
-        assertThat(FhirPath.from("name").notEquiv("'Smith'").build(), `is`("name !~ 'Smith'"))
+    fun `lt with Int emits literal`() {
+        assertThat(FhirPath.from("age").lt(18).build(), `is`("age < 18"))
     }
 
     @Test
-    fun `memberOf produces in expression`() {
+    fun `lt with Double emits literal`() {
+        assertThat(FhirPath.from("score").lt(9.5).build(), `is`("score < 9.5"))
+    }
+
+    @Test
+    fun `lt with String auto-quotes`() {
+        assertThat(FhirPath.from("name").lt("M").build(), `is`("name < 'M'"))
+    }
+
+    @Test
+    fun `gt with Int emits literal`() {
+        assertThat(FhirPath.from("age").gt(65).build(), `is`("age > 65"))
+    }
+
+    @Test
+    fun `gt with Double emits literal`() {
+        assertThat(FhirPath.from("score").gt(0.5).build(), `is`("score > 0.5"))
+    }
+
+    @Test
+    fun `gt with String auto-quotes`() {
+        assertThat(FhirPath.from("name").gt("M").build(), `is`("name > 'M'"))
+    }
+
+    @Test
+    fun `le with Int emits literal`() {
+        assertThat(FhirPath.from("age").le(17).build(), `is`("age <= 17"))
+    }
+
+    @Test
+    fun `le with Double emits literal`() {
+        assertThat(FhirPath.from("score").le(1.0).build(), `is`("score <= 1.0"))
+    }
+
+    @Test
+    fun `ge with Int emits literal`() {
+        assertThat(FhirPath.from("age").ge(18).build(), `is`("age >= 18"))
+    }
+
+    @Test
+    fun `ge with Double emits literal`() {
+        assertThat(FhirPath.from("score").ge(0.0).build(), `is`("score >= 0.0"))
+    }
+
+    @Test
+    fun `equiv produces tilde expression with auto-quoted string`() {
+        assertThat(FhirPath.from("name").equiv("Smith").build(), `is`("name ~ 'Smith'"))
+    }
+
+    @Test
+    fun `equiv with Int emits literal`() {
+        assertThat(FhirPath.from("value").equiv(42).build(), `is`("value ~ 42"))
+    }
+
+    @Test
+    fun `notEquiv produces bang-tilde expression with auto-quoted string`() {
+        assertThat(FhirPath.from("name").notEquiv("Smith").build(), `is`("name !~ 'Smith'"))
+    }
+
+    @Test
+    fun `notEquiv with Int emits literal`() {
+        assertThat(FhirPath.from("value").notEquiv(0).build(), `is`("value !~ 0"))
+    }
+
+    @Test
+    fun `memberOf produces in expression — collection is not quoted`() {
         assertThat(FhirPath.from("code").memberOf("vs").build(), `is`("code in vs"))
     }
 
     @Test
-    fun `containsValue produces contains expression`() {
-        assertThat(FhirPath.from("codes").containsValue("'abc'").build(), `is`("codes contains 'abc'"))
+    fun `containsValue auto-quotes the string value`() {
+        assertThat(FhirPath.from("codes").containsValue("abc").build(), `is`("codes contains 'abc'"))
     }
 
     // ── Type functions ────────────────────────────────────────────────────────
@@ -341,28 +406,28 @@ class FhirPathTest {
     }
 
     @Test
-    fun `startsWith appends startsWith call`() {
-        assertThat(FhirPath.from("family").startsWith("'A'").build(), `is`("family.startsWith('A')"))
+    fun `startsWith auto-quotes prefix`() {
+        assertThat(FhirPath.from("family").startsWith("A").build(), `is`("family.startsWith('A')"))
     }
 
     @Test
-    fun `endsWith appends endsWith call`() {
-        assertThat(FhirPath.from("family").endsWith("'son'").build(), `is`("family.endsWith('son')"))
+    fun `endsWith auto-quotes suffix`() {
+        assertThat(FhirPath.from("family").endsWith("son").build(), `is`("family.endsWith('son')"))
     }
 
     @Test
-    fun `contains appends contains call`() {
-        assertThat(FhirPath.from("family").contains("'an'").build(), `is`("family.contains('an')"))
+    fun `contains auto-quotes substring`() {
+        assertThat(FhirPath.from("family").contains("an").build(), `is`("family.contains('an')"))
     }
 
     @Test
-    fun `matches appends matches call`() {
-        assertThat(FhirPath.from("family").matches("'[A-Z].*'").build(), `is`("family.matches('[A-Z].*')"))
+    fun `matches auto-quotes regex`() {
+        assertThat(FhirPath.from("family").matches("[A-Z].*").build(), `is`("family.matches('[A-Z].*')"))
     }
 
     @Test
-    fun `indexOf appends indexOf call`() {
-        assertThat(FhirPath.from("family").indexOf("'a'").build(), `is`("family.indexOf('a')"))
+    fun `indexOf auto-quotes substring`() {
+        assertThat(FhirPath.from("family").indexOf("a").build(), `is`("family.indexOf('a')"))
     }
 
     @Test
@@ -376,23 +441,23 @@ class FhirPathTest {
     }
 
     @Test
-    fun `replace appends replace call`() {
-        assertThat(FhirPath.from("family").replace("'a'", "'b'").build(), `is`("family.replace('a', 'b')"))
+    fun `replace auto-quotes pattern and substitution`() {
+        assertThat(FhirPath.from("family").replace("a", "b").build(), `is`("family.replace('a', 'b')"))
     }
 
     @Test
-    fun `replaceMatches appends replaceMatches call`() {
-        assertThat(FhirPath.from("family").replaceMatches("'[aeiou]'", "'*'").build(), `is`("family.replaceMatches('[aeiou]', '*')"))
+    fun `replaceMatches auto-quotes regex and substitution`() {
+        assertThat(FhirPath.from("family").replaceMatches("[aeiou]", "*").build(), `is`("family.replaceMatches('[aeiou]', '*')"))
     }
 
     @Test
-    fun `split appends split call`() {
-        assertThat(FhirPath.from("csv").split("','").build(), `is`("csv.split(',')"))
+    fun `split auto-quotes separator`() {
+        assertThat(FhirPath.from("csv").split(",").build(), `is`("csv.split(',')"))
     }
 
     @Test
-    fun `join appends join call`() {
-        assertThat(FhirPath.from("parts").join("','").build(), `is`("parts.join(',')"))
+    fun `join auto-quotes separator`() {
+        assertThat(FhirPath.from("parts").join(",").build(), `is`("parts.join(',')"))
     }
 
     // ── Math functions ────────────────────────────────────────────────────────
@@ -540,7 +605,7 @@ class FhirPathTest {
     fun `full official-name path`() {
         val path = FhirPath.from("Patient")
             .navigate("name")
-            .where(FhirPath.relative().navigate("use").eq("'official'"))
+            .where(FhirPath.relative().navigate("use").eq("official"))
             .navigate("given")
             .first()
             .build()
@@ -549,7 +614,7 @@ class FhirPathTest {
 
     @Test
     fun `compound and condition`() {
-        val active = FhirPath.from("active").eq("true")
+        val active = FhirPath.from("active").eq(true)
         val hasName = FhirPath.from("name").exists()
         assertThat(active.and(hasName).build(), `is`("(active = true) and (name.exists())"))
     }
