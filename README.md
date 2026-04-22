@@ -1395,11 +1395,11 @@ val result = OperationResult.of(patient)
 | Math | `abs`, `ceiling`, `floor`, `round`, `sqrt`, `power`, `truncate` |
 | Arithmetic | `plus`, `minus`, `times`, `dividedBy`, `div`, `mod`, `concat` |
 | Type conversion | `toBoolean`, `toInteger`, `toDecimal`, `toDate`, `toDateTime`, `toTime`, `toQuantity` |
-| FHIR-specific | `extension`, `hasExtension`, `resolve` |
+| FHIR-specific | `extension`, `resolve` |
 
 `is` and `as` are Kotlin keywords and are exposed as `isType` / `asType`. Similarly, `in` is exposed as `memberOf`.
 
-**String auto-quoting.** Methods whose FHIRPath parameter is always a string literal (`startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `replace`, `replaceMatches`, `split`, `join`, `extension`, `hasExtension`) automatically wrap the argument in single quotes. Pass the plain string — no embedded quotes needed:
+**String auto-quoting.** Methods whose FHIRPath parameter is always a string literal (`startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `replace`, `replaceMatches`, `split`, `join`, `extension`) automatically wrap the argument in single quotes. Pass the plain string — no embedded quotes needed:
 ```kotlin
 .startsWith("Sm")   // → .startsWith('Sm')
 .extension("http://example.org/ext")  // → .extension('http://example.org/ext')

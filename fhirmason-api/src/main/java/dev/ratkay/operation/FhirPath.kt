@@ -223,9 +223,6 @@ class FhirPath private constructor(private val expr: String) {
     /** Navigates to the extension with [url]: `expr.extension('url')`. */
     fun extension(url: String): FhirPath = FhirPath("$expr.extension('$url')")
 
-    /** Tests for the presence of an extension with [url]: `expr.hasExtension('url')`. */
-    fun hasExtension(url: String): FhirPath = FhirPath("$expr.hasExtension('$url')")
-
     /** Resolves a reference to its target resource: `expr.resolve()`. */
     fun resolve(): FhirPath = FhirPath("$expr.resolve()")
 

@@ -587,14 +587,6 @@ class FhirPathTest {
     }
 
     @Test
-    fun `hasExtension wraps url in single quotes`() {
-        assertThat(
-            FhirPath.from("Patient").hasExtension("http://example.org/ext").build(),
-            `is`("Patient.hasExtension('http://example.org/ext')")
-        )
-    }
-
-    @Test
     fun `resolve appends resolve()`() {
         assertThat(FhirPath.from("subject").resolve().build(), `is`("subject.resolve()"))
     }
