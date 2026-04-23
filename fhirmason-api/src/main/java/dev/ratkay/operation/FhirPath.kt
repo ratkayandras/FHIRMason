@@ -69,9 +69,6 @@ class FhirPath private constructor(private val expr: String) {
     /** Appends a `select` projection: `expr.select(projection)`. */
     fun select(projection: String): FhirPath = FhirPath("$expr.select($projection)")
 
-    /** Appends an `ofType` type filter: `expr.ofType(type)`. */
-    fun ofType(type: String): FhirPath = FhirPath("$expr.ofType($type)")
-
     // ── Collection functions ──────────────────────────────────────────────────
 
     fun first(): FhirPath = FhirPath("$expr.first()")

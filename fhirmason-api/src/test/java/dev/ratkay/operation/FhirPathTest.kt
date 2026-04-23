@@ -80,11 +80,6 @@ class FhirPathTest {
         assertThat(FhirPath.from("name").select("given").build(), `is`("name.select(given)"))
     }
 
-    @Test
-    fun `ofType appends ofType call`() {
-        assertThat(FhirPath.from("value").ofType("Quantity").build(), `is`("value.ofType(Quantity)"))
-    }
-
     // ── Collection functions ──────────────────────────────────────────────────
 
     @Test

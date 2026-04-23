@@ -1386,7 +1386,7 @@ val result = OperationResult.of(patient)
 | Category | Methods |
 |----------|---------|
 | Navigation | `navigate`, `union` |
-| Subsetting | `where`, `select`, `ofType` |
+| Subsetting | `where`, `select` |
 | Collection | `first`, `last`, `tail`, `take`, `skip`, `count`, `empty`, `exists`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `distinct`, `isDistinct`, `subsetOf`, `supersetOf`, `children`, `descendants` |
 | Boolean | `not`, `and`, `or`, `xor`, `implies` |
 | Equality / comparison | `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, `memberOf`, `containsValue` |
