@@ -175,11 +175,6 @@ class FhirPathTest {
     }
 
     @Test
-    fun `subsetOf appends subsetOf call`() {
-        assertThat(FhirPath.from("a").subsetOf("b").build(), `is`("a.subsetOf(b)"))
-    }
-
-    @Test
     fun `supersetOf appends supersetOf call`() {
         assertThat(FhirPath.from("a").supersetOf("b").build(), `is`("a.supersetOf(b)"))
     }
@@ -357,25 +352,8 @@ class FhirPathTest {
     }
 
     @Test
-    fun `memberOf produces in expression — collection is not quoted`() {
-        assertThat(FhirPath.from("code").memberOf("vs").build(), `is`("code in vs"))
-    }
-
-    @Test
     fun `containsValue auto-quotes the string value`() {
         assertThat(FhirPath.from("codes").containsValue("abc").build(), `is`("codes contains 'abc'"))
-    }
-
-    // ── Type functions ────────────────────────────────────────────────────────
-
-    @Test
-    fun `isType produces is call`() {
-        assertThat(FhirPath.from("value").isType("Quantity").build(), `is`("value.is(Quantity)"))
-    }
-
-    @Test
-    fun `asType produces as call`() {
-        assertThat(FhirPath.from("value").asType("Quantity").build(), `is`("value.as(Quantity)"))
     }
 
     // ── String functions ──────────────────────────────────────────────────────
@@ -549,21 +527,6 @@ class FhirPathTest {
     @Test
     fun `toDecimal appends toDecimal()`() {
         assertThat(FhirPath.from("value").toDecimal().build(), `is`("value.toDecimal()"))
-    }
-
-    @Test
-    fun `toDate appends toDate()`() {
-        assertThat(FhirPath.from("value").toDate().build(), `is`("value.toDate()"))
-    }
-
-    @Test
-    fun `toDateTime appends toDateTime()`() {
-        assertThat(FhirPath.from("value").toDateTime().build(), `is`("value.toDateTime()"))
-    }
-
-    @Test
-    fun `toTime appends toTime()`() {
-        assertThat(FhirPath.from("value").toTime().build(), `is`("value.toTime()"))
     }
 
     @Test

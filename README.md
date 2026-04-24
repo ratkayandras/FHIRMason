@@ -1387,17 +1387,16 @@ val result = OperationResult.of(patient)
 |----------|---------|
 | Navigation | `navigate`, `union` |
 | Subsetting | `where`, `select` |
-| Collection | `first`, `last`, `tail`, `take`, `skip`, `count`, `empty`, `exists`, `all`, `allTrue`, `anyTrue`, `allFalse`, `anyFalse`, `distinct`, `isDistinct`, `subsetOf`, `supersetOf`, `children`, `descendants` |
+| Collection | `first`, `last`, `tail`, `take`, `skip`, `count`, `empty`, `exists`, `all`, `allTrue`¹, `anyTrue`¹, `allFalse`¹, `anyFalse`¹, `distinct`, `isDistinct`, `supersetOf`, `children`, `descendants` |
 | Boolean | `not`, `and`, `or`, `xor`, `implies` |
-| Equality / comparison | `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, `memberOf`, `containsValue` |
-| Type | `isType`, `asType` |
-| String | `length`, `upper`, `lower`, `trim`, `startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `substring`, `replace`, `replaceMatches`, `split`, `join` |
-| Math | `abs`, `ceiling`, `floor`, `round`, `sqrt`, `power`, `truncate` |
+| Equality / comparison | `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, `containsValue` |
+| String | `length`, `upper`¹, `lower`¹, `trim`¹, `startsWith`, `endsWith`, `contains`, `matches`, `indexOf`¹, `substring`, `replace`, `replaceMatches`¹, `split`¹, `join`¹ |
+| Math | `abs`¹, `ceiling`¹, `floor`¹, `round`¹, `sqrt`¹, `power`¹, `truncate`¹ |
 | Arithmetic | `plus`, `minus`, `times`, `dividedBy`, `div`, `mod`, `concat` |
-| Type conversion | `toBoolean`, `toInteger`, `toDecimal`, `toDate`, `toDateTime`, `toTime`, `toQuantity` |
+| Type conversion | `toBoolean`¹, `toInteger`¹, `toDecimal`, `toQuantity`¹ |
 | FHIR-specific | `extension`, `resolve` |
 
-`is` and `as` are Kotlin keywords and are exposed as `isType` / `asType`. Similarly, `in` is exposed as `memberOf`.
+¹ **R4 only.** These methods use FHIRPath 2.0 functions or math/type-conversion functions that are not registered in HAPI's DSTU3 FHIRPath 1.0 engine. They produce valid expression strings but will throw an exception when evaluated against a DSTU3 resource.
 
 **String auto-quoting.** Methods whose FHIRPath parameter is always a string literal (`startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `replace`, `replaceMatches`, `split`, `join`, `extension`) automatically wrap the argument in single quotes. Pass the plain string — no embedded quotes needed:
 ```kotlin
@@ -1412,7 +1411,6 @@ val result = OperationResult.of(patient)
 .eq(18)           // → = 18
 .lt(65.5)         // → < 65.5
 ```
-`memberOf` takes a raw FHIRPath expression (collection path or set name) and is never quoted.
 
 ### Java usage
 

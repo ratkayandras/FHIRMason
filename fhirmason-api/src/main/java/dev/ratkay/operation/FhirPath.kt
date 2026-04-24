@@ -89,7 +89,6 @@ class FhirPath private constructor(private val expr: String) {
     fun anyFalse(): FhirPath = FhirPath("$expr.anyFalse()")
     fun distinct(): FhirPath = FhirPath("$expr.distinct()")
     fun isDistinct(): FhirPath = FhirPath("$expr.isDistinct()")
-    fun subsetOf(other: String): FhirPath = FhirPath("$expr.subsetOf($other)")
     fun supersetOf(other: String): FhirPath = FhirPath("$expr.supersetOf($other)")
     fun children(): FhirPath = FhirPath("$expr.children()")
     fun descendants(): FhirPath = FhirPath("$expr.descendants()")
@@ -147,20 +146,8 @@ class FhirPath private constructor(private val expr: String) {
     fun notEquiv(value: Int): FhirPath = FhirPath("$expr !~ $value")
     fun notEquiv(value: Double): FhirPath = FhirPath("$expr !~ $value")
 
-    /** FHIRPath `in` membership: `expr in collection`. (`in` is a Kotlin keyword, so this is named `memberOf`.)
-     *  [collection] is a FHIRPath expression (path or set name) — not auto-quoted. */
-    fun memberOf(collection: String): FhirPath = FhirPath("$expr in $collection")
-
     /** FHIRPath `contains` membership: `expr contains value`. [value] is auto-quoted as a string literal. */
     fun containsValue(value: String): FhirPath = FhirPath("$expr contains '$value'")
-
-    // ── Type functions ────────────────────────────────────────────────────────
-
-    /** FHIRPath `is` type check: `expr.is(type)`. (`is` is a Kotlin keyword, so this is named `isType`.) */
-    fun isType(type: String): FhirPath = FhirPath("$expr.is($type)")
-
-    /** FHIRPath `as` type cast: `expr.as(type)`. (`as` is a Kotlin keyword, so this is named `asType`.) */
-    fun asType(type: String): FhirPath = FhirPath("$expr.as($type)")
 
     // ── String functions ──────────────────────────────────────────────────────
     //
@@ -210,9 +197,6 @@ class FhirPath private constructor(private val expr: String) {
     fun toBoolean(): FhirPath = FhirPath("$expr.toBoolean()")
     fun toInteger(): FhirPath = FhirPath("$expr.toInteger()")
     fun toDecimal(): FhirPath = FhirPath("$expr.toDecimal()")
-    fun toDate(): FhirPath = FhirPath("$expr.toDate()")
-    fun toDateTime(): FhirPath = FhirPath("$expr.toDateTime()")
-    fun toTime(): FhirPath = FhirPath("$expr.toTime()")
     fun toQuantity(): FhirPath = FhirPath("$expr.toQuantity()")
 
     // ── FHIR-specific ─────────────────────────────────────────────────────────
