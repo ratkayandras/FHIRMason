@@ -1343,6 +1343,90 @@ val result = AsyncOperationResult()
 
 ---
 
+## FhirPath Expression Builder
+
+`FhirPath` (in `fhirmason-api`, package `dev.ratkay.operation`) is a fluent, immutable builder for constructing FHIRPath expression strings. It is version-agnostic — the same class is shared by both R4 and DSTU3.
+
+HAPI FHIR provides no API for constructing FHIRPath expressions programmatically. `FhirPath` fills that gap: each step returns a new `FhirPath` instance and the final expression string is retrieved via `build()` (or `toString()`).
+
+```kotlin
+// Absolute path
+val path = FhirPath.from("Patient")
+    .navigate("name")
+    .where(FhirPath.relative().navigate("use").eq("official"))
+    .navigate("given")
+    .first()
+    .build()
+// → "Patient.name.where(use = 'official').given.first()"
+
+// Compose conditions with boolean operators
+val condition = FhirPath.from("active").eq(true)
+    .and(FhirPath.from("name").exists())
+    .build()
+// → "(active = true) and (name.exists())"
+
+// Use with existing OperationResult FHIRPath methods
+val result = OperationResult.of(patient)
+    .guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active")
+    .selectByPath<HumanName>(
+        FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("official")).first().build(),
+        "official-name"
+    )
+```
+
+### Factory methods
+
+| Method | Description |
+|--------|-------------|
+| `FhirPath.from(segment)` | Start from a named root segment (resource type or first field) |
+| `FhirPath.relative()` | Start with an empty base for condition/predicate expressions used inside `where`, `all`, `exists` |
+
+### Available operations
+
+| Category | Methods |
+|----------|---------|
+| Navigation | `navigate`, `union` |
+| Subsetting | `where`, `select` |
+| Collection | `first`, `last`, `tail`, `take`, `skip`, `count`, `empty`, `exists`, `all`, `allTrue`¹, `anyTrue`¹, `allFalse`¹, `anyFalse`¹, `distinct`, `isDistinct`, `supersetOf`, `children`, `descendants` |
+| Boolean | `not`, `and`, `or`, `xor`, `implies` |
+| Equality / comparison | `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, `containsValue` |
+| String | `length`, `upper`¹, `lower`¹, `trim`¹, `startsWith`, `endsWith`, `contains`, `matches`, `indexOf`¹, `substring`, `replace`, `replaceMatches`¹, `split`¹, `join`¹ |
+| Math | `abs`¹, `ceiling`¹, `floor`¹, `round`¹, `sqrt`¹, `power`¹, `truncate`¹ |
+| Arithmetic | `plus`, `minus`, `times`, `dividedBy`, `div`, `mod`, `concat` |
+| Type conversion | `toBoolean`¹, `toInteger`¹, `toDecimal`, `toQuantity`¹ |
+| FHIR-specific | `extension`, `resolve` |
+
+¹ **R4 only.** These methods use FHIRPath 2.0 functions or math/type-conversion functions that are not registered in HAPI's DSTU3 FHIRPath 1.0 engine. They produce valid expression strings but will throw an exception when evaluated against a DSTU3 resource.
+
+**String auto-quoting.** Methods whose FHIRPath parameter is always a string literal (`startsWith`, `endsWith`, `contains`, `matches`, `indexOf`, `replace`, `replaceMatches`, `split`, `join`, `extension`) automatically wrap the argument in single quotes. Pass the plain string — no embedded quotes needed:
+```kotlin
+.startsWith("Sm")   // → .startsWith('Sm')
+.extension("http://example.org/ext")  // → .extension('http://example.org/ext')
+```
+
+**Typed comparison overloads.** `eq`, `ne`, `lt`, `gt`, `le`, `ge`, `equiv`, `notEquiv`, and `containsValue` provide overloads for `String` (auto-quoted), `Int`, `Double`, and (for `eq`/`ne`) `Boolean`:
+```kotlin
+.eq("official")   // → = 'official'
+.eq(true)         // → = true
+.eq(18)           // → = 18
+.lt(65.5)         // → < 65.5
+```
+
+### Java usage
+
+```java
+String path = FhirPath.from("Patient")
+    .navigate("name")
+    .where(FhirPath.relative().navigate("use").eq("official"))
+    .navigate("given")
+    .first()
+    .build();
+
+result.guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active");
+```
+
+---
+
 ## Usage Examples
 
 ### 1. Simple accumulation
@@ -1576,11 +1660,14 @@ mvn clean install       # build, test, and install to local repo
 
 ```
 fhirmason-api/
-└── src/main/java/dev/ratkay/operation/
-    ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
-    ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
-    ├── StepMetrics.kt                  # Per-step timing and outcome data
-    └── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
+├── src/main/java/dev/ratkay/operation/
+│   ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
+│   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+│   ├── StepMetrics.kt                  # Per-step timing and outcome data
+│   ├── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
+│   └── FhirPath.kt                     # Fluent FHIRPath expression builder (version-agnostic)
+└── src/test/java/dev/ratkay/operation/
+    └── FhirPathTest.kt
 
 fhirmason-r4/
 └── src/
@@ -1607,6 +1694,7 @@ fhirmason-r4/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── FhirPathEvaluationTest.kt
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
@@ -1652,6 +1740,7 @@ fhirmason-dstu3/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── FhirPathEvaluationTest.kt
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
