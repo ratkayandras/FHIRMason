@@ -1,6 +1,7 @@
 package dev.ratkay.operation.r4
 
 import dev.ratkay.operation.ErrorStrategy
+import dev.ratkay.operation.FhirPath
 
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.empty
@@ -346,5 +347,138 @@ class OperationResultFhirPathTest {
 
         assertTrue(result.isSuccessful())
         assertEquals("Smith", result.getResult().value)
+    }
+
+    // ── FhirPath builder overloads ────────────────────────────────────────
+
+    @Test
+    fun `addFromMatching accepts FhirPath expression`() {
+        val activePatient = Patient().apply { active = true; setId("p1") }
+        val inactivePatient = Patient().apply { active = false; setId("p2") }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(activePatient)
+            .add { inactivePatient }
+            .addFromMatching<Patient, StringType>("result", Patient::class, expression) { matches ->
+                assertThat(matches, hasSize(1))
+                assertThat(matches[0].idPart, `is`("p1"))
+                StringType("found")
+            }
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getAll("result"), hasSize(1))
+    }
+
+    @Test
+    fun `addFromMatching reified accepts FhirPath expression`() {
+        val patient = Patient().apply { active = true }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .addFromMatching<Patient, StringType>(expression = expression) { StringType("ok") }
+
+        assertThat(result.getAll("string"), hasSize(1))
+    }
+
+    @Test
+    fun `addAllFromMatching accepts FhirPath expression`() {
+        val p1 = Patient().apply { active = true; setId("p1") }
+        val p2 = Patient().apply { active = true; setId("p2") }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(p1)
+            .add { p2 }
+            .addAllFromMatching("active", Patient::class, expression) { it }
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getAll("active"), hasSize(2))
+    }
+
+    @Test
+    fun `addAllFromMatching reified accepts FhirPath expression`() {
+        val patient = Patient().apply { active = true }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .addAllFromMatching<Patient, Patient>(expression = expression) { it }
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getResult(), hasSize(1))
+    }
+
+    @Test
+    fun `whenPath accepts FhirPath expression`() {
+        val patient = Patient().apply { active = true }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .whenPath(expression) { add("flag") { StringType("ran") } }
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getAll("flag"), hasSize(1))
+    }
+
+    @Test
+    fun `whenPath with FhirPath skips block when expression is false`() {
+        val patient = Patient().apply { active = false }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .whenPath(expression) { add("flag") { StringType("should-not-run") } }
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getAll("flag"), empty())
+    }
+
+    @Test
+    fun `guardPath accepts FhirPath expression`() {
+        val patient = Patient().apply { active = true }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .guardPath(expression, "Patient must be active")
+
+        assertTrue(result.isSuccessful())
+        assertThat(result.getOutcomes(), empty())
+    }
+
+    @Test
+    fun `guardPath with FhirPath records WARNING when expression is false`() {
+        val patient = Patient().apply { active = false }
+        val expression = FhirPath.relative().navigate("active").eq(true)
+
+        val result = OperationResult.of(patient)
+            .guardPath(expression, "Patient must be active")
+
+        assertTrue(result.hasErrors())
+        assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
+    }
+
+    @Test
+    fun `selectByPath KClass accepts FhirPath expression`() {
+        val patient = Patient().apply {
+            addName().apply { family = "Smith"; addGiven("John") }
+        }
+        val expression = FhirPath.relative().navigate("name").first()
+
+        val result = OperationResult.of(patient)
+            .selectByPath(HumanName::class, expression)
+
+        assertTrue(result.isSuccessful())
+        assertEquals("Smith", result.getResult().family)
+    }
+
+    @Test
+    fun `selectByPath reified accepts FhirPath expression`() {
+        val patient = Patient().apply {
+            addName().apply { family = "Jones" }
+        }
+        val expression = FhirPath.relative().navigate("name").first()
+
+        val result = OperationResult.of(patient)
+            .selectByPath<HumanName>(expression)
+
+        assertTrue(result.isSuccessful())
+        assertEquals("Jones", result.getResult().family)
     }
 }
