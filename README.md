@@ -266,10 +266,12 @@ val result6 = OperationResult.of(resources, "resources")
 
 | Method | Returns | Default key |
 |---|---|---|
-| `addFromMatching(name?, type, expression) { list -> R }` | `OperationResult<R>` | `type` simple name (lowercase) |
-| `addAllFromMatching(name?, type, expression) { list -> List<R> }` | `OperationResult<List<R>>` | `type` simple name (lowercase) |
+| `addFromMatching(name?, type, expression: String) { list -> R }` | `OperationResult<R>` | `type` simple name (lowercase) |
+| `addFromMatching(name?, type, expression: FhirPath) { list -> R }` | `OperationResult<R>` | `type` simple name (lowercase) |
+| `addAllFromMatching(name?, type, expression: String) { list -> List<R> }` | `OperationResult<List<R>>` | `type` simple name (lowercase) |
+| `addAllFromMatching(name?, type, expression: FhirPath) { list -> List<R> }` | `OperationResult<List<R>>` | `type` simple name (lowercase) |
 
-Both methods have reified Kotlin overloads (omit `type`) and generate `@JvmOverloads` for Java callers. Error handling follows Pattern A: malformed expressions produce an ERROR `OperationOutcome` and skip the head.
+Each method has a `String`-expression variant and a `FhirPath`-expression variant (the `FhirPath` overload calls `.build()` and delegates). Both variants have reified Kotlin overloads (omit `type`) and generate `@JvmOverloads` for Java callers. Error handling follows Pattern A: malformed expressions produce an ERROR `OperationOutcome` and skip the head.
 
 ```kotlin
 // Keep only active patients, then build a summary
@@ -726,20 +728,36 @@ Three FHIRPath-aware methods complement the existing conditional API. All expres
 
 | Method | Head requirement | Behaviour |
 |---|---|---|
-| `whenPath(expression) { ... }` | Must be a `Base`; silent skip if null/non-Base | Runs block and merges parameters when expression is truthy; WARNING on malformed expression |
-| `guardPath(expression, message)` | Must be a `Base`; WARNING if null/non-Base | Records WARNING `OperationOutcome` with `message` when expression is `false`; WARNING on malformed expression |
-| `selectByPath(type, expression, name?)` | Must be a `Base`; ERROR if null/non-Base | Evaluates expression, promotes first matching result of `type` to the new pipeline head, stores under `name`; ERROR if no match found |
+| `whenPath(expression: String) { ... }` | Must be a `Base`; silent skip if null/non-Base | Runs block and merges parameters when expression is truthy; WARNING on malformed expression |
+| `whenPath(expression: FhirPath) { ... }` | Must be a `Base`; silent skip if null/non-Base | `FhirPath` overload — calls `.build()` and delegates |
+| `guardPath(expression: String, message)` | Must be a `Base`; WARNING if null/non-Base | Records WARNING `OperationOutcome` with `message` when expression is `false`; WARNING on malformed expression |
+| `guardPath(expression: FhirPath, message)` | Must be a `Base`; WARNING if null/non-Base | `FhirPath` overload — calls `.build()` and delegates |
+| `selectByPath(type, expression: String, name?)` | Must be a `Base`; ERROR if null/non-Base | Evaluates expression, promotes first matching result of `type` to the new pipeline head, stores under `name`; ERROR if no match found |
+| `selectByPath(type, expression: FhirPath, name?)` | Must be a `Base`; ERROR if null/non-Base | `FhirPath` overload — calls `.build()` and delegates |
 
 ```kotlin
+val activeGuard = FhirPath.relative().navigate("active").eq(true)
+val mpiFilter   = FhirPath.relative().navigate("identifier")
+                      .where(FhirPath.relative().navigate("system").eq("http://example.org/mpi"))
+                      .exists()
+val officialName = FhirPath.relative().navigate("name")
+                      .where(FhirPath.relative().navigate("use").eq("official"))
+                      .first()
+
 val result = OperationResult.of(patient)
-    .guardPath("active = true", "Patient must be active")
-    .whenPath("identifier.where(system='http://example.org/mpi').exists()") {
+    .guardPath(activeGuard, "Patient must be active")
+    .whenPath(mpiFilter) {
         add("mpi-flag") { StringType("enrolled") }
     }
+    .selectByPath<HumanName>(officialName, "official-name")
+
+// String expressions still work unchanged:
+val result2 = OperationResult.of(patient)
+    .guardPath("active = true", "Patient must be active")
     .selectByPath<HumanName>("name.where(use='official').first()", "official-name")
 ```
 
-`selectByPath` has a reified Kotlin overload (`selectByPath<HumanName>("name.first()")`). Error handling for `whenPath` and `guardPath` follows Pattern B (head preserved); `selectByPath` follows Pattern A (head skipped on failure).
+`selectByPath` has a reified Kotlin overload (`selectByPath<HumanName>("name.first()")` and `selectByPath<HumanName>(FhirPath.relative().navigate("name").first())`). Error handling for `whenPath` and `guardPath` follows Pattern B (head preserved); `selectByPath` follows Pattern A (head skipped on failure).
 
 #### Convenience lookups
 
@@ -1365,13 +1383,20 @@ val condition = FhirPath.from("active").eq(true)
     .build()
 // → "(active = true) and (name.exists())"
 
-// Use with existing OperationResult FHIRPath methods
+// Use with OperationResult FHIRPath methods — pass a FhirPath directly (no .build() needed)
+val activeGuard = FhirPath.relative().navigate("active").eq(true)
+val officialName = FhirPath.relative().navigate("name")
+    .where(FhirPath.relative().navigate("use").eq("official"))
+    .first()
+
 val result = OperationResult.of(patient)
+    .guardPath(activeGuard, "Patient must be active")
+    .selectByPath<HumanName>(officialName, "official-name")
+
+// String expressions still work — .build() is only needed when calling methods
+// that accept only a String:
+val result2 = OperationResult.of(patient)
     .guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active")
-    .selectByPath<HumanName>(
-        FhirPath.from("name").where(FhirPath.relative().navigate("use").eq("official")).first().build(),
-        "official-name"
-    )
 ```
 
 ### Factory methods
@@ -1422,6 +1447,11 @@ String path = FhirPath.from("Patient")
     .first()
     .build();
 
+// Pass a FhirPath directly — no .build() needed:
+result.guardPath(FhirPath.from("active").eq(true), "Patient must be active");
+result.selectByPath(HumanName.class, FhirPath.relative().navigate("name").first(), "official-name");
+
+// String expressions still work unchanged:
 result.guardPath(FhirPath.from("active").eq(true).build(), "Patient must be active");
 ```
 

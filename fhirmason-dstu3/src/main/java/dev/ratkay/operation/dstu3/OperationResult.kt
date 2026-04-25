@@ -23,6 +23,7 @@ import org.hl7.fhir.dstu3.model.Type
 import org.hl7.fhir.dstu3.model.UriType
 import dev.ratkay.operation.DateTimeInput
 import dev.ratkay.operation.ErrorStrategy
+import dev.ratkay.operation.FhirPath
 import dev.ratkay.operation.IOperationResult
 import dev.ratkay.operation.StepMetrics
 import org.slf4j.LoggerFactory
@@ -341,6 +342,15 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /** [FhirPath] overload of [addFromMatching] — builds the expression and delegates. */
+    @JvmOverloads
+    fun <I : Base, R : Base> addFromMatching(
+        name: String? = null,
+        type: KClass<I>,
+        expression: FhirPath,
+        builder: (List<I>) -> R
+    ): OperationResult<R> = addFromMatching(name, type, expression.build(), builder)
+
     /**
      * Like [addFromMatching] but [builder] returns a `List<R>`.
      * When [name] is `null`, the output key defaults to the first element's [Base.fhirType]
@@ -359,6 +369,15 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /** [FhirPath] overload of [addAllFromMatching] — builds the expression and delegates. */
+    @JvmOverloads
+    fun <I : Base, R : Base> addAllFromMatching(
+        name: String? = null,
+        type: KClass<I>,
+        expression: FhirPath,
+        builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromMatching(name, type, expression.build(), builder)
+
     /** Reified overload of [addFromMatching] — no [KClass] argument needed at call sites. */
     inline fun <reified I : Base, R : Base> addFromMatching(
         name: String? = null,
@@ -366,12 +385,26 @@ class OperationResult<T> private constructor(
         noinline builder: (List<I>) -> R
     ): OperationResult<R> = addFromMatching(name, I::class, expression, builder)
 
+    /** [FhirPath] reified overload of [addFromMatching]. */
+    inline fun <reified I : Base, R : Base> addFromMatching(
+        name: String? = null,
+        expression: FhirPath,
+        noinline builder: (List<I>) -> R
+    ): OperationResult<R> = addFromMatching(name, I::class, expression.build(), builder)
+
     /** Reified overload of [addAllFromMatching] — no [KClass] argument needed at call sites. */
     inline fun <reified I : Base, R : Base> addAllFromMatching(
         name: String? = null,
         expression: String,
         noinline builder: (List<I>) -> List<R>
     ): OperationResult<List<R>> = addAllFromMatching(name, I::class, expression, builder)
+
+    /** [FhirPath] reified overload of [addAllFromMatching]. */
+    inline fun <reified I : Base, R : Base> addAllFromMatching(
+        name: String? = null,
+        expression: FhirPath,
+        noinline builder: (List<I>) -> List<R>
+    ): OperationResult<List<R>> = addAllFromMatching(name, I::class, expression.build(), builder)
 
     // Builder methods - single item
 
@@ -1063,6 +1096,10 @@ class OperationResult<T> private constructor(
         )
     }
 
+    /** [FhirPath] overload of [whenPath] — builds the expression and delegates. */
+    fun whenPath(expression: FhirPath, block: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> =
+        whenPath(expression.build(), block)
+
     /**
      * Returns this result unchanged when [expression] evaluates to `true` against the current
      * head value.
@@ -1112,6 +1149,10 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /** [FhirPath] overload of [guardPath] — builds the expression and delegates. */
+    fun guardPath(expression: FhirPath, message: String): OperationResult<T> =
+        guardPath(expression.build(), message)
+
     // ── FHIRPath extraction ───────────────────────────────────────────────
 
     /**
@@ -1143,9 +1184,18 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /** [FhirPath] overload of [selectByPath] — builds the expression and delegates. */
+    @JvmOverloads
+    fun <R : Base> selectByPath(type: KClass<R>, expression: FhirPath, name: String? = null): OperationResult<R> =
+        selectByPath(type, expression.build(), name)
+
     /** Reified overload of [selectByPath] — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> selectByPath(expression: String, name: String? = null): OperationResult<R> =
         selectByPath(R::class, expression, name)
+
+    /** [FhirPath] reified overload of [selectByPath]. */
+    inline fun <reified R : Base> selectByPath(expression: FhirPath, name: String? = null): OperationResult<R> =
+        selectByPath(R::class, expression.build(), name)
 
     /** Returns the first value stored under [name], or `null` if the key is absent or empty. */
     fun takeFirst(name: String): Base? = parameters[name]?.firstOrNull()
