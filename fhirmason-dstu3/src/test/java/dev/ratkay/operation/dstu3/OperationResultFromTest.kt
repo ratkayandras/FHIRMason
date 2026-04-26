@@ -508,6 +508,89 @@ class OperationResultFromTest {
         assertEquals(2, roundTripped.totalCount())
     }
 
+    // ── fromBundleTyped ───────────────────────────────────────────────────────
+
+    @Test
+    fun `fromBundleTyped - sets typed head to first resource under primary key`() {
+        val p = Patient().apply { id = "p1" }
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = p
+        }
+
+        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class)
+
+        assertInstanceOf(Patient::class.java, result.getResult())
+        assertEquals("p1", result.getResult().idPart)
+    }
+
+    @Test
+    fun `fromBundleTyped reified overload - no KClass argument needed`() {
+        val p = patient()
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = p
+        }
+
+        val result = OperationResult.fromBundleTyped<Patient>(bundle, "patient")
+
+        assertInstanceOf(Patient::class.java, result.getResult())
+    }
+
+    @Test
+    fun `fromBundleTyped Class overload - Java-friendly`() {
+        val p = patient()
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = p
+        }
+
+        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class.java)
+
+        assertInstanceOf(Patient::class.java, result.getResult())
+    }
+
+    @Test
+    fun `fromBundleTyped - all other resources are still accessible`() {
+        val p = patient()
+        val a = appointment()
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = p
+            addEntry().resource = a
+        }
+
+        val result = OperationResult.fromBundleTyped<Patient>(bundle, "patient")
+
+        assertThat(result.getByType<Patient>(), hasSize(1))
+        assertThat(result.getByType<Appointment>(), hasSize(1))
+        assertEquals(2, result.totalCount())
+    }
+
+    @Test
+    fun `fromBundleTyped - throws when primary key is absent`() {
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = appointment()
+        }
+
+        assertThrows<IllegalArgumentException> {
+            OperationResult.fromBundleTyped<Patient>(bundle, "patient")
+        }
+    }
+
+    @Test
+    fun `fromBundleTyped - throws when key exists but type does not match`() {
+        val bundle = Bundle().apply {
+            type = Bundle.BundleType.COLLECTION
+            addEntry().resource = appointment()
+        }
+
+        assertThrows<IllegalArgumentException> {
+            OperationResult.fromBundleTyped<Patient>(bundle, "appointment")
+        }
+    }
+
     // ── extractParam / extractParamList ──────────────────────────────────────
 
     @Test

@@ -1081,6 +1081,55 @@ class OperationResultTest {
         assertEquals(Bundle.HTTPVerb.POST, bundle.entryFirstRep.request.method)
     }
 
+    @Test
+    fun `toCollectionBundle - convenience alias produces COLLECTION bundle`() {
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appointment() }
+
+        val bundle = result.toCollectionBundle()
+
+        assertEquals(Bundle.BundleType.COLLECTION, bundle.type)
+        assertThat(bundle.entry, hasSize(2))
+        assertThat(bundle.entry[0].resource, instanceOf(Patient::class.java))
+        assertThat(bundle.entry[1].resource, instanceOf(Appointment::class.java))
+    }
+
+    @Test
+    fun `toCollectionBundle with configBlock - applies configuration to each entry`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        val bundle = result.toCollectionBundle { entry ->
+            entry.fullUrl = "http://example.com/fhir/Patient/test"
+        }
+
+        assertEquals("http://example.com/fhir/Patient/test", bundle.entryFirstRep.fullUrl)
+    }
+
+    @Test
+    fun `toTransactionBundle with configBlock - sets fullUrl on each entry`() {
+        val result = OperationResult.of(Patient().apply { id = "p1" }, "patient")
+
+        val bundle = result.toTransactionBundle { entry ->
+            entry.fullUrl = "urn:uuid:patient-p1"
+        }
+
+        assertEquals(Bundle.BundleType.TRANSACTION, bundle.type)
+        assertEquals("urn:uuid:patient-p1", bundle.entryFirstRep.fullUrl)
+        assertEquals(Bundle.HTTPVerb.PUT, bundle.entryFirstRep.request.method)
+    }
+
+    @Test
+    fun `toBatchBundle with configBlock - sets fullUrl on each entry`() {
+        val result = OperationResult.of(patient(), "patient")
+
+        val bundle = result.toBatchBundle { entry ->
+            entry.fullUrl = "urn:uuid:patient-new"
+        }
+
+        assertEquals(Bundle.BundleType.BATCH, bundle.type)
+        assertEquals("urn:uuid:patient-new", bundle.entryFirstRep.fullUrl)
+    }
+
     // ── Type safety ───────────────────────────────────────────────────────────
     // These tests prove compile-time type enforcement: if the generic machinery
     // were broken the typed assignments below would fail to compile.
