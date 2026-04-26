@@ -240,6 +240,47 @@ class OperationResultTest {
         assertEquals("count=0", appt.participantFirstRep.actor.display)
     }
 
+    // ── Collection inputs ─────────────────────────────────────────────────────
+
+    @Test
+    fun `of accepts a Set and stores all elements`() {
+        val p1 = patient()
+        val p2 = patient()
+        val result = OperationResult.of(setOf(p1, p2))
+
+        assertEquals(2, result.count("patient"))
+        assertThat(result.getResultList(), hasSize(2))
+    }
+
+    @Test
+    fun `addAll builder returning a Set stores all elements`() {
+        val result = OperationResult.of(patient())
+            .addAll { setOf(patient(), appointment()) }
+
+        assertEquals(2, result.count("patient"))
+        assertEquals(1, result.count("appointment"))
+    }
+
+    @Test
+    fun `addAllUsing builder returning a LinkedHashSet stores all elements`() {
+        val items = linkedSetOf(appointment(), appointment())
+        val result = OperationResult.of(patient())
+            .addAllUsing { _ -> items }
+
+        assertEquals(2, result.count("appointment"))
+    }
+
+    @Test
+    fun `addAllFrom builder returning a Set stores all elements`() {
+        val result = OperationResult.of(listOf(patient(), patient()), "patients")
+            .addAllFrom("patients", Patient::class) { patients ->
+                patients.map { OperationOutcome() }.toSet()
+            }
+
+        assertThat(result.getResultList(), hasSize(2))
+        assertThat(result.getByType<OperationOutcome>(), hasSize(2))
+    }
+
     // ── addAllFrom ────────────────────────────────────────────────────────────
 
     @Test
@@ -1177,7 +1218,7 @@ class OperationResultTest {
         // getResultList() extension only exists on OperationResult<List<R>>
         val retrieved: List<Appointment> = result.getResultList()
         assertEquals(2, retrieved.size)
-        assertThat(retrieved, sameInstance(appts))
+        assertThat(retrieved, containsInAnyOrder(*appts.toTypedArray()))
     }
 
     @Test

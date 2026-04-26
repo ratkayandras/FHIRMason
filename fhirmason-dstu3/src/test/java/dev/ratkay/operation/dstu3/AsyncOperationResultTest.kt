@@ -463,6 +463,48 @@ class AsyncOperationResultTest {
         }
     }
 
+    // ── Collection inputs ─────────────────────────────────────────────────────
+
+    @Test
+    fun `addList block returning a Set stores all elements`() = runBlocking {
+        val result = AsyncOperationResult()
+            .addList("appointments") {
+                setOf(
+                    Appointment().apply { id = "a1" },
+                    Appointment().apply { id = "a2" }
+                )
+            }
+            .run()
+
+        assertThat(result.count("appointments"), `is`(2))
+    }
+
+    @Test
+    fun `addListWithDefault default as Set is used on failure`() = runBlocking {
+        val default = setOf(Appointment().apply { id = "fallback" })
+        val result = AsyncOperationResult()
+            .addListWithDefault("appointments", default) { throw RuntimeException("fail") }
+            .run()
+
+        assertThat(result.count("appointments"), `is`(1))
+        val stored = result.getAll("appointments").first() as Appointment
+        assertThat(stored.id, `is`("fallback"))
+    }
+
+    @Test
+    fun `addListIf block returning a Set registers correctly`() = runBlocking {
+        val result = AsyncOperationResult()
+            .addListIf(true, "appointments") {
+                setOf(
+                    Appointment().apply { id = "a1" },
+                    Appointment().apply { id = "a2" }
+                )
+            }
+            .run()
+
+        assertThat(result.count("appointments"), `is`(2))
+    }
+
     @Test
     fun `withExecutor returns this for fluent chaining`() {
         val dag = AsyncOperationResult()
