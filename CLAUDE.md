@@ -151,6 +151,23 @@ catch (e: Exception) {
 - Primitive convenience methods must delegate to `runPrimitiveStep` (Pattern B) — never duplicate the try/catch inline.
 - Do not add new catch patterns without updating this section.
 
+## Documentation Rule
+
+**Every public method, function, and property must have a KDoc comment (`/** … */`).**
+
+This is a hard requirement for all public API surfaces — no exceptions.
+
+Rules:
+- **Class-level KDoc is required** on every public class and object.
+- **Method-level KDoc is required** on every `fun` that is `public` (explicitly or by default) — including companion object methods, top-level functions that are part of the public API, and `override` methods that add behaviour beyond what the interface documents.
+- **Single-line `/** … */` is acceptable** for self-evident overloads (e.g. a reified wrapper that only removes the explicit `KClass` argument). Use `/** [FhirPath] overload of [xxx] — builds the expression and delegates. */` or `/** Reified overload — no [KClass] argument needed at call sites. */` as appropriate.
+- **Multi-line KDoc** is required when a method has non-trivial behaviour, error semantics, or parameters that need explanation (see existing methods for examples).
+- **`@param` tags** are required for every parameter of a public method whose purpose is not fully captured by its name alone.
+- `internal` and `private` members do not require KDoc, but a single-line comment is welcome for non-obvious logic.
+- `inline fun` with `reified` type parameters must still have KDoc; just omit `@JvmStatic`/`@JvmOverloads` as normal.
+
+When adding a new method or modifying an existing one, write or update its KDoc in the same commit. Reviewing a PR that contains public methods without KDoc is a policy violation.
+
 ## Pre-Commit and Pre-Push Requirement
 
 **This is a hard requirement — no exceptions.**
