@@ -84,10 +84,19 @@ class OperationResult<T> private constructor(
 
     override fun isSuccessful(): Boolean = outcomes.isEmpty()
 
+    /** Returns all [OperationOutcome] instances recorded by failed pipeline steps. */
     fun getOutcomes(): List<OperationOutcome> = outcomes.toList()
 
+    /**
+     * Returns the map of task keys to their [OperationOutcome] for steps that failed when this
+     * result was produced by [AsyncOperationResult]. Empty for synchronous pipelines.
+     */
     fun getFailedTasks(): Map<String, OperationOutcome> = failedTasks.toMap()
 
+    /**
+     * Merges all recorded [OperationOutcome] instances into a single composite
+     * [OperationOutcome] whose issues are the union of every individual outcome's issues.
+     */
     fun toOperationOutcome(): OperationOutcome = OperationOutcome().apply {
         this@OperationResult.outcomes.forEach { oo ->
             oo.issue.forEach { issue ->
@@ -408,6 +417,14 @@ class OperationResult<T> private constructor(
 
     // Builder methods - single item
 
+    /**
+     * Invokes [builder] to produce a new FHIR resource, stores it under [name] (or the
+     * resource's [Base.fhirType] lowercase when [name] is `null`), and returns a new
+     * [OperationResult] with [R] as the pipeline head.
+     *
+     * Error handling follows Pattern A: exceptions record an ERROR-severity [OperationOutcome]
+     * and skip the head value.
+     */
     @JvmOverloads
     fun <R : Base> add(name: String? = null, builder: () -> R): OperationResult<R> =
         runBuilderStep(name) {
@@ -415,6 +432,11 @@ class OperationResult<T> private constructor(
             storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
+    /**
+     * Like [add] but [builder] receives the current pipeline head value [T].
+     *
+     * Error handling follows Pattern A.
+     */
     @JvmOverloads
     fun <R : Base> addUsing(name: String? = null, builder: (T) -> R): OperationResult<R> =
         runBuilderStep(name) {
@@ -426,6 +448,13 @@ class OperationResult<T> private constructor(
     // addAll/addAllUsing return OperationResult<List<R>>; use getResultList() or getResult()
     // to retrieve the typed list without casting.
 
+    /**
+     * Invokes [builder] to produce a list of FHIR resources, stores each element under [name]
+     * (or each element's [Base.fhirType] lowercase when [name] is `null`), and returns a new
+     * [OperationResult] with `List<R>` as the pipeline head.
+     *
+     * Error handling follows Pattern A.
+     */
     @JvmOverloads
     fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
@@ -433,6 +462,11 @@ class OperationResult<T> private constructor(
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
 
+    /**
+     * Like [addAll] but [builder] receives the current pipeline head value [T].
+     *
+     * Error handling follows Pattern A.
+     */
     @JvmOverloads
     fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
@@ -442,6 +476,13 @@ class OperationResult<T> private constructor(
 
     // Builder methods - from existing parameters
 
+    /**
+     * Reads all values already accumulated under [name], filters them to [type], passes the
+     * typed list to [builder], and replaces the values stored under [name] with the single
+     * result. The pipeline head becomes [R].
+     *
+     * Error handling follows Pattern A.
+     */
     fun <I : Base, R : Base> addFrom(name: String, type: KClass<I>, builder: (List<I>) -> R): OperationResult<R> =
         runBuilderStep(name) {
             val (value, duration) = measureTimedValue {
@@ -451,6 +492,11 @@ class OperationResult<T> private constructor(
             storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
+    /**
+     * Like [addFrom] but [builder] returns a `List<R>`. The pipeline head becomes `List<R>`.
+     *
+     * Error handling follows Pattern A.
+     */
     fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> List<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
             val (values, duration) = measureTimedValue {
@@ -462,6 +508,13 @@ class OperationResult<T> private constructor(
 
     // Builder variants with explicit error handling
 
+    /**
+     * Like [add] but on exception records a WARNING-severity [OperationOutcome] and preserves
+     * the current head type [T] rather than skipping it (Pattern B — head-preserving).
+     *
+     * The result is still stored in the parameter map on success; on failure it is silently
+     * omitted and the pipeline continues with the same head.
+     */
     @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
         val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
@@ -485,6 +538,11 @@ class OperationResult<T> private constructor(
         )
     }
 
+    /**
+     * Like [add] but on exception stores [default] under [name] instead and returns a new
+     * [OperationResult] with [R] as the pipeline head. A WARNING-severity [OperationOutcome]
+     * is recorded on failure (Pattern B — head-preserving, result type changes to [R]).
+     */
     @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
         val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
@@ -619,32 +677,79 @@ class OperationResult<T> private constructor(
     }
 
     // ── Primitive value convenience methods ──────────────────────────────────
+    //
+    // All primitive methods follow Pattern B: exceptions record a WARNING-severity
+    // OperationOutcome and preserve the current head type T unchanged.
 
+    /** Stores a FHIR [StringType] under [name]. On error records a WARNING (Pattern B). */
     fun addString(name: String, value: String): OperationResult<T>       = runPrimitiveStep(name) { StringType(value) }
+
+    /** Stores a FHIR [BooleanType] under [name]. On error records a WARNING (Pattern B). */
     fun addBoolean(name: String, value: Boolean): OperationResult<T>     = runPrimitiveStep(name) { BooleanType(value) }
+
+    /** Stores a FHIR [IntegerType] under [name]. On error records a WARNING (Pattern B). */
     fun addInteger(name: String, value: Int): OperationResult<T>         = runPrimitiveStep(name) { IntegerType(value) }
+
+    /** Stores a FHIR [DecimalType] under [name]. On error records a WARNING (Pattern B). */
     fun addDecimal(name: String, value: BigDecimal): OperationResult<T>  = runPrimitiveStep(name) { DecimalType(value) }
+
+    /** Stores a FHIR [CodeType] under [name]. On error records a WARNING (Pattern B). */
     fun addCode(name: String, value: String): OperationResult<T>         = runPrimitiveStep(name) { CodeType(value) }
+
+    /** Stores a FHIR [UriType] under [name]. On error records a WARNING (Pattern B). */
     fun addUri(name: String, value: String): OperationResult<T>          = runPrimitiveStep(name) { UriType(value) }
+
+    /** Converts [value] to a FHIR date and stores it under [name]. On error records a WARNING (Pattern B). */
     fun addDate(name: String, value: DateTimeInput): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(value) }
+
+    /** Converts [value] to a FHIR dateTime and stores it under [name]. On error records a WARNING (Pattern B). */
     fun addDateTime(name: String, value: DateTimeInput): OperationResult<T> = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(value) }
+
+    /** Converts [value] to a FHIR instant and stores it under [name]. On error records a WARNING (Pattern B). */
     fun addInstant(name: String, value: DateTimeInput): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(value) }
+
+    /** Converts [value] to a FHIR time and stores it under [name]. On error records a WARNING (Pattern B). */
     fun addTime(name: String, value: DateTimeInput): OperationResult<T>     = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(value) }
 
-
+    /** Like [addString] but derives [value] from the current pipeline head via [builder]. */
     fun addStringUsing(name: String, builder: (T) -> String): OperationResult<T>           = runPrimitiveStep(name) { StringType(builder(getResult())) }
+
+    /** Like [addBoolean] but derives [value] from the current pipeline head via [builder]. */
     fun addBooleanUsing(name: String, builder: (T) -> Boolean): OperationResult<T>         = runPrimitiveStep(name) { BooleanType(builder(getResult())) }
+
+    /** Like [addInteger] but derives [value] from the current pipeline head via [builder]. */
     fun addIntegerUsing(name: String, builder: (T) -> Int): OperationResult<T>             = runPrimitiveStep(name) { IntegerType(builder(getResult())) }
+
+    /** Like [addDecimal] but derives [value] from the current pipeline head via [builder]. */
     fun addDecimalUsing(name: String, builder: (T) -> BigDecimal): OperationResult<T>      = runPrimitiveStep(name) { DecimalType(builder(getResult())) }
+
+    /** Like [addCode] but derives [value] from the current pipeline head via [builder]. */
     fun addCodeUsing(name: String, builder: (T) -> String): OperationResult<T>             = runPrimitiveStep(name) { CodeType(builder(getResult())) }
+
+    /** Like [addUri] but derives [value] from the current pipeline head via [builder]. */
     fun addUriUsing(name: String, builder: (T) -> String): OperationResult<T>              = runPrimitiveStep(name) { UriType(builder(getResult())) }
+
+    /** Like [addDate] but derives [value] from the current pipeline head via [builder]. */
     fun addDateUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDate(builder(getResult())) }
+
+    /** Like [addDateTime] but derives [value] from the current pipeline head via [builder]. */
     fun addDateTimeUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>  = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirDateTime(builder(getResult())) }
+
+    /** Like [addInstant] but derives [value] from the current pipeline head via [builder]. */
     fun addInstantUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>   = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirInstant(builder(getResult())) }
+
+    /** Like [addTime] but derives [value] from the current pipeline head via [builder]. */
     fun addTimeUsing(name: String, builder: (T) -> DateTimeInput): OperationResult<T>      = runPrimitiveStep(name) { FhirDateTimeConverter.toFhirTime(builder(getResult())) }
 
     // ── Complex data type convenience methods ────────────────────────────────
+    //
+    // All complex type methods follow Pattern B: on error a WARNING is recorded and the
+    // head type T is preserved unchanged.
 
+    /**
+     * Stores a [Coding] under [name] with the given [system], [code], and optional [display].
+     * On error records a WARNING (Pattern B).
+     */
     @JvmOverloads
     fun addCoding(name: String, system: String, code: String, display: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
@@ -655,9 +760,11 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /** Stores a [Reference] under [name] with the given [reference] string. On error records a WARNING (Pattern B). */
     fun addReference(name: String, reference: String): OperationResult<T> =
         runPrimitiveStep(name) { Reference(reference) }
 
+    /** Stores an [Identifier] under [name] with the given [system] and [value]. On error records a WARNING (Pattern B). */
     fun addIdentifier(name: String, system: String, value: String): OperationResult<T> =
         runPrimitiveStep(name) {
             Identifier().apply {
@@ -666,6 +773,10 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /**
+     * Stores a [Period] under [name] from raw FHIR date-time strings. `null` values are omitted
+     * from the period. On error records a WARNING (Pattern B).
+     */
     fun addPeriod(name: String, start: String?, end: String?): OperationResult<T> =
         runPrimitiveStep(name) {
             Period().apply {
@@ -674,6 +785,7 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /** Stores a [Period] under [name] from [LocalDateTime] values. `null` values are omitted. On error records a WARNING (Pattern B). */
     fun addPeriod(name: String, start: LocalDateTime?, end: LocalDateTime?): OperationResult<T> =
         runPrimitiveStep(name) {
             Period().apply {
@@ -682,6 +794,7 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /** Stores a [Period] under [name] from [ZonedDateTime] values. `null` values are omitted. On error records a WARNING (Pattern B). */
     fun addPeriod(name: String, start: ZonedDateTime?, end: ZonedDateTime?): OperationResult<T> =
         runPrimitiveStep(name) {
             Period().apply {
@@ -690,6 +803,7 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /** Stores a [Period] under [name] from [OffsetDateTime] values. `null` values are omitted. On error records a WARNING (Pattern B). */
     fun addPeriod(name: String, start: OffsetDateTime?, end: OffsetDateTime?): OperationResult<T> =
         runPrimitiveStep(name) {
             Period().apply {
@@ -698,6 +812,10 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /**
+     * Stores a [Quantity] under [name] with [value], [unit], and optional [system] and [code].
+     * On error records a WARNING (Pattern B).
+     */
     @JvmOverloads
     fun addQuantity(name: String, value: BigDecimal, unit: String, system: String? = null, code: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
@@ -709,6 +827,10 @@ class OperationResult<T> private constructor(
             }
         }
 
+    /**
+     * Stores a [CodeableConcept] under [name] with a single [Coding] built from [system], [code],
+     * and optional [display], plus an optional free-text [text]. On error records a WARNING (Pattern B).
+     */
     @JvmOverloads
     fun addCodeableConcept(name: String, system: String, code: String, display: String? = null, text: String? = null): OperationResult<T> =
         runPrimitiveStep(name) {
@@ -789,9 +911,11 @@ class OperationResult<T> private constructor(
 
     // Query methods
 
+    /** Returns a read-only snapshot of the full parameter map (all keys and all their values). */
     fun getAllParameters(): Map<String, List<Base>> =
         parameters.mapValues { it.value.toList() }
 
+    /** Returns all values accumulated under [name], or an empty list if the key is absent. */
     fun getAll(name: String): List<Base> =
         parameters[name]?.toList() ?: emptyList()
 
@@ -843,6 +967,7 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> filterByType(): OperationResult<T> = filterByType(R::class)
 
+    /** Returns a new result containing only the entry for [name]. All other keys are dropped. No-op if [name] is absent. */
     fun filterByName(name: String): OperationResult<T> {
         val filtered = mutableMapOf<String, MutableList<Base>>()
         parameters[name]?.let { values ->
@@ -851,6 +976,11 @@ class OperationResult<T> private constructor(
         return copyWith(result, params = filtered)
     }
 
+    /**
+     * Applies [transform] to every value in the parameter map and returns a new result with the
+     * transformed values. The pipeline head is cleared to `null`; use [getResult] only after a
+     * subsequent builder step sets a new head.
+     */
     fun <R : Base> mapValues(transform: (Base) -> R): OperationResult<R> {
         val transformed = parameters.mapValues { (_, values) ->
             values.map(transform).toMutableList<Base>()
@@ -1306,6 +1436,11 @@ class OperationResult<T> private constructor(
      */
     fun toParameters(): Parameters = ParameterMapSerializer.unflatten(parameters, extensions)
 
+    /**
+     * Wraps [resource] in a [Bundle.BundleEntryComponent]. When [resource] is a [Resource]
+     * subtype, it is set as the entry's resource; non-Resource values produce an empty entry.
+     * Used internally by [toBundle] and its convenience aliases.
+     */
     fun toBundleEntry(resource: Base): Bundle.BundleEntryComponent =
         Bundle.BundleEntryComponent().apply {
             if (resource is Resource) setResource(resource)
@@ -1437,6 +1572,13 @@ class OperationResult<T> private constructor(
             return OperationResult(mutable, null, outcomes.toMutableList(), ErrorStrategy.FAIL_FAST, failedTasks.toMutableMap())
         }
 
+        /**
+         * Creates an [OperationResult] with [value] as both the pipeline head and the first
+         * parameter-map entry, stored under [name] (or [value]'s [Base.fhirType] lowercase when
+         * [name] is `null`).
+         *
+         * @param errorStrategy controls how subsequent steps behave when an error is recorded
+         */
         @JvmStatic
         @JvmOverloads
         fun <T : Base> of(value: T, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<T> {
@@ -1446,6 +1588,13 @@ class OperationResult<T> private constructor(
             return OperationResult(params, value, mutableListOf(), errorStrategy, mutableMapOf())
         }
 
+        /**
+         * Creates an [OperationResult] with [values] as both the pipeline head (`List<T>`) and
+         * the initial parameter-map entries. Each element is stored under [name] (or the element's
+         * [Base.fhirType] lowercase when [name] is `null`).
+         *
+         * @param errorStrategy controls how subsequent steps behave when an error is recorded
+         */
         @JvmStatic
         @JvmOverloads
         fun <T : Base> of(values: List<T>, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<List<T>> {

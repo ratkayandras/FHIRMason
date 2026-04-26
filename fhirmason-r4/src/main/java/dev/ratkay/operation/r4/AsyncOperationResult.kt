@@ -22,6 +22,29 @@ import kotlin.reflect.KClass
 import kotlin.time.measureTime
 import kotlin.time.measureTimedValue
 
+/**
+ * Builds and executes a DAG of asynchronous FHIR tasks, collecting results into an
+ * [OperationResult].
+ *
+ * Tasks are registered before execution:
+ * - Independent tasks ([add], [addList], [addWithRetry], etc.) have no dependencies and run
+ *   in parallel immediately when [run] is called.
+ * - Dependent tasks ([addAfter], [addListAfter], etc.) declare their dependencies by key and
+ *   start only after all named dependencies resolve successfully.
+ *
+ * Execution is started by calling [run] (suspending) or [runBlocking] (blocking). The returned
+ * [OperationResult] accumulates all successful task results; failed tasks add an ERROR-severity
+ * [OperationOutcome].
+ *
+ * ### Registration order
+ * Dependencies must be registered before the tasks that depend on them — [addAfter] validates
+ * at registration time and throws [IllegalArgumentException] for unknown keys or cycles.
+ *
+ * ### Configuration
+ * - [timed] — enable per-task metrics
+ * - [timeout] — set a DAG-level wall-clock timeout
+ * - [withExecutor] — override the default [kotlinx.coroutines.Dispatchers.IO] thread pool
+ */
 class AsyncOperationResult {
 
     private val logger = LoggerFactory.getLogger(AsyncOperationResult::class.java)
@@ -102,14 +125,39 @@ class AsyncOperationResult {
         nodes[key] = node
     }
 
+    /**
+     * Registers an independent DAG task that produces a single [Base] resource stored under [key].
+     *
+     * [block] is invoked with no arguments when [run] is called. If it throws, the key is absent
+     * from the final [OperationResult] and an ERROR-severity [OperationOutcome] is recorded.
+     * Downstream tasks that depend on this key are skipped.
+     */
     fun add(key: String, block: suspend () -> Base): AsyncOperationResult = also {
         registerNode(key, TaskNode.Independent(key) { listOf(block()) })
     }
 
+    /**
+     * Registers an independent DAG task that produces a list of resources stored under [key].
+     * Each element is added to the list under the same key. See [add] for error semantics.
+     */
     fun <R : Base> addList(key: String, block: suspend () -> List<R>): AsyncOperationResult = also {
         registerNode(key, TaskNode.Independent(key) { block() })
     }
 
+    /**
+     * Registers a dependent DAG task that produces a single [Base] resource stored under [key].
+     *
+     * [block] is invoked only after all [deps] have resolved successfully. It receives a map
+     * keyed by dependency name, where each entry holds the list of resources produced by that
+     * dependency. If any dependency fails, this task is skipped without calling [block].
+     *
+     * All [deps] must already be registered; duplicate keys and cycles cause
+     * [IllegalArgumentException] at registration time.
+     *
+     * @param key storage key for the result
+     * @param deps keys of previously registered tasks whose results are passed to [block]
+     * @param block the suspending lambda to invoke; receives resolved dependency results
+     */
     fun addAfter(
         key: String,
         vararg deps: String,
@@ -121,6 +169,13 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Dependent(key, depList) { map -> listOf(block(map)) })
     }
 
+    /**
+     * Like [addAfter] but [block] returns a `List<R>`. All elements are stored under [key].
+     *
+     * @param key storage key for the result list
+     * @param deps keys of previously registered tasks whose results are passed to [block]
+     * @param block the suspending lambda to invoke; receives resolved dependency results
+     */
     fun <R : Base> addListAfter(
         key: String,
         vararg deps: String,
@@ -134,6 +189,17 @@ class AsyncOperationResult {
 
     // Type-safe single-dependency convenience methods
 
+    /**
+     * Type-safe overload of [addAfter] for a single dependency.
+     *
+     * Extracts the first value stored under [dep] that is an instance of [type] and passes it
+     * directly to [block], eliminating manual map lookup and casting.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param block the suspending lambda; receives the typed dependency value
+     */
     fun <T : Base> addAfter(
         key: String,
         dep: String,
@@ -144,6 +210,17 @@ class AsyncOperationResult {
         block(value)
     }
 
+    /**
+     * Type-safe overload of [addListAfter] for a single dependency.
+     *
+     * Extracts the first value stored under [dep] that is an instance of [type] and passes it
+     * directly to [block]. See [addAfter] (typed overload) for the full contract.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency value
+     * @param block the suspending lambda; receives the typed dependency value
+     */
     fun <T : Base, R : Base> addListAfter(
         key: String,
         dep: String,
@@ -156,6 +233,17 @@ class AsyncOperationResult {
 
     // Type-safe list-injection convenience methods
 
+    /**
+     * Type-safe overload of [addAfter] for a single dependency where [block] receives **all**
+     * values stored under [dep] that are instances of [type], as a typed list.
+     *
+     * Use [addAfter] (typed overload) when you want only the first matching value.
+     *
+     * @param key storage key for the result
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param block the suspending lambda; receives the typed dependency list
+     */
     fun <T : Base> addAfterAll(
         key: String,
         dep: String,
@@ -166,6 +254,14 @@ class AsyncOperationResult {
         block(values)
     }
 
+    /**
+     * Like [addAfterAll] but [block] returns a `List<R>`.
+     *
+     * @param key storage key for the result list
+     * @param dep the single dependency key
+     * @param type the expected type of the dependency values
+     * @param block the suspending lambda; receives the typed dependency list
+     */
     fun <T : Base, R : Base> addListAfterAll(
         key: String,
         dep: String,
@@ -912,6 +1008,12 @@ class AsyncOperationResult {
         OperationResult.fromMap(accumulator, outcomes, failedTasks)
     }
 
+    /**
+     * Blocking wrapper around [run] — calls [run] inside [kotlinx.coroutines.runBlocking].
+     *
+     * Inherits the DAG-level timeout configured via [timeout], if set.
+     * Prefer [run] from a coroutine context; use this method only from non-suspending call sites.
+     */
     fun runBlocking(): OperationResult<Base> = runBlocking { run() }
 
     private fun dagTimeoutOutcome(durationMs: Long): OperationOutcome = OperationOutcome().apply {
