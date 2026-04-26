@@ -64,8 +64,8 @@ import kotlin.time.measureTimedValue
  * | FHIRPath extraction | `selectByPath` |
  * | Extraction | `takeFirst`, `takeFirstTyped`, `extractParam`, `extractParamList` |
  * | Reference linking | `linkReferences` |
- * | Serialization | `toParameters`, `toBundleEntry`, `toBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
- * | Factory *(companion)* | `of`, `fromParameters`, `fromParametersTyped`, `fromBundle`, `empty` |
+ * | Serialization | `toParameters`, `toBundleEntry`, `toBundle`, `toCollectionBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
+ * | Factory *(companion)* | `of`, `fromParameters`, `fromParametersTyped`, `fromBundle`, `fromBundleTyped`, `empty` |
  */
 class OperationResult<T> private constructor(
     private val parameters: MutableMap<String, MutableList<Base>>,
@@ -1311,6 +1311,24 @@ class OperationResult<T> private constructor(
             if (resource is Resource) setResource(resource)
         }
 
+    /**
+     * Serialises all accumulated [Resource] values to a FHIR [Bundle] of the given [type].
+     *
+     * Only [Resource] subtypes from the parameter map are written as bundle entries.
+     * Primitive and complex FHIR [Type] values added via `addString`, `addCoding`, `addPart`,
+     * etc. are not representable in a Bundle entry and are silently omitted.
+     * Use [toParameters] to serialise the full accumulated state including non-Resource values.
+     *
+     * Type-specific behaviour:
+     * - **TRANSACTION / BATCH**: each entry gets a `request` component; PUT with
+     *   `"ResourceType/id"` when the resource has an id, POST with `"ResourceType"` otherwise.
+     * - **SEARCHSET**: each entry gets `search.mode = MATCH`; `bundle.total` is set to the
+     *   number of entries.
+     * - All other types (e.g. COLLECTION): plain entries with no request/search metadata.
+     *
+     * @param configBlock optional lambda applied to each [Bundle.BundleEntryComponent] after the
+     *   automatic type-specific logic, useful for setting `fullUrl` or overriding search mode.
+     */
     @JvmOverloads
     fun toBundle(
         type: Bundle.BundleType,
@@ -1347,9 +1365,46 @@ class OperationResult<T> private constructor(
         }
     }
 
-    fun toTransactionBundle(): Bundle = toBundle(Bundle.BundleType.TRANSACTION)
+    /**
+     * Convenience alias for `toBundle(Bundle.BundleType.COLLECTION, configBlock)`.
+     *
+     * Only [Resource] values are included; non-Resource accumulated values are silently omitted.
+     * Use [toParameters] to serialise the full state.
+     *
+     * @param configBlock optional lambda applied to each entry, e.g. to set `fullUrl`.
+     */
+    @JvmOverloads
+    fun toCollectionBundle(
+        configBlock: ((Bundle.BundleEntryComponent) -> Unit)? = null
+    ): Bundle = toBundle(Bundle.BundleType.COLLECTION, configBlock)
 
-    fun toBatchBundle(): Bundle = toBundle(Bundle.BundleType.BATCH)
+    /**
+     * Convenience alias for `toBundle(Bundle.BundleType.TRANSACTION, configBlock)`.
+     *
+     * Only [Resource] values are included; non-Resource accumulated values are silently omitted.
+     * Use [toParameters] to serialise the full state.
+     *
+     * @param configBlock optional lambda applied to each entry after the automatic PUT/POST
+     *   inference, e.g. to set `fullUrl` for cross-entry reference resolution.
+     */
+    @JvmOverloads
+    fun toTransactionBundle(
+        configBlock: ((Bundle.BundleEntryComponent) -> Unit)? = null
+    ): Bundle = toBundle(Bundle.BundleType.TRANSACTION, configBlock)
+
+    /**
+     * Convenience alias for `toBundle(Bundle.BundleType.BATCH, configBlock)`.
+     *
+     * Only [Resource] values are included; non-Resource accumulated values are silently omitted.
+     * Use [toParameters] to serialise the full state.
+     *
+     * @param configBlock optional lambda applied to each entry after the automatic PUT/POST
+     *   inference, e.g. to set `fullUrl`.
+     */
+    @JvmOverloads
+    fun toBatchBundle(
+        configBlock: ((Bundle.BundleEntryComponent) -> Unit)? = null
+    ): Bundle = toBundle(Bundle.BundleType.BATCH, configBlock)
 
     /**
      * Returns the most recently added value, typed as [T].
@@ -1492,6 +1547,52 @@ class OperationResult<T> private constructor(
                 }
             return OperationResult(params, null, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
         }
+
+        /**
+         * Builds an [OperationResult] from a FHIR [Bundle] and sets the typed pipeline head to
+         * the first resource stored under [primaryKey] that is an instance of [type].
+         *
+         * Resources are keyed by `resource.fhirType().lowercase()` (same as the default
+         * [fromBundle] overload).  All resources are loaded into the parameter map; only the
+         * head is narrowed to [T].
+         *
+         * @throws IllegalArgumentException if no resource of [type] exists under [primaryKey].
+         */
+        @JvmStatic
+        fun <T : Resource> fromBundleTyped(
+            bundle: Bundle,
+            primaryKey: String,
+            type: KClass<T>
+        ): OperationResult<T> {
+            val params = mutableMapOf<String, MutableList<Base>>()
+            bundle.entry
+                .filter { it.hasResource() }
+                .forEach { entry ->
+                    val key = entry.resource.fhirType().lowercase()
+                    params.getOrPut(key) { mutableListOf() }.add(entry.resource)
+                }
+            val primary = params[primaryKey]
+                ?.filterIsInstance(type.java)
+                ?.firstOrNull()
+                ?: throw IllegalArgumentException(
+                    "No value of type '${type.simpleName}' found under key '$primaryKey'"
+                )
+            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+        }
+
+        /** Java-friendly overload of [fromBundleTyped] — accepts [Class] instead of [KClass]. */
+        @JvmStatic
+        fun <T : Resource> fromBundleTyped(
+            bundle: Bundle,
+            primaryKey: String,
+            type: Class<T>
+        ): OperationResult<T> = fromBundleTyped(bundle, primaryKey, type.kotlin)
+
+        /** Reified overload of [fromBundleTyped] — no [KClass] argument needed at call sites. */
+        inline fun <reified T : Resource> fromBundleTyped(
+            bundle: Bundle,
+            primaryKey: String
+        ): OperationResult<T> = fromBundleTyped(bundle, primaryKey, T::class)
 
         /**
          * Creates an empty [OperationResult] with no parameters and no pipeline head.

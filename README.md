@@ -61,7 +61,7 @@ val result = OperationResult.of(patient)
     .linkReferences()           // auto-wire FHIR references between resources
 
 result.toParameters()           // serialize to a FHIR Parameters resource
-result.toTransactionBundle()    // serialize to a FHIR transaction Bundle
+result.toTransactionBundle()    // serialize to a FHIR transaction Bundle (Resources only)
 result.getResult()              // the most recently added value (typed)
 
 // Async
@@ -924,12 +924,22 @@ result.toParameters()   // structurally identical to `original`
 
 #### FHIR Bundle
 
+Only accumulated `Resource` values appear in the bundle; primitive and complex `Type` values
+added via `addString`, `addCoding`, `addPart`, etc. are not representable as bundle entries and
+are silently omitted. Use `toParameters()` to serialise the full accumulated state.
+
 ```kotlin
-result.toTransactionBundle()          // Bundle (type = TRANSACTION), PUT/POST requests added per resource
+result.toCollectionBundle()           // Bundle (type = COLLECTION)
+result.toTransactionBundle()          // Bundle (type = TRANSACTION), PUT/POST inferred per resource
 result.toBatchBundle()                // Bundle (type = BATCH)
-result.toBundle(Bundle.BundleType.COLLECTION)
 result.toBundle(Bundle.BundleType.SEARCHSET) { entry ->
-    entry.search.mode = Bundle.SearchEntryMode.MATCH  // optional entry config block
+    entry.search.mode = Bundle.SearchEntryMode.MATCH  // optional per-entry config block
+}
+
+// configBlock is available on all three convenience aliases too,
+// e.g. to set fullUrl for cross-entry reference resolution in a transaction:
+result.toTransactionBundle { entry ->
+    entry.fullUrl = "urn:uuid:${UUID.randomUUID()}"
 }
 ```
 
@@ -950,6 +960,9 @@ val result = OperationResult.fromParametersTyped<Patient>(parameters, primaryKey
 
 // From a Bundle — keys default to fhirType().lowercase()
 val result = OperationResult.fromBundle(bundle)
+
+// Typed head — getResult() returns a Patient without casting
+val result = OperationResult.fromBundleTyped<Patient>(bundle, primaryKey = "patient")
 
 // Custom key strategy
 val result = OperationResult.fromBundle(bundle) { entry ->
@@ -1559,8 +1572,13 @@ val result = OperationResult.fromBundle(bundle)
 // or with a custom key per entry:
 val result = OperationResult.fromBundle(bundle) { entry -> entry.fullUrl }
 
+// Typed head — getResult() returns a Patient without casting
+val result = OperationResult.fromBundleTyped<Patient>(bundle, primaryKey = "patient")
+
 result.getByType<Patient>()
+result.toCollectionBundle()
 result.toTransactionBundle()
+result.toTransactionBundle { entry -> entry.fullUrl = "urn:uuid:${UUID.randomUUID()}" }
 ```
 
 ### 10. Filtering and transforming
@@ -1955,8 +1973,16 @@ result.addCodeableConcept("category", "http://loinc.org", "vital-signs")
       .addCodeableConcept("category", "http://loinc.org", "vital-signs", "Vital Signs", "Patient vitals");
 
 // toBundle — configBlock is optional
-Bundle plain = result.toBundle(Bundle.BundleType.COLLECTION);
+Bundle plain  = result.toBundle(Bundle.BundleType.COLLECTION);
 Bundle custom = result.toBundle(Bundle.BundleType.COLLECTION, entry -> entry.setFullUrl("urn:uuid:" + UUID.randomUUID()));
+
+// Convenience aliases — configBlock is optional on all three
+Bundle collection  = result.toCollectionBundle();
+Bundle transaction = result.toTransactionBundle(entry -> entry.setFullUrl("urn:uuid:" + UUID.randomUUID()));
+Bundle batch       = result.toBatchBundle();
+
+// fromBundleTyped — sets a typed pipeline head
+OperationResult<Patient> fromBundle = OperationResult.fromBundleTyped(bundle, "patient", Patient.class);
 ```
 
 ### Retry methods
