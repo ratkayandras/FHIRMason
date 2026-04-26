@@ -236,13 +236,14 @@ class OperationResult<T> private constructor(
         return copyWith(value)
     }
 
-    private fun <R : Base> storeListAndCopy(name: String?, values: List<R>, durationMs: Long): OperationResult<List<R>> {
-        addToParameters(values, name)
-        val key = name ?: values.firstOrNull()?.fhirType()?.lowercase() ?: "list"
-        val typeDesc = "${values.firstOrNull()?.fhirType() ?: "Empty"}[${values.size}]"
+    private fun <R : Base> storeListAndCopy(name: String?, values: Collection<R>, durationMs: Long): OperationResult<List<R>> {
+        val list = values.toList()
+        addToParameters(list, name)
+        val key = name ?: list.firstOrNull()?.fhirType()?.lowercase() ?: "list"
+        val typeDesc = "${list.firstOrNull()?.fhirType() ?: "Empty"}[${list.size}]"
         recordMetric(key, typeDesc, durationMs, true)
         logStep(key, typeDesc, durationMs)
-        return copyWith(values)
+        return copyWith(list)
     }
 
 
@@ -287,15 +288,18 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> = addFromFiltered(name, type.kotlin, predicate, builder)
 
     /**
-     * Like [addFromFiltered] but [builder] returns a `List<R>`, making the new
+     * Like [addFromFiltered] but [builder] returns a `Collection<R>`, making the new
      * pipeline head `List<R>`.
+     *
+     * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+     * always stored as a [List].
      */
     @JvmOverloads
     fun <I : Base, R : Base> addAllFromFiltered(
         name: String? = null,
         type: KClass<I>,
         predicate: (I) -> Boolean,
-        builder: (List<I>) -> List<R>
+        builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = runBuilderStep(name) {
         val (values, duration) = measureTimedValue {
             builder(parameters.values.flatten().filterIsInstance(type.java).filter(predicate))
@@ -307,7 +311,7 @@ class OperationResult<T> private constructor(
     inline fun <reified I : Base, R : Base> addAllFromFiltered(
         name: String? = null,
         noinline predicate: (I) -> Boolean,
-        noinline builder: (List<I>) -> List<R>
+        noinline builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromFiltered(name, I::class, predicate, builder)
 
     /** Java-friendly overload of [addAllFromFiltered] — accepts [Class] instead of [KClass]. */
@@ -316,7 +320,7 @@ class OperationResult<T> private constructor(
         name: String? = null,
         type: Class<I>,
         predicate: (I) -> Boolean,
-        builder: (List<I>) -> List<R>
+        builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromFiltered(name, type.kotlin, predicate, builder)
 
     // Builder methods — filter all accumulated parameters by type and FHIRPath expression
@@ -361,16 +365,19 @@ class OperationResult<T> private constructor(
     ): OperationResult<R> = addFromMatching(name, type, expression.build(), builder)
 
     /**
-     * Like [addFromMatching] but [builder] returns a `List<R>`.
+     * Like [addFromMatching] but [builder] returns a `Collection<R>`.
      * When [name] is `null`, the output key defaults to the first element's [Base.fhirType]
      * (lowercase) — consistent with [addAll].
+     *
+     * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+     * always stored as a [List].
      */
     @JvmOverloads
     fun <I : Base, R : Base> addAllFromMatching(
         name: String? = null,
         type: KClass<I>,
         expression: String,
-        builder: (List<I>) -> List<R>
+        builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> {
         return runBuilderStep(name) {
             val (values, duration) = measureTimedValue { builder(collectByPath(type, expression)) }
@@ -384,7 +391,7 @@ class OperationResult<T> private constructor(
         name: String? = null,
         type: KClass<I>,
         expression: FhirPath,
-        builder: (List<I>) -> List<R>
+        builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromMatching(name, type, expression.build(), builder)
 
     /** Reified overload of [addFromMatching] — no [KClass] argument needed at call sites. */
@@ -405,14 +412,14 @@ class OperationResult<T> private constructor(
     inline fun <reified I : Base, R : Base> addAllFromMatching(
         name: String? = null,
         expression: String,
-        noinline builder: (List<I>) -> List<R>
+        noinline builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromMatching(name, I::class, expression, builder)
 
     /** [FhirPath] reified overload of [addAllFromMatching]. */
     inline fun <reified I : Base, R : Base> addAllFromMatching(
         name: String? = null,
         expression: FhirPath,
-        noinline builder: (List<I>) -> List<R>
+        noinline builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromMatching(name, I::class, expression.build(), builder)
 
     // Builder methods - single item
@@ -449,14 +456,17 @@ class OperationResult<T> private constructor(
     // to retrieve the typed list without casting.
 
     /**
-     * Invokes [builder] to produce a list of FHIR resources, stores each element under [name]
-     * (or each element's [Base.fhirType] lowercase when [name] is `null`), and returns a new
-     * [OperationResult] with `List<R>` as the pipeline head.
+     * Invokes [builder] to produce a collection of FHIR resources, stores each element under
+     * [name] (or each element's [Base.fhirType] lowercase when [name] is `null`), and returns a
+     * new [OperationResult] with `List<R>` as the pipeline head.
+     *
+     * Accepts any [Collection] (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+     * always stored as a [List].
      *
      * Error handling follows Pattern A.
      */
     @JvmOverloads
-    fun <R : Base> addAll(name: String? = null, builder: () -> List<R>): OperationResult<List<R>> =
+    fun <R : Base> addAll(name: String? = null, builder: () -> Collection<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
             val (values, duration) = measureTimedValue { builder() }
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
@@ -465,10 +475,13 @@ class OperationResult<T> private constructor(
     /**
      * Like [addAll] but [builder] receives the current pipeline head value [T].
      *
+     * Accepts any [Collection] (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+     * always stored as a [List].
+     *
      * Error handling follows Pattern A.
      */
     @JvmOverloads
-    fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> List<R>): OperationResult<List<R>> =
+    fun <R : Base> addAllUsing(name: String? = null, builder: (T) -> Collection<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
             val (values, duration) = measureTimedValue { builder(getResult()) }
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
@@ -493,11 +506,14 @@ class OperationResult<T> private constructor(
         }
 
     /**
-     * Like [addFrom] but [builder] returns a `List<R>`. The pipeline head becomes `List<R>`.
+     * Like [addFrom] but [builder] returns a `Collection<R>`. The pipeline head becomes `List<R>`.
+     *
+     * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+     * always stored as a [List].
      *
      * Error handling follows Pattern A.
      */
-    fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> List<R>): OperationResult<List<R>> =
+    fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> Collection<R>): OperationResult<List<R>> =
         runBuilderStep(name) {
             val (values, duration) = measureTimedValue {
                 val filtered = parameters[name]?.filterIsInstance(type.java) ?: emptyList()
@@ -1550,7 +1566,7 @@ class OperationResult<T> private constructor(
 
     // Private helpers
 
-    private fun addToParameters(values: List<Base>, name: String?) {
+    private fun addToParameters(values: Collection<Base>, name: String?) {
         values.forEach { value ->
             val key = name ?: value.fhirType().lowercase()
             parameters.getOrPut(key) { mutableListOf() }.add(value)
@@ -1593,14 +1609,18 @@ class OperationResult<T> private constructor(
          * the initial parameter-map entries. Each element is stored under [name] (or the element's
          * [Base.fhirType] lowercase when [name] is `null`).
          *
+         * Accepts any [Collection] (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
+         * always stored as a [List].
+         *
          * @param errorStrategy controls how subsequent steps behave when an error is recorded
          */
         @JvmStatic
         @JvmOverloads
-        fun <T : Base> of(values: List<T>, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<List<T>> {
+        fun <T : Base> of(values: Collection<T>, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<List<T>> {
+            val list = values.toList()
             val params = mutableMapOf<String, MutableList<Base>>()
-            val instance = OperationResult(params, values, mutableListOf(), errorStrategy, mutableMapOf())
-            instance.addToParameters(values, name)
+            val instance = OperationResult(params, list, mutableListOf(), errorStrategy, mutableMapOf())
+            instance.addToParameters(list, name)
             return instance
         }
 

@@ -137,11 +137,14 @@ class AsyncOperationResult {
     }
 
     /**
-     * Registers an independent DAG task that produces a list of resources stored under [key].
+     * Registers an independent DAG task that produces a collection of resources stored under [key].
      * Each element is added to the list under the same key. See [add] for error semantics.
+     *
+     * Accepts any [Collection] (e.g. [List], [Set], [LinkedHashSet]); elements are stored as a
+     * [List] internally.
      */
-    fun <R : Base> addList(key: String, block: suspend () -> List<R>): AsyncOperationResult = also {
-        registerNode(key, TaskNode.Independent(key) { block() })
+    fun <R : Base> addList(key: String, block: suspend () -> Collection<R>): AsyncOperationResult = also {
+        registerNode(key, TaskNode.Independent(key) { block().toList() })
     }
 
     /**
@@ -170,7 +173,10 @@ class AsyncOperationResult {
     }
 
     /**
-     * Like [addAfter] but [block] returns a `List<R>`. All elements are stored under [key].
+     * Like [addAfter] but [block] returns a `Collection<R>`. All elements are stored under [key].
+     *
+     * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); elements are stored
+     * as a [List] internally.
      *
      * @param key storage key for the result list
      * @param deps keys of previously registered tasks whose results are passed to [block]
@@ -179,12 +185,12 @@ class AsyncOperationResult {
     fun <R : Base> addListAfter(
         key: String,
         vararg deps: String,
-        block: suspend (Map<String, List<Base>>) -> List<R>
+        block: suspend (Map<String, List<Base>>) -> Collection<R>
     ): AsyncOperationResult = also {
         val depList = deps.toList()
         requireKeysExist(depList)
         requireNoCycle(key, depList)
-        registerNode(key, TaskNode.Dependent(key, depList) { map -> block(map) })
+        registerNode(key, TaskNode.Dependent(key, depList) { map -> block(map).toList() })
     }
 
     // Type-safe single-dependency convenience methods
@@ -216,6 +222,8 @@ class AsyncOperationResult {
      * Extracts the first value stored under [dep] that is an instance of [type] and passes it
      * directly to [block]. See [addAfter] (typed overload) for the full contract.
      *
+     * Accepts any [Collection] return from [block]; elements are stored as a [List] internally.
+     *
      * @param key storage key for the result list
      * @param dep the single dependency key
      * @param type the expected type of the dependency value
@@ -225,7 +233,7 @@ class AsyncOperationResult {
         key: String,
         dep: String,
         type: KClass<T>,
-        block: suspend (T) -> List<R>
+        block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
         val value = deps[dep]!!.filterIsInstance(type.java).first()
         block(value)
@@ -255,7 +263,10 @@ class AsyncOperationResult {
     }
 
     /**
-     * Like [addAfterAll] but [block] returns a `List<R>`.
+     * Like [addAfterAll] but [block] returns a `Collection<R>`.
+     *
+     * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); elements are stored
+     * as a [List] internally.
      *
      * @param key storage key for the result list
      * @param dep the single dependency key
@@ -266,7 +277,7 @@ class AsyncOperationResult {
         key: String,
         dep: String,
         type: KClass<T>,
-        block: suspend (List<T>) -> List<R>
+        block: suspend (List<T>) -> Collection<R>
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
@@ -369,10 +380,10 @@ class AsyncOperationResult {
      * @param timeoutMs maximum allowed execution time in milliseconds; must be > 0
      * @param block the suspending lambda to execute within the timeout
      */
-    fun <R : Base> addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> List<R>): AsyncOperationResult = also {
+    fun <R : Base> addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> Collection<R>): AsyncOperationResult = also {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
         registerNode(key, TaskNode.Independent(key) {
-            withTimeout(timeoutMs) { block() }
+            withTimeout(timeoutMs) { block() }.toList()
         })
     }
 
@@ -419,14 +430,14 @@ class AsyncOperationResult {
         key: String,
         vararg deps: String,
         timeoutMs: Long,
-        block: suspend (Map<String, List<Base>>) -> List<R>
+        block: suspend (Map<String, List<Base>>) -> Collection<R>
     ): AsyncOperationResult = also {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
         val depList = deps.toList()
         requireKeysExist(depList)
         requireNoCycle(key, depList)
         registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
-            withTimeout(timeoutMs) { block(depResults) }
+            withTimeout(timeoutMs) { block(depResults) }.toList()
         })
     }
 
@@ -472,7 +483,7 @@ class AsyncOperationResult {
         dep: String,
         type: KClass<T>,
         timeoutMs: Long,
-        block: suspend (T) -> List<R>
+        block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
         val value = deps[dep]!!.filterIsInstance(type.java).first()
         block(value)
@@ -516,7 +527,7 @@ class AsyncOperationResult {
         dep: String,
         type: KClass<T>,
         timeoutMs: Long,
-        block: suspend (List<T>) -> List<R>
+        block: suspend (List<T>) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
@@ -583,7 +594,7 @@ class AsyncOperationResult {
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (Map<String, List<Base>>) -> List<R>
+        block: suspend (Map<String, List<Base>>) -> Collection<R>
     ): AsyncOperationResult {
         require(maxAttempts >= 1) { "maxAttempts must be at least 1" }
         require(initialDelayMs >= 0) { "initialDelayMs must be non-negative" }
@@ -592,7 +603,7 @@ class AsyncOperationResult {
         requireNoCycle(key, depList)
         return also {
             registerNode(key, TaskNode.Dependent(key, depList) { depResults ->
-                suspendExecuteWithRetry(maxAttempts, initialDelayMs, retryOn) { block(depResults) }
+                suspendExecuteWithRetry(maxAttempts, initialDelayMs, retryOn) { block(depResults) }.toList()
             })
         }
     }
@@ -654,7 +665,7 @@ class AsyncOperationResult {
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (T) -> List<R>
+        block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithRetry(
         key, dep,
         maxAttempts = maxAttempts,
@@ -717,7 +728,7 @@ class AsyncOperationResult {
         maxAttempts: Int = 3,
         initialDelayMs: Long = 500,
         retryOn: (Exception) -> Boolean = { true },
-        block: suspend (List<T>) -> List<R>
+        block: suspend (List<T>) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithRetry(
         key, dep,
         maxAttempts = maxAttempts,
@@ -766,16 +777,17 @@ class AsyncOperationResult {
      * @param default list to store when [block] throws
      * @param block suspending lambda that produces the primary list
      */
-    fun <R : Base> addListWithDefault(key: String, default: List<R>, block: suspend () -> List<R>): AsyncOperationResult = also {
+    fun <R : Base> addListWithDefault(key: String, default: Collection<R>, block: suspend () -> Collection<R>): AsyncOperationResult = also {
+        val defaultList = default.toList()
         registerNode(key, TaskNode.Independent(key) {
             try {
-                block()
+                block().toList()
             } catch (e: BaseServerResponseException) {
                 logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
-                default
+                defaultList
             } catch (e: Exception) {
                 logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
-                default
+                defaultList
             }
         })
     }
@@ -808,7 +820,7 @@ class AsyncOperationResult {
      * Registers an independent list-producing DAG task via [addList] only when [condition] is `true`.
      * When [condition] is `false`, returns `this` unchanged. See [addIf] for full contract.
      */
-    fun <R : Base> addListIf(condition: Boolean, key: String, block: suspend () -> List<R>): AsyncOperationResult =
+    fun <R : Base> addListIf(condition: Boolean, key: String, block: suspend () -> Collection<R>): AsyncOperationResult =
         if (condition) addList(key, block) else this
 
     // ── DAG composition ──────────────────────────────────────────────────────
