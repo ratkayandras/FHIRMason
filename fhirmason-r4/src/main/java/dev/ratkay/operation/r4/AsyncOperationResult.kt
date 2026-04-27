@@ -883,13 +883,26 @@ class AsyncOperationResult {
     fun describe(): String {
         if (nodes.isEmpty()) return "AsyncOperationResult DAG: (empty)"
 
+        // Iterative BFS tier assignment: tier(n) = 1 + max(tier(dep)) for all deps.
+        // Processing nodes in reverse topological order (deps before dependents) avoids
+        // the StackOverflowError that would occur in deep DAGs with recursive computeTier.
         val tierOf = mutableMapOf<String, Int>()
-        fun computeTier(key: String): Int = tierOf.getOrPut(key) {
-            val node = nodes[key]!!
-            if (node.deps.isEmpty()) 1
-            else 1 + node.deps.maxOf { computeTier(it) }
+        val queue = ArrayDeque<String>()
+        nodes.keys.filterTo(queue) { nodes[it]!!.deps.isEmpty() }
+        queue.forEach { tierOf[it] = 1 }
+        while (queue.isNotEmpty()) {
+            val key = queue.removeFirst()
+            val nextTier = tierOf[key]!! + 1
+            nodes.values
+                .filter { key in it.deps }
+                .forEach { dependent ->
+                    val current = tierOf[dependent.key] ?: 0
+                    if (nextTier > current) {
+                        tierOf[dependent.key] = nextTier
+                        queue.addLast(dependent.key)
+                    }
+                }
         }
-        nodes.keys.forEach { computeTier(it) }
 
         val byTier: Map<Int, List<TaskNode>> = nodes.values
             .groupBy { tierOf[it.key]!! }

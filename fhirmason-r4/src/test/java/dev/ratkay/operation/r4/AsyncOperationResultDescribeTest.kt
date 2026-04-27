@@ -213,4 +213,17 @@ class AsyncOperationResultDescribeTest {
         val tierLines = output.lines().filter { it.contains("Tier") }
         assertEquals(3, tierLines.size)
     }
+
+    @Test
+    fun `describe does not throw StackOverflowError on a deep linear chain`() {
+        // A 500-node linear chain would overflow the stack with the old recursive computeTier.
+        var dag = AsyncOperationResult().add("t0") { Patient() }
+        for (i in 1..499) {
+            dag = dag.addAfter("t$i", "t${i - 1}") { Patient() }
+        }
+
+        val output = dag.describe()
+
+        assertThat(output, containsString("Tier 500"))
+    }
 }
