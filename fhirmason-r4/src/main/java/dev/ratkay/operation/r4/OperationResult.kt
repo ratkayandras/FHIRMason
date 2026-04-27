@@ -51,8 +51,6 @@ import kotlin.time.measureTimedValue
  * |---------|---------|
  * | Error state | `hasErrors`, `isSuccessful`, `getOutcomes`, `getFailedTasks`, `toOperationOutcome`, `throwIfErrors` |
  * | Metrics & timing | `timed`, `getMetrics` |
- * | Step runners *(private)* | `runStep`, `runBuilderStep`, `runPrimitiveStep` |
- * | Storage helpers *(private)* | `storeAndCopy`, `storeListAndCopy` |
  * | Extension URL filters | `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom…`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, … |
  * | Identifier filters | `addFromHavingIdentifierWithSystem`, `addFromHavingIdentifierWithValue`, `addFromHavingIdentifier`, `addAllFrom…` |
  * | Filtered builders | `addFromFiltered`, `addAllFromFiltered` — pass a [FhirFilter] predicate or any `(I) -> Boolean` |
