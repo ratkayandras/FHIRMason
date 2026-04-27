@@ -503,6 +503,12 @@ class OperationResult<T> private constructor(
         }
 
     /**
+     * Java-friendly overload of [addFrom] — accepts a [Class] instead of a [KClass].
+     */
+    fun <I : Base, R : Base> addFrom(name: String, type: Class<I>, builder: (List<I>) -> R): OperationResult<R> =
+        addFrom(name, type.kotlin, builder)
+
+    /**
      * Like [addFrom] but [builder] returns a `Collection<R>`. The pipeline head becomes `List<R>`.
      *
      * Accepts any [Collection] return (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
@@ -518,6 +524,12 @@ class OperationResult<T> private constructor(
             }
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
+
+    /**
+     * Java-friendly overload of [addAllFrom] — accepts a [Class] instead of a [KClass].
+     */
+    fun <I : Base, R : Base> addAllFrom(name: String, type: Class<I>, builder: (List<I>) -> Collection<R>): OperationResult<List<R>> =
+        addAllFrom(name, type.kotlin, builder)
 
     // Builder variants with explicit error handling
 
@@ -944,6 +956,11 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> getByType(): List<R> = getByType(R::class)
 
+    /**
+     * Java-friendly overload of [getByType] — accepts a [Class] instead of a [KClass].
+     */
+    fun <R : Base> getByType(type: Class<R>): List<R> = getByType(type.kotlin)
+
     override fun containsKey(name: String): Boolean =
         parameters.containsKey(name)
 
@@ -981,6 +998,11 @@ class OperationResult<T> private constructor(
 
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> filterByType(): OperationResult<T> = filterByType(R::class)
+
+    /**
+     * Java-friendly overload of [filterByType] — accepts a [Class] instead of a [KClass].
+     */
+    fun <R : Base> filterByType(type: Class<R>): OperationResult<T> = filterByType(type.kotlin)
 
     /** Returns a new result containing only the entry for [name]. All other keys are dropped. No-op if [name] is absent. */
     fun filterByName(name: String): OperationResult<T> {
@@ -1374,6 +1396,12 @@ class OperationResult<T> private constructor(
         extractParam(name, R::class)
 
     /**
+     * Java-friendly overload of [extractParam] — accepts a [Class] instead of a [KClass].
+     */
+    fun <R : Base> extractParam(name: String, type: Class<R>): OperationResult<R> =
+        extractParam(name, type.kotlin)
+
+    /**
      * Extracts all values of type [R] stored under [name] and sets the list as the pipeline head.
      * Returns an empty list (not an error) if no values match.
      */
@@ -1387,6 +1415,12 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> extractParamList(name: String): OperationResult<List<R>> =
         extractParamList(name, R::class)
+
+    /**
+     * Java-friendly overload of [extractParamList] — accepts a [Class] instead of a [KClass].
+     */
+    fun <R : Base> extractParamList(name: String, type: Class<R>): OperationResult<List<R>> =
+        extractParamList(name, type.kotlin)
 
     // Reference linking
 
