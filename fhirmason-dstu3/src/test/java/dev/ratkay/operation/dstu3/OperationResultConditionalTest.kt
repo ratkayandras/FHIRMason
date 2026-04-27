@@ -249,6 +249,31 @@ class OperationResultConditionalTest {
         assertTrue(result.hasErrors())
     }
 
+    // ── addOrSkip / addOrDefault respect FAIL_FAST ────────────────────────────
+
+    @Test
+    fun `addOrSkip - respects shouldSkip in FAIL_FAST mode`() {
+        var invoked = false
+        val result = OperationResult.of(patient())
+            .add("enc") { error("trigger error") }
+            .addOrSkip("skipped") { invoked = true; appointment() }
+
+        assertFalse(invoked)
+        assertFalse(result.containsKey("skipped"))
+    }
+
+    @Test
+    fun `addOrDefault - respects shouldSkip in FAIL_FAST mode`() {
+        var invoked = false
+        val default = coverage()
+        val result = OperationResult.of(patient())
+            .add("enc") { error("trigger error") }
+            .addOrDefault("skipped", default) { invoked = true; coverage() }
+
+        assertFalse(invoked)
+        assertFalse(result.containsKey("skipped"))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply {

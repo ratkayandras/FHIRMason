@@ -530,6 +530,7 @@ class OperationResult<T> private constructor(
      */
     @JvmOverloads
     fun <R : Base> addOrSkip(name: String? = null, builder: () -> R): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
         val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
         return builderResult.fold(
@@ -558,6 +559,7 @@ class OperationResult<T> private constructor(
      */
     @JvmOverloads
     fun <R : Base> addOrDefault(name: String? = null, default: R, builder: () -> R): OperationResult<R> {
+        if (shouldSkip()) return skippedResult()
         val (builderResult, duration) = measureTimedValue { runCatching { builder() } }
         val durationMs = duration.inWholeMilliseconds
         return builderResult.fold(
