@@ -1672,6 +1672,19 @@ class OperationResult<T> private constructor(
         ): OperationResult<T> = fromParametersTyped(parameters, primaryKey, T::class)
 
         /**
+         * Java-friendly overload of [fromParametersTyped] — accepts a [Class] instead of a [KClass]
+         * so Java callers can write `fromParametersTyped(params, "patient", Patient.class)`.
+         *
+         * @throws IllegalArgumentException if no value of [type] exists under [primaryKey].
+         */
+        @JvmStatic
+        fun <T : Base> fromParametersTyped(
+            parameters: Parameters,
+            primaryKey: String,
+            type: Class<T>
+        ): OperationResult<T> = fromParametersTyped(parameters, primaryKey, type.kotlin)
+
+        /**
          * Builds an [OperationResult] from a FHIR [Bundle].
          *
          * Each entry that carries a resource is stored using `resource.fhirType().lowercase()` as
