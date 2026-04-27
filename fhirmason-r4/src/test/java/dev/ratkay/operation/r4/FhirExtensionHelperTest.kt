@@ -376,4 +376,24 @@ class FhirExtensionHelperTest {
         }
         assertEquals("nameExt", FhirExtensionHelper.getValueAs<StringType>(name, URL_A)?.value)
     }
+
+    @Test
+    fun `getAllByUrl finds extensions on two structurally equal sibling nodes`() {
+        // Two distinct HumanName instances with the same content — if identity hash codes
+        // were used for cycle detection, a collision between the two could cause one to be
+        // silently skipped. Using an IdentityHashMap-backed set avoids that.
+        val patient = Patient().apply {
+            addName().apply {
+                family = "Smith"
+                addExtension(URL_A, StringType("first"))
+            }
+            addName().apply {
+                family = "Smith"
+                addExtension(URL_A, StringType("second"))
+            }
+        }
+
+        val found = FhirExtensionHelper.getAllByUrl(patient, URL_A)
+        assertThat(found, hasSize(2))
+    }
 }
