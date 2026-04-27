@@ -759,9 +759,6 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Independent(key) {
             try {
                 listOf(block())
-            } catch (e: BaseServerResponseException) {
-                logger.warn("FHIRMason.async | task='{}' | using default: {}", key, e.message)
-                listOf(default)
             } catch (e: Exception) {
                 logger.warn("FHIRMason.async | task='{}' | using default: {}", key, e.message)
                 listOf(default)
@@ -782,9 +779,6 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Independent(key) {
             try {
                 block().toList()
-            } catch (e: BaseServerResponseException) {
-                logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
-                defaultList
             } catch (e: Exception) {
                 logger.warn("FHIRMason.async | task='{}' | using default list: {}", key, e.message)
                 defaultList
