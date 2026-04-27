@@ -264,6 +264,63 @@ class OperationResultFhirErrorHandlingTest {
         assertThat(encOutcome!!.issue[0].diagnostics, containsString("bad param"))
     }
 
+    // ── toOperationOutcome preserves all issue fields ─────────────────────────
+
+    @Test
+    fun `toOperationOutcome preserves location from original issue`() {
+        val embedded = OperationOutcome().apply {
+            addIssue().apply {
+                severity = OperationOutcome.IssueSeverity.ERROR
+                code = OperationOutcome.IssueType.EXCEPTION
+                diagnostics = "error"
+                addLocation("Patient.name")
+            }
+        }
+        val result = OperationResult.of(patient())
+            .add("enc") { throw InternalErrorException("fail", embedded) }
+
+        val merged = result.toOperationOutcome()
+        assertThat(merged.issue, hasSize(1))
+        assertThat(merged.issue[0].location.map { it.value }, equalTo(listOf("Patient.name")))
+    }
+
+    @Test
+    fun `toOperationOutcome preserves expression from original issue`() {
+        val embedded = OperationOutcome().apply {
+            addIssue().apply {
+                severity = OperationOutcome.IssueSeverity.ERROR
+                code = OperationOutcome.IssueType.EXCEPTION
+                diagnostics = "error"
+                addExpression("Patient.active")
+            }
+        }
+        val result = OperationResult.of(patient())
+            .add("enc") { throw InternalErrorException("fail", embedded) }
+
+        val merged = result.toOperationOutcome()
+        assertThat(merged.issue, hasSize(1))
+        assertThat(merged.issue[0].expression.map { it.value }, equalTo(listOf("Patient.active")))
+    }
+
+    @Test
+    fun `toOperationOutcome preserves extension from original issue`() {
+        val embedded = OperationOutcome().apply {
+            addIssue().apply {
+                severity = OperationOutcome.IssueSeverity.ERROR
+                code = OperationOutcome.IssueType.EXCEPTION
+                diagnostics = "error"
+                addExtension("http://example.org/ext", org.hl7.fhir.r4.model.StringType("val"))
+            }
+        }
+        val result = OperationResult.of(patient())
+            .add("enc") { throw InternalErrorException("fail", embedded) }
+
+        val merged = result.toOperationOutcome()
+        assertThat(merged.issue, hasSize(1))
+        assertThat(merged.issue[0].extension, hasSize(1))
+        assertThat(merged.issue[0].extension[0].url, equalTo("http://example.org/ext"))
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun patient() = Patient().apply { setId("p1") }
