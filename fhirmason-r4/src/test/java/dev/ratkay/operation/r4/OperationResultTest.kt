@@ -818,14 +818,6 @@ class OperationResultTest {
         assertTrue(result.isEmpty())
     }
 
-    @Test
-    fun `mapValues transforms every value in all entries`() {
-        val result = OperationResult.of(patient(), "p")
-            .mapValues { _ -> appointment() }
-
-        assertThat(result.getByType<Appointment>(), hasSize(1))
-        assertThat(result.getByType<Patient>(), empty())
-    }
 
     // ── toParameters ─────────────────────────────────────────────────────────
 
@@ -1091,15 +1083,6 @@ class OperationResultTest {
         assertEquals("http://example.com/fhir/Patient/custom", bundle.entryFirstRep.fullUrl)
     }
 
-    @Test
-    fun `toBundleEntry - produces entry with resource set`() {
-        val p = patient()
-        val result = OperationResult.of(p)
-
-        val entry = result.toBundleEntry(p)
-
-        assertThat(entry.resource, sameInstance(p))
-    }
 
     @Test
     fun `toTransactionBundle - convenience alias produces TRANSACTION bundle`() {
@@ -1278,27 +1261,6 @@ class OperationResultTest {
         assertThat(result.getResult(), instanceOf(Patient::class.java))
     }
 
-    // ── mapValues (type-safe) ─────────────────────────────────────────────────
-
-    @Test
-    fun `mapValues type-safe transforms every value and changes pipeline type`() {
-        val result: OperationResult<Appointment> = OperationResult.of(patient(), "p")
-            .mapValues { _ -> appointment() }
-
-        assertThat(result.getByType<Appointment>(), hasSize(1))
-        assertThat(result.getByType<Patient>(), empty())
-    }
-
-    @Test
-    fun `mapValues transforms values across multiple keys`() {
-        val result = OperationResult.of(patient(), "patient")
-            .add("appt") { appointment() }
-            .mapValues { _ -> Patient() }
-
-        // Both entries should now be Patients
-        assertThat(result.getByType<Patient>(), hasSize(2))
-        assertThat(result.getByType<Appointment>(), empty())
-    }
 
     // ── flatMap ───────────────────────────────────────────────────────────────
 

@@ -661,9 +661,6 @@ result.filterByName("patient")         // keep only the "patient" key
 #### Mapping and chaining
 
 ```kotlin
-// Type-safe map — transforms every value across all keys, changes pipeline head type
-val mapped: OperationResult<Appointment> = result.mapValues { base -> toAppointment(base) }
-
 // flatMap — chain an inner pipeline; all its parameter entries are merged into the outer map
 val combined: OperationResult<Coverage> = OperationResult.of(patient)
     .flatMap { p ->
@@ -1587,9 +1584,6 @@ result.toTransactionBundle { entry -> entry.fullUrl = "urn:uuid:${UUID.randomUUI
 val patientsOnly = result.filterByType<Patient>()
 val patientEntry = result.filterByName("patient")
 val allPatients  = result.getByType<Patient>()
-
-// Type-safe map — changes pipeline head type to Appointment
-val mapped: OperationResult<Appointment> = result.mapValues { base -> normalize(base) }
 
 // Peek for side effects (debugging, logging) — returns the same instance unchanged
 val same = result.peek { map -> log.debug("state: {}", map.keys) }
