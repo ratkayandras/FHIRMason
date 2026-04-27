@@ -59,12 +59,12 @@ import kotlin.time.measureTimedValue
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
  * | Query | `getAllParameters`, `getAll`, `getByType`, `containsKey`, `getKeys`, `count`, `totalCount`, `isEmpty`, `isNotEmpty` |
- * | Transformations | `filterByType`, `filterByName`, `mapValues`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `peek` |
+ * | Transformations | `filterByType`, `filterByName`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `peek` |
  * | Conditional chaining | `whenTrue`, `ifPresent`, `guardFalse`, `whenPath`, `guardPath` |
  * | FHIRPath extraction | `selectByPath` |
  * | Extraction | `takeFirst`, `takeFirstTyped`, `extractParam`, `extractParamList` |
  * | Reference linking | `linkReferences` |
- * | Serialization | `toParameters`, `toBundleEntry`, `toBundle`, `toCollectionBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
+ * | Serialization | `toParameters`, `toBundle`, `toCollectionBundle`, `toTransactionBundle`, `toBatchBundle`, `getResult` |
  * | Factory *(companion)* | `of`, `fromParameters`, `fromParametersTyped`, `fromBundle`, `fromBundleTyped`, `empty` |
  */
 class OperationResult<T> private constructor(
@@ -1014,18 +1014,6 @@ class OperationResult<T> private constructor(
     }
 
     /**
-     * Applies [transform] to every value in the parameter map and returns a new result with the
-     * transformed values. The pipeline head is cleared to `null`; use [getResult] only after a
-     * subsequent builder step sets a new head.
-     */
-    fun <R : Base> mapValues(transform: (Base) -> R): OperationResult<R> {
-        val transformed = parameters.mapValues { (_, values) ->
-            values.map(transform).toMutableList<Base>()
-        }.toMutableMap()
-        return copyWith<R>(null, params = transformed)
-    }
-
-    /**
      * Chains an inner pipeline on the current typed result [T], merges all of its parameter map
      * entries into the outer map, and returns an [OperationResult] whose head type and current
      * result come from the inner pipeline.
@@ -1485,12 +1473,7 @@ class OperationResult<T> private constructor(
      */
     fun toParameters(): Parameters = ParameterMapSerializer.unflatten(parameters, extensions)
 
-    /**
-     * Wraps [resource] in a [Bundle.BundleEntryComponent]. When [resource] is a [Resource]
-     * subtype, it is set as the entry's resource; non-Resource values produce an empty entry.
-     * Used internally by [toBundle] and its convenience aliases.
-     */
-    fun toBundleEntry(resource: Base): Bundle.BundleEntryComponent =
+    private fun toBundleEntry(resource: Base): Bundle.BundleEntryComponent =
         Bundle.BundleEntryComponent().apply {
             if (resource is Resource) setResource(resource)
         }
