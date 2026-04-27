@@ -52,8 +52,8 @@
         <approvalcrest.version>0.61.6</approvalcrest.version>
         <hamcrest.version>3.0</hamcrest.version>
         <coroutines.version>1.10.2</coroutines.version>
-        <slf4j.version>1.7.36</slf4j.version>
-        <logback.version>1.2.12</logback.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <logback.version>1.5.18</logback.version>
         <spring.boot.version>2.7.18</spring.boot.version>
         <dokka.version>1.9.20</dokka.version>
     </properties>
