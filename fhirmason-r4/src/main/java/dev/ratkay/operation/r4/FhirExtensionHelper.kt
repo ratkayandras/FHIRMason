@@ -4,6 +4,8 @@ import org.hl7.fhir.instance.model.api.IBaseHasExtensions
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.Extension
 import org.hl7.fhir.r4.model.Type
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.Optional
 import kotlin.reflect.KClass
 
@@ -77,7 +79,8 @@ object FhirExtensionHelper {
      */
     fun getAllByUrl(source: IBaseHasExtensions, url: String): List<Extension> {
         val results = mutableListOf<Extension>()
-        collectDeepByUrl(source as Base, url, results, mutableSetOf())
+        val visited: MutableSet<Base> = Collections.newSetFromMap(IdentityHashMap())
+        collectDeepByUrl(source as Base, url, results, visited)
         return results
     }
 
@@ -188,9 +191,9 @@ object FhirExtensionHelper {
         node: Base,
         url: String,
         results: MutableList<Extension>,
-        visited: MutableSet<Int>
+        visited: MutableSet<Base>
     ) {
-        if (!visited.add(System.identityHashCode(node))) return
+        if (!visited.add(node)) return
 
         if (node is IBaseHasExtensions) {
             results.addAll(node.extension.filterIsInstance<Extension>().filter { it.url == url })
