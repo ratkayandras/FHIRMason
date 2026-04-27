@@ -96,16 +96,13 @@ class OperationResult<T> private constructor(
     /**
      * Merges all recorded [OperationOutcome] instances into a single composite
      * [OperationOutcome] whose issues are the union of every individual outcome's issues.
+     *
+     * All issue fields are preserved — `severity`, `code`, `diagnostics`, `location`,
+     * `expression`, `details`, `extension`, etc. — via HAPI's own [Base.copy] mechanism.
      */
     fun toOperationOutcome(): OperationOutcome = OperationOutcome().apply {
         this@OperationResult.outcomes.forEach { oo ->
-            oo.issue.forEach { issue ->
-                addIssue().apply {
-                    severity = issue.severity
-                    code = issue.code
-                    diagnostics = issue.diagnostics
-                }
-            }
+            oo.issue.forEach { issue -> addIssue(issue.copy()) }
         }
     }
 
