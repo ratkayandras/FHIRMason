@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -348,6 +349,19 @@ class OperationResultFromTest {
         assertThrows<IllegalArgumentException> {
             OperationResult.fromParametersTyped<Patient>(fhirParams, "patient")
         }
+    }
+
+    @Test
+    fun `fromParametersTyped - Class overload sets typed head identical to KClass overload`() {
+        val patient = patient()
+        val fhirParams = Parameters().apply {
+            addParameter().apply { name = "patient"; resource = patient }
+        }
+
+        val result = OperationResult.fromParametersTyped(fhirParams, "patient", Patient::class.java)
+
+        assertSame(patient, result.getResult())
+        assertTrue(result.containsKey("patient"))
     }
 
     // ── fromBundle ────────────────────────────────────────────────────────────
