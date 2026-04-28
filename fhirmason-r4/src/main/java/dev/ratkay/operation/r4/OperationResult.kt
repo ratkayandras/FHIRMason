@@ -60,7 +60,7 @@ import kotlin.time.measureTimedValue
  * | Nested params | `addPart` |
  * | Extension support | `addWithExtension` |
  * | Query | `getAllParameters`, `getAll`, `getByType`, `containsKey`, `getKeys`, `count`, `totalCount`, `isEmpty`, `isNotEmpty` |
- * | Transformations | `filterByType`, `filterByName`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `peek` |
+ * | Transformations | `filterByType`, `filterByName`, `flatMap`, `mapHead`, `mapHeadUsing`, `merge`, `remove`, `rename`, `mapStored`, `peek` |
  * | Conditional chaining | `whenTrue`, `ifPresent`, `guardFalse`, `whenPath`, `guardPath` |
  * | FHIRPath extraction | `selectByPath` |
  * | Extraction | `takeFirst`, `takeFirstTyped`, `extractParam`, `extractParamList` |
@@ -1091,6 +1091,110 @@ class OperationResult<T> private constructor(
         newParams.remove(oldName)?.let { newParams.getOrPut(newName) { mutableListOf() }.addAll(it) }
         return copyWith(result, params = newParams, extensions = shallowCopyExtensions())
     }
+
+    /**
+     * Applies [transform] to every value stored under [name] that is an instance of [type],
+     * replacing each matching value with the result of [transform]. Values that are not
+     * instances of [type] are passed through unchanged.
+     *
+     * If [name] is absent from the parameter map the result is returned unchanged (no-op).
+     * The pipeline head type [T] is always preserved.
+     *
+     * On exception inside [transform]: a WARNING-severity [OperationOutcome] is recorded and
+     * the original parameter map is preserved unchanged (Pattern B — head-preserving).
+     * Respects [ErrorStrategy.FAIL_FAST]: returns immediately when the pipeline has errors.
+     *
+     * @param name the key whose values to transform.
+     * @param type the [KClass] of values to match; non-matching values pass through.
+     * @param transform element-wise mapping function applied to each matching value.
+     */
+    fun <I : Base, R : Base> mapStored(name: String, type: KClass<I>, transform: (I) -> R): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val (outcome, duration) = measureTimedValue {
+            runCatching {
+                val newParams = shallowCopyParams()
+                val existing = newParams[name]
+                if (existing != null) {
+                    newParams[name] = existing.map {
+                        if (type.java.isInstance(it)) transform(type.java.cast(it)) else it
+                    }.toMutableList()
+                }
+                newParams
+            }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return outcome.fold(
+            onSuccess = { newParams ->
+                recordMetric(name, "mapStored", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='mapStored' | WARN: {}", t.message)
+                recordMetric(name, "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
+            }
+        )
+    }
+
+    /** Java-friendly [Class] overload of [mapStored] — targets values under [name]. */
+    fun <I : Base, R : Base> mapStored(name: String, type: Class<I>, transform: (I) -> R): OperationResult<T> =
+        mapStored(name, type.kotlin, transform)
+
+    /** Reified overload — no [KClass] argument needed at call sites. Targets values under [name]. */
+    inline fun <reified I : Base, R : Base> mapStored(name: String, noinline transform: (I) -> R): OperationResult<T> =
+        mapStored(name, I::class, transform)
+
+    /**
+     * Applies [transform] to every value across all stored keys that is an instance of [type],
+     * replacing each matching value with the result of [transform]. Values that are not instances
+     * of [type] are passed through unchanged. All keys are visited.
+     *
+     * If no stored value matches [type] the result is returned unchanged (no-op).
+     * The pipeline head type [T] is always preserved.
+     *
+     * On exception inside [transform]: a WARNING-severity [OperationOutcome] is recorded and
+     * the original parameter map is preserved unchanged (Pattern B — head-preserving).
+     * Respects [ErrorStrategy.FAIL_FAST]: returns immediately when the pipeline has errors.
+     *
+     * @param type the [KClass] of values to match; non-matching values pass through.
+     * @param transform element-wise mapping function applied to each matching value.
+     */
+    fun <I : Base, R : Base> mapStored(type: KClass<I>, transform: (I) -> R): OperationResult<T> {
+        if (shouldSkip()) return copyWith(result)
+        val (outcome, duration) = measureTimedValue {
+            runCatching {
+                val newParams = shallowCopyParams()
+                newParams.replaceAll { _, values ->
+                    values.map { if (type.java.isInstance(it)) transform(type.java.cast(it)) else it }.toMutableList()
+                }
+                newParams
+            }
+        }
+        val durationMs = duration.inWholeMilliseconds
+        return outcome.fold(
+            onSuccess = { newParams ->
+                recordMetric("mapStored", "mapStored", durationMs, true)
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+            },
+            onFailure = { t ->
+                if (t !is Exception) throw t
+                logger.warn("FHIRMason | step='mapStored' | WARN: {}", t.message)
+                recordMetric("mapStored", "", durationMs, false)
+                outcomes.add(warningOutcome(t))
+                copyWith(result)
+            }
+        )
+    }
+
+    /** Java-friendly [Class] overload of [mapStored] — targets all stored values of [type] across all keys. */
+    fun <I : Base, R : Base> mapStored(type: Class<I>, transform: (I) -> R): OperationResult<T> =
+        mapStored(type.kotlin, transform)
+
+    /** Reified overload — no [KClass] argument needed at call sites. Targets all stored values of the type across all keys. */
+    inline fun <reified I : Base, R : Base> mapStored(noinline transform: (I) -> R): OperationResult<T> =
+        mapStored(I::class, transform)
 
     /**
      * Invokes [block] with a snapshot of the current parameter map for side-effects (logging,
