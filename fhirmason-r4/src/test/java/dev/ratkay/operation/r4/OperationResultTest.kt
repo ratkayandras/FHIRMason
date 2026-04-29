@@ -1426,6 +1426,185 @@ class OperationResultTest {
         assertEquals(2, result.count("target"))
     }
 
+    // ── mapStored (named overload) ────────────────────────────────────────────
+
+    @Test
+    fun `mapStored named transforms matching values under the key`() {
+        val original = patient()
+        val replacement = patient().apply { addName().family = "Smith" }
+        val result = OperationResult.of(original, "patient")
+            .mapStored("patient", Patient::class) { replacement }
+
+        assertThat(result.getAll("patient").first(), sameInstance(replacement))
+    }
+
+    @Test
+    fun `mapStored named leaves non-matching types under the same key unchanged`() {
+        val appt = appointment()
+        val result = OperationResult.of(patient(), "mixed")
+            .add("mixed") { appt }
+            .mapStored("mixed", Patient::class) { patient().apply { addName().family = "Transformed" } }
+
+        // appointment is non-matching — should still be present
+        assertTrue(result.getAll("mixed").any { it is Appointment && it === appt })
+    }
+
+    @Test
+    fun `mapStored named key absent is a no-op`() {
+        val p = patient()
+        val result = OperationResult.of(p, "patient")
+            .mapStored("other", Patient::class) { patient() }
+
+        assertThat(result.getAll("patient").first(), sameInstance(p))
+        assertFalse(result.containsKey("other"))
+    }
+
+    @Test
+    fun `mapStored named head is unchanged`() {
+        val original = patient()
+        val result = OperationResult.of(original, "patient")
+            .mapStored("patient", Patient::class) { patient() }
+
+        assertThat(result.getResult(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored named other keys are not affected`() {
+        val appt = appointment()
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appt }
+            .mapStored("patient", Patient::class) { patient() }
+
+        assertThat(result.getAll("appt").first(), sameInstance(appt))
+    }
+
+    @Test
+    fun `mapStored named transform throws records WARNING outcome and preserves original`() {
+        val original = patient()
+        val result = OperationResult.of(original, "patient")
+            .mapStored("patient", Patient::class) { throw RuntimeException("boom") }
+
+        assertTrue(result.hasErrors())
+        assertThat(
+            result.getOutcomes().first().issueFirstRep.severity,
+            `is`(OperationOutcome.IssueSeverity.WARNING)
+        )
+        assertThat(result.getAll("patient").first(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored named respects FAIL_FAST and returns immediately`() {
+        val original = patient()
+        var called = false
+        val result = OperationResult.of(original, "patient", ErrorStrategy.FAIL_FAST)
+            .add { throw RuntimeException("first") }
+            .mapStored("patient", Patient::class) { called = true; patient() }
+
+        assertFalse(called)
+        assertThat(result.getAll("patient").first(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored named reified overload works without explicit KClass`() {
+        val replacement = patient().apply { addName().family = "Reified" }
+        val result = OperationResult.of(patient(), "patient")
+            .mapStored<Patient, Patient>("patient") { replacement }
+
+        assertThat(result.getAll("patient").first(), sameInstance(replacement))
+    }
+
+    @Test
+    fun `mapStored named Class overload produces same result as KClass overload`() {
+        val replacement = patient().apply { addName().family = "Java" }
+        val viaKClass = OperationResult.of(patient(), "patient")
+            .mapStored("patient", Patient::class) { replacement }
+        val viaClass = OperationResult.of(patient(), "patient")
+            .mapStored("patient", Patient::class.java) { replacement }
+
+        assertEquals(1, viaKClass.count("patient"))
+        assertEquals(1, viaClass.count("patient"))
+        assertThat(viaKClass.getAll("patient").first(), instanceOf(Patient::class.java))
+        assertThat(viaClass.getAll("patient").first(), instanceOf(Patient::class.java))
+    }
+
+    // ── mapStored (unkeyed overload) ──────────────────────────────────────────
+
+    @Test
+    fun `mapStored unkeyed transforms matching values across multiple keys`() {
+        val p1 = patient()
+        val p2 = patient()
+        val replacement = patient().apply { addName().family = "Transformed" }
+        val result = OperationResult.of(p1, "key1")
+            .add("key2") { p2 }
+            .mapStored(Patient::class) { replacement }
+
+        assertTrue(result.getAll("key1").all { it === replacement })
+        assertTrue(result.getAll("key2").all { it === replacement })
+    }
+
+    @Test
+    fun `mapStored unkeyed leaves non-matching types across all keys unchanged`() {
+        val appt = appointment()
+        val result = OperationResult.of(patient(), "patient")
+            .add("appt") { appt }
+            .mapStored(Patient::class) { patient().apply { addName().family = "X" } }
+
+        assertThat(result.getAll("appt").first(), sameInstance(appt))
+    }
+
+    @Test
+    fun `mapStored unkeyed no matching values is a no-op`() {
+        val appt = appointment()
+        val result = OperationResult.of(appt, "appt")
+            .mapStored(Patient::class) { patient() }
+
+        assertThat(result.getAll("appt").first(), sameInstance(appt))
+    }
+
+    @Test
+    fun `mapStored unkeyed head is unchanged`() {
+        val original = patient()
+        val result = OperationResult.of(original, "patient")
+            .mapStored(Patient::class) { patient() }
+
+        assertThat(result.getResult(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored unkeyed transform throws records WARNING outcome and preserves original`() {
+        val original = patient()
+        val result = OperationResult.of(original, "patient")
+            .mapStored(Patient::class) { throw RuntimeException("boom") }
+
+        assertTrue(result.hasErrors())
+        assertThat(
+            result.getOutcomes().first().issueFirstRep.severity,
+            `is`(OperationOutcome.IssueSeverity.WARNING)
+        )
+        assertThat(result.getAll("patient").first(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored unkeyed respects FAIL_FAST and returns immediately`() {
+        val original = patient()
+        var called = false
+        val result = OperationResult.of(original, "patient", ErrorStrategy.FAIL_FAST)
+            .add { throw RuntimeException("first") }
+            .mapStored(Patient::class) { called = true; patient() }
+
+        assertFalse(called)
+        assertThat(result.getAll("patient").first(), sameInstance(original))
+    }
+
+    @Test
+    fun `mapStored unkeyed reified overload works without explicit KClass`() {
+        val replacement = patient().apply { addName().family = "Reified" }
+        val result = OperationResult.of(patient(), "patient")
+            .mapStored<Patient, Patient> { replacement }
+
+        assertThat(result.getAll("patient").first(), sameInstance(replacement))
+    }
+
     // ── peek ─────────────────────────────────────────────────────────────────
 
     @Test

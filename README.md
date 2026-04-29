@@ -689,6 +689,31 @@ result.remove("coverage")             // new OperationResult without the "covera
 result.rename("old", "new")           // move all values from "old" to "new"
 ```
 
+#### In-place value transformation (mapStored)
+
+Applies a function to values already stored in the parameter map without changing the pipeline head type.
+
+```kotlin
+// Named overload — transform every Patient stored under "patient"
+val updated = result.mapStored<Patient, Patient>("patient") { p ->
+    p.copy().apply { addName().family = p.nameFirstRep.family.uppercase() }
+}
+
+// Named overload, explicit KClass
+val updated = result.mapStored("patient", Patient::class) { p -> transform(p) }
+
+// Unkeyed overload — transform every Patient across ALL stored keys
+val updated = result.mapStored<Patient, Patient> { p -> transform(p) }
+
+// Unkeyed overload, explicit KClass
+val updated = result.mapStored(Patient::class) { p -> transform(p) }
+```
+
+- Values that do not match the given type are passed through unchanged.
+- Named: if the key is absent the result is returned unchanged (no-op).
+- Unkeyed: if no stored value matches the type all values pass through unchanged.
+- On exception inside the transform: a WARNING `OperationOutcome` is recorded and the **original** parameter map is preserved (Pattern B — head-preserving).
+
 #### Side effects (peek)
 
 ```kotlin
@@ -1595,6 +1620,10 @@ val first: Base?           = result.takeFirst("patient")
 // Remove a key (no-op if absent) or rename a key
 val trimmed  = result.remove("draft")
 val renamed  = result.rename("old", "new")
+
+// mapStored — transform stored values element-wise; head type T is always preserved
+val updated = result.mapStored<Patient, Patient>("patient") { p -> transform(p) }  // named key
+val updated = result.mapStored<Patient, Patient> { p -> transform(p) }              // all keys
 
 // Merge two pipelines — overlapping keys accumulate
 val merged = resultA.merge(resultB)
