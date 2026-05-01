@@ -27,7 +27,7 @@ class FhirMasonFactory(private val properties: FhirMasonProperties) {
      * If `fhirmason.metrics.enabled` is `true` the pipeline will have timing enabled.
      */
     fun <T : Base> pipeline(resource: T): OperationResult<T> {
-        var result = OperationResult.of(resource, errorStrategy = properties.errorStrategy)
+        var result = OperationResult.of(resource).useErrorStrategy(properties.errorStrategy)
         if (properties.metrics.enabled) result = result.timed()
         return result
     }

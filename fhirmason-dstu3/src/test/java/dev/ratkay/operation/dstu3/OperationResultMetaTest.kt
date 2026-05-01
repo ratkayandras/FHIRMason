@@ -82,7 +82,7 @@ class OperationResultMetaTest {
     @Test
     fun `addFromHavingMetaTagWithSystem respects FAIL_FAST`() {
         var builderCalled = false
-        val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients", ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(patientWithTag("http://example.org/tags", "x"), "patients")
             .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaTagWithSystem("http://example.org/tags")) { _ ->
                 throw RuntimeException("first failure")
             }
@@ -464,7 +464,7 @@ class OperationResultMetaTest {
     fun `addFromHavingMetaProfile respects FAIL_FAST`() {
         var builderCalled = false
         val url = "http://hl7.org/fhir/StructureDefinition/us-core-patient"
-        val result = OperationResult.of(patientWithProfile(url), "patients", ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(patientWithProfile(url), "patients")
             .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { _ -> throw RuntimeException("first failure") }
             .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasMetaProfile(url)) { _ -> builderCalled = true; OperationOutcome() }
 

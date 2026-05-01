@@ -75,7 +75,7 @@ class OperationResultConditionalTest {
 
     @Test
     fun `whenTrue - merges inner outcomes into outer result`() {
-        val result = OperationResult.of(patient(), "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient(), "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .whenTrue(true) {
                 add("appt") { appointment() }
                     .add { error("inner error") }
@@ -241,7 +241,7 @@ class OperationResultConditionalTest {
     @Test
     fun `guardFalse - pipeline continues and accumulates resources after guard`() {
         val appt = appointment()
-        val result = OperationResult.of(patient(), "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient(), "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .guardFalse(false, "inactive")
             .add("appt") { appt }
 

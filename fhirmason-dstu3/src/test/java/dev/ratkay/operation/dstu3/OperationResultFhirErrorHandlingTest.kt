@@ -11,9 +11,11 @@ import org.hamcrest.Matchers.equalTo
 import org.hamcrest.Matchers.hasSize
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.not
+import org.hl7.fhir.dstu3.model.Bundle
 import org.hl7.fhir.dstu3.model.Coverage
 import org.hl7.fhir.dstu3.model.Encounter
 import org.hl7.fhir.dstu3.model.OperationOutcome
+import org.hl7.fhir.dstu3.model.Parameters
 import org.hl7.fhir.dstu3.model.Patient
 import org.hl7.fhir.dstu3.model.Resource
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -99,7 +101,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `add - BaseServerResponseException stops pipeline in FAIL_FAST mode`() {
         var secondStepExecuted = false
 
-        OperationResult.of(patient(), errorStrategy = ErrorStrategy.FAIL_FAST)
+        OperationResult.of(patient())
             .add("enc") { throw InvalidRequestException("server error") }
             .add("cov") { secondStepExecuted = true; Coverage() }
 
@@ -110,7 +112,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `add - BaseServerResponseException continues pipeline in ACCUMULATE mode`() {
         var secondStepExecuted = false
 
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add("enc") { throw InvalidRequestException("server error") }
             .add("cov") { secondStepExecuted = true; Coverage() }
 
@@ -280,6 +282,157 @@ class OperationResultFhirErrorHandlingTest {
         assertThat(merged.issue, hasSize(1))
         assertThat(merged.issue[0].extension, hasSize(1))
         assertThat(merged.issue[0].extension[0].url, equalTo("http://example.org/ext"))
+    }
+
+    // ── PROPAGATE strategy ───────────────────────────────────────────────────
+
+    @Test
+    fun `add with PROPAGATE strategy - exception propagates raw, not wrapped as outcome`() {
+        val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
+        assertThrows<RuntimeException> {
+            pipeline.add("coverage") { throw RuntimeException("boom") }
+        }
+    }
+
+    @Test
+    fun `addAll with PROPAGATE strategy - exception propagates raw`() {
+        val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
+        assertThrows<IllegalStateException> {
+            pipeline.addAll<Patient>("coverage") { throw IllegalStateException("addAll boom") }
+        }
+    }
+
+    @Test
+    fun `addFrom with PROPAGATE strategy - exception propagates raw`() {
+        val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
+        assertThrows<RuntimeException> {
+            pipeline.addFrom<Patient, Patient>("test", Patient::class) { throw RuntimeException("addFrom boom") }
+        }
+    }
+
+    @Test
+    fun `flatMap with PROPAGATE strategy - exception propagates raw`() {
+        val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
+        assertThrows<RuntimeException> {
+            pipeline.flatMap<Patient> { throw RuntimeException("flatMap boom") }
+        }
+    }
+
+    @Test
+    fun `PROPAGATE - no outcomes accumulated after propagation (outcomes list stays empty)`() {
+        val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
+        assertThrows<RuntimeException> {
+            pipeline.add("coverage") { throw RuntimeException("boom") }
+        }
+        assertTrue(pipeline.isSuccessful())
+        assertThat(pipeline.getOutcomes(), hasSize(0))
+    }
+
+    @Test
+    fun `PROPAGATE - successful steps complete normally and accumulate results`() {
+        val result = OperationResult.of(patient())
+            .useErrorStrategy(ErrorStrategy.PROPAGATE)
+            .add("encounter") { Encounter().apply { setId("e1") } }
+
+        assertTrue(result.isSuccessful())
+        assertNotNull(result.getResult())
+    }
+
+    @Test
+    fun `useErrorStrategy - mid-chain switch from FAIL_FAST to PROPAGATE takes effect from next step`() {
+        val result = OperationResult.of(patient())
+            .add("encounter") { throw RuntimeException("step1 fails") }
+            .useErrorStrategy(ErrorStrategy.PROPAGATE)
+
+        assertTrue(result.hasErrors())
+        assertThrows<RuntimeException> {
+            result.add("coverage") { throw RuntimeException("step2 propagates") }
+        }
+    }
+
+    @Test
+    fun `useErrorStrategy - mid-chain switch from ACCUMULATE to FAIL_FAST skips subsequent steps`() {
+        var step2Ran = false
+        val result = OperationResult.of(patient())
+            .useErrorStrategy(ErrorStrategy.ACCUMULATE)
+            .add("enc") { throw RuntimeException("step1 fails") }
+            .useErrorStrategy(ErrorStrategy.FAIL_FAST)
+            .add("cov") { step2Ran = true; Coverage() }
+
+        assertTrue(result.hasErrors())
+        assertFalse(step2Ran)
+    }
+
+    // ── fromParametersTyped error outcomes ───────────────────────────────────
+
+    @Test
+    fun `fromParametersTyped - missing key returns hasErrors true and null head`() {
+        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class)
+        assertTrue(result.hasErrors())
+    }
+
+    @Test
+    fun `fromParametersTyped - missing key outcome has NOTFOUND code`() {
+        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class)
+        assertThat(result.getOutcomes(), hasSize(1))
+        assertThat(result.getOutcomes()[0].issueFirstRep.severity, equalTo(OperationOutcome.IssueSeverity.ERROR))
+        assertThat(result.getOutcomes()[0].issueFirstRep.code, equalTo(OperationOutcome.IssueType.NOTFOUND))
+    }
+
+    @Test
+    fun `fromParametersTyped - found key returns isSuccessful true with correct typed head`() {
+        val p = Patient().apply { setId("p1") }
+        val params = Parameters().apply { addParameter().apply { name = "patient"; resource = p } }
+        val result = OperationResult.fromParametersTyped(params, "patient", Patient::class)
+        assertTrue(result.isSuccessful())
+        assertThat(result.getResult().idElement.idPart, equalTo("p1"))
+    }
+
+    // ── fromBundleTyped error outcomes ───────────────────────────────────────
+
+    @Test
+    fun `fromBundleTyped - missing key returns hasErrors true and null head`() {
+        val result = OperationResult.fromBundleTyped(Bundle(), "patient", Patient::class)
+        assertTrue(result.hasErrors())
+    }
+
+    @Test
+    fun `fromBundleTyped - found resource returns isSuccessful true`() {
+        val p = Patient().apply { setId("p1") }
+        val bundle = Bundle().apply { addEntry().resource = p }
+        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class)
+        assertTrue(result.isSuccessful())
+        assertThat(result.getResult().idElement.idPart, equalTo("p1"))
+    }
+
+    // ── extractParam Pattern A ───────────────────────────────────────────────
+
+    @Test
+    fun `extractParam - missing key adds ERROR outcome and skips (Pattern A)`() {
+        val result = OperationResult.of(patient())
+            .extractParam("missing", Coverage::class)
+        assertTrue(result.hasErrors())
+        assertThat(result.getOutcomes(), hasSize(1))
+        assertThat(result.getOutcomes()[0].issueFirstRep.severity, equalTo(OperationOutcome.IssueSeverity.ERROR))
+    }
+
+    @Test
+    fun `extractParam - found key changes head and leaves no error`() {
+        val p = patient()
+        val result = OperationResult.of(p)
+            .extractParam("patient", Patient::class)
+        assertTrue(result.isSuccessful())
+        assertSame(p, result.getResult())
+    }
+
+    @Test
+    fun `extractParam - missing key with FAIL_FAST skips subsequent steps`() {
+        var step2Ran = false
+        val result = OperationResult.of(patient())
+            .extractParam("missing", Coverage::class)
+            .add("enc") { step2Ran = true; Encounter() }
+        assertTrue(result.hasErrors())
+        assertFalse(step2Ran)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

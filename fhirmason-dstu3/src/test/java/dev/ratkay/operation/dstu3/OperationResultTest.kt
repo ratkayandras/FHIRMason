@@ -901,7 +901,7 @@ class OperationResultTest {
 
     @Test
     fun `add - exception in ACCUMULATE continues pipeline and collects outcome`() {
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add { error("step 1 failed") }
             .add { appointment() }
 
@@ -912,7 +912,7 @@ class OperationResultTest {
 
     @Test
     fun `ACCUMULATE - multiple failing steps collect all outcomes`() {
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add { error("step 1 failed") }
             .add { error("step 2 failed") }
             .add { appointment() }
@@ -995,7 +995,7 @@ class OperationResultTest {
 
     @Test
     fun `toOperationOutcome - merges all collected issues into single OperationOutcome`() {
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add { error("step 1 failed") }
             .add { error("step 2 failed") }
 
@@ -1497,7 +1497,7 @@ class OperationResultTest {
     fun `mapStored named respects FAIL_FAST and returns immediately`() {
         val original = patient()
         var called = false
-        val result = OperationResult.of(original, "patient", ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(original, "patient")
             .add { throw RuntimeException("first") }
             .mapStored("patient", Patient::class) { called = true; patient() }
 
@@ -1589,7 +1589,7 @@ class OperationResultTest {
     fun `mapStored unkeyed respects FAIL_FAST and returns immediately`() {
         val original = patient()
         var called = false
-        val result = OperationResult.of(original, "patient", ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(original, "patient")
             .add { throw RuntimeException("first") }
             .mapStored(Patient::class) { called = true; patient() }
 
@@ -2155,7 +2155,7 @@ class OperationResultTest {
     @Test
     fun `addString - pipeline continues in ACCUMULATE after exception and head is preserved`() {
         val patient = patient()
-        val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .addStringUsing("label") { error("boom") }
             .addString("other", "ok")
 
@@ -2390,7 +2390,7 @@ class OperationResultTest {
 
     @Test
     fun `addPart is skipped when pipeline has errors in FAIL_FAST`() {
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(patient())
             .add { throw RuntimeException("induced failure") }
             .addPart("address") { addString("city", "Springfield") }
 
@@ -2455,7 +2455,7 @@ class OperationResultTest {
 
     @Test
     fun `empty with ACCUMULATE error strategy`() {
-        val result = OperationResult.empty(ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.empty().useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add { throw RuntimeException("induced failure") }
             .add("patient") { patient() }
 

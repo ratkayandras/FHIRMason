@@ -48,3 +48,15 @@ internal fun warningOutcome(e: Exception): OperationOutcome =
     errorOutcome(e).also { outcome ->
         outcome.issue.forEach { it.severity = OperationOutcome.IssueSeverity.WARNING }
     }
+
+/**
+ * Builds an ERROR-severity [OperationOutcome] with [IssueType.NOTFOUND] code from a plain
+ * diagnostic message string.  Used by factory methods that detect a missing primary resource.
+ */
+internal fun messageOutcome(diagnostics: String): OperationOutcome = OperationOutcome().apply {
+    addIssue().apply {
+        severity = OperationOutcome.IssueSeverity.ERROR
+        code = OperationOutcome.IssueType.NOTFOUND
+        this.diagnostics = diagnostics
+    }
+}

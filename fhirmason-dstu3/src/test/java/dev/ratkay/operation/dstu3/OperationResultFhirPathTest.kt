@@ -272,7 +272,7 @@ class OperationResultFhirPathTest {
     fun `guardPath preserves head and pipeline continues in ACCUMULATE mode`() {
         val patient = Patient().apply { active = false }
 
-        val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .guardPath("active = true", "not active")
             .add("note") { StringType("after-guard") }
 
