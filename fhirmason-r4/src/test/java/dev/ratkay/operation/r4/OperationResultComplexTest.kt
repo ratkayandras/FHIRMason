@@ -68,7 +68,7 @@ class OperationResultComplexTest {
 
     @Test
     fun `ACCUMULATE strategy collects all errors while successful steps still produce values`() {
-        val result = OperationResult.of(patient("p1"), "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient("p1"), "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add("step1") { Observation().apply { id = "obs1" } }
             .add("step2") { error("step2 failed") }
             .add("step3") { Encounter().apply { id = "enc1" } }
@@ -179,7 +179,7 @@ class OperationResultComplexTest {
     fun `guardFalse records WARNING and pipeline continues in ACCUMULATE after conditional skip`() {
         val inactivePatient = patient("p2").apply { active = false }
 
-        val result = OperationResult.of(inactivePatient, "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(inactivePatient, "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .whenTrue(inactivePatient.active) {
                 addString("status", "active") // must not run
             }
@@ -297,10 +297,10 @@ class OperationResultComplexTest {
     @Test
     fun `merging two results with distinct keys combines parameter maps and accumulates outcomes`() {
         // Both pipelines have a warning (Pattern B step failure)
-        val a = OperationResult.of(patient("p1"), "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val a = OperationResult.of(patient("p1"), "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .addOrSkip<Observation>("obs") { error("optional obs failed") }
 
-        val b = OperationResult.of(encounter("e1"), "encounter", errorStrategy = ErrorStrategy.ACCUMULATE)
+        val b = OperationResult.of(encounter("e1"), "encounter").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .addString("status", "finished")
 
         val merged = a.merge(b)

@@ -82,7 +82,7 @@ val result = AsyncOperationResult()
 // From a single value — name defaults to fhirType().lowercase() when omitted
 OperationResult.of(patient)
 OperationResult.of(patient, "myPatient")
-OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+OperationResult.of(patient).useErrorStrategy(ErrorStrategy.ACCUMULATE)
 
 // From a list — each item keyed by its fhirType() unless a shared name is given
 OperationResult.of(listOf(patient, appointment))
@@ -98,7 +98,6 @@ OperationResult.fromBundle(bundle) { entry -> entry.fullUrl }   // custom key st
 
 // Empty — no values, no typed head; useful for conditional pipelines or merge targets
 OperationResult.empty()
-OperationResult.empty(errorStrategy = ErrorStrategy.ACCUMULATE)
 ```
 
 ```kotlin
@@ -612,11 +611,21 @@ Extensions on dot-delimited (nested) keys work correctly — `buildParameterComp
 |---|---|
 | `FAIL_FAST` (default) | Records the error `OperationOutcome` and skips all subsequent builder steps |
 | `ACCUMULATE` | Records the error and continues executing subsequent steps |
+| `PROPAGATE` | Exception bubbles to the caller unchanged — not wrapped as an `OperationOutcome` |
+
+Call `useErrorStrategy(strategy)` anywhere in the chain to set or change the strategy:
 
 ```kotlin
-val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+// Switch to ACCUMULATE so all steps run even after a failure
+val result = OperationResult.of(patient)
+    .useErrorStrategy(ErrorStrategy.ACCUMULATE)
     .add { riskyStep() }      // failure recorded but next step still runs
     .add { anotherStep() }
+
+// Switch to PROPAGATE when your infrastructure already handles exceptions
+val result = OperationResult.of(patient)
+    .useErrorStrategy(ErrorStrategy.PROPAGATE)
+    .add { riskyStep() }      // throws directly — no OperationOutcome created
 
 result.hasErrors()            // true if any step failed
 result.isSuccessful()         // true if no failures
@@ -806,6 +815,16 @@ FHIRMason | state: {patient=1, coverage=1}
 FHIRMason | step='risky' | WARN: connection timed out
 ```
 
+#### Error strategy (`useErrorStrategy()`)
+
+Call `useErrorStrategy(strategy)` anywhere in the chain to set or change the active [ErrorStrategy]. Changes take effect from that step onwards.
+
+```kotlin
+val result = OperationResult.of(patient)
+    .useErrorStrategy(ErrorStrategy.PROPAGATE)  // exceptions propagate unchanged from here
+    .add("coverage") { fetchCoverage() }
+```
+
 #### Per-step metrics (`timed()` / `getMetrics()`)
 
 Call `timed()` anywhere in the chain to enable `StepMetrics` collection. When disabled (the default), `getMetrics()` returns an empty list — zero overhead.
@@ -891,15 +910,16 @@ val result = OperationResult.of(patient)
 
 ### Error Handling
 
-Every builder step (`add`, `addAll`, `addUsing`, etc.) catches exceptions internally. When an exception is thrown:
+Every builder step (`add`, `addAll`, `addUsing`, etc.) catches exceptions internally unless `PROPAGATE` is active. When an exception is thrown:
 
-- The exception is converted to an `OperationOutcome` with `ERROR` severity and added to the outcome list.
+- The exception is converted to an `OperationOutcome` with `ERROR` severity and added to the outcome list (`FAIL_FAST` / `ACCUMULATE`), or propagated unchanged to the caller (`PROPAGATE`).
 - If the caught exception is a HAPI FHIR `BaseServerResponseException` that already carries an embedded `OperationOutcome`, **that outcome is preserved** rather than replaced with a generic one. Rich diagnostic information from upstream FHIR servers or clients survives the pipeline intact.
 - In `FAIL_FAST` mode subsequent steps are skipped; in `ACCUMULATE` mode they continue.
 
 ```kotlin
 // Embedded OperationOutcome from HAPI FHIR exceptions is preserved in full
-val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+val result = OperationResult.of(patient)
+    .useErrorStrategy(ErrorStrategy.ACCUMULATE)
     .add("encounter") { fhirClient.read(Encounter::class.java, encounterId) }  // may throw BaseServerResponseException
     .add("coverage")  { fhirClient.read(Coverage::class.java, coverageId) }
 
@@ -977,13 +997,15 @@ result.throwIfErrors()  // returns this unchanged, or throws InternalErrorExcept
 // From a Parameters resource
 val result = OperationResult.fromParameters(parameters)
 
-// Typed head — getResult() returns a Patient without casting
+// Typed head — getResult() returns a Patient without casting.
+// If no value of the expected type exists under primaryKey, returns a pipeline
+// with hasErrors() == true and a null head (consistent with Pattern A steps).
 val result = OperationResult.fromParametersTyped<Patient>(parameters, primaryKey = "patient")
 
 // From a Bundle — keys default to fhirType().lowercase()
 val result = OperationResult.fromBundle(bundle)
 
-// Typed head — getResult() returns a Patient without casting
+// Typed head — same error-outcome behaviour as fromParametersTyped when key/type is absent.
 val result = OperationResult.fromBundleTyped<Patient>(bundle, primaryKey = "patient")
 
 // Custom key strategy
@@ -998,7 +1020,7 @@ After loading a `Parameters` resource with `fromParameters`, use `extractParam` 
 
 | Method | Signature | Behaviour on missing / wrong type |
 |---|---|---|
-| `extractParam` | `extractParam<R>(name)` | Throws `IllegalArgumentException` |
+| `extractParam` | `extractParam<R>(name)` | Records ERROR outcome, skips head (Pattern A) |
 | `extractParamList` | `extractParamList<R>(name)` | Returns empty list |
 
 ```kotlin
@@ -1539,7 +1561,8 @@ result.getByType<Claim>()   // [the derived Claim]
 ### 5. Resilient pipeline with error accumulation
 
 ```kotlin
-val result = OperationResult.of(patient, errorStrategy = ErrorStrategy.ACCUMULATE)
+val result = OperationResult.of(patient)
+    .useErrorStrategy(ErrorStrategy.ACCUMULATE)
     .add("coverage") { fetchCoverage() }      // may throw
     .addOrSkip("score") { computeScore() }    // failure → warning, pipeline continues
 
@@ -1733,7 +1756,7 @@ mvn clean install       # build, test, and install to local repo
 fhirmason-api/
 ├── src/main/java/dev/ratkay/operation/
 │   ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
-│   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE enum
+│   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE / PROPAGATE enum
 │   ├── StepMetrics.kt                  # Per-step timing and outcome data
 │   ├── DateTimeInput.kt                # Sealed wrapper for date/time values (collapses overloads)
 │   └── FhirPath.kt                     # Fluent FHIRPath expression builder (version-agnostic)
@@ -1868,7 +1891,7 @@ When `fhirmason-spring` is on the classpath in a Spring Boot application, a `Fhi
 
 ```yaml
 fhirmason:
-  error-strategy: ACCUMULATE   # FAIL_FAST | ACCUMULATE (default: ACCUMULATE)
+  error-strategy: ACCUMULATE   # FAIL_FAST | ACCUMULATE | PROPAGATE (default: ACCUMULATE)
   metrics:
     enabled: true               # enable per-step timing (default: false)
 ```
@@ -1948,12 +1971,12 @@ FHIRMason is fully usable from Java with an unbroken fluent chain.
 // Single resource — name defaults to fhirType().lowercase()
 OperationResult<Patient> result = OperationResult.of(patient);
 
-// Single resource with explicit name and error strategy
-OperationResult<Patient> result = OperationResult.of(patient, "patient", ErrorStrategy.ACCUMULATE);
+// Single resource with explicit name; switch to ACCUMULATE via fluent method
+OperationResult<Patient> result = OperationResult.of(patient, "patient")
+    .useErrorStrategy(ErrorStrategy.ACCUMULATE);
 
 // Empty pipeline
 OperationResult<Base> empty = OperationResult.empty();
-OperationResult<Base> accumulating = OperationResult.empty(ErrorStrategy.ACCUMULATE);
 
 // From existing FHIR resources
 OperationResult<Base> fromParams = OperationResult.fromParameters(parameters);

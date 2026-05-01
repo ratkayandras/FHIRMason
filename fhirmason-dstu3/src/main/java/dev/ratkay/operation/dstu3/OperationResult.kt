@@ -125,7 +125,8 @@ class OperationResult<T> private constructor(
         result: R?,
         params: MutableMap<String, MutableList<Base>> = parameters,
         timingEnabled: Boolean = this.timingEnabled,
-        extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = this.extensions
+        extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = this.extensions,
+        errorStrategy: ErrorStrategy = this.errorStrategy
     ): OperationResult<R> = OperationResult(params, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics, extensions)
 
     private fun shallowCopyParams(): MutableMap<String, MutableList<Base>> =
@@ -146,6 +147,17 @@ class OperationResult<T> private constructor(
 
     /** Returns a snapshot of [StepMetrics] collected so far. Empty when [timed] was not called. */
     override fun getMetrics(): List<StepMetrics> = metrics.toList()
+
+    /**
+     * Returns a new pipeline with [strategy] applied to all subsequent steps.
+     *
+     * Can be called at any point in the chain — changes take effect from that step onwards.
+     * The default strategy is [ErrorStrategy.FAIL_FAST]; call this method to switch to
+     * [ErrorStrategy.ACCUMULATE] or [ErrorStrategy.PROPAGATE] mid-chain.
+     *
+     * @param strategy the [ErrorStrategy] to apply from this point in the pipeline onwards.
+     */
+    fun useErrorStrategy(strategy: ErrorStrategy): OperationResult<T> = copyWith(result, errorStrategy = strategy)
 
     // Private logging/metrics helpers
 
@@ -174,6 +186,7 @@ class OperationResult<T> private constructor(
         block: () -> OperationResult<R>
     ): OperationResult<R> {
         if (shouldSkip()) return onSkip()
+        if (errorStrategy == ErrorStrategy.PROPAGATE) return block()
         val (result, duration) = measureTimedValue { runCatching { block() } }
         val durationMs = duration.inWholeMilliseconds
         return result.fold(
@@ -1471,17 +1484,21 @@ class OperationResult<T> private constructor(
 
     /**
      * Extracts the first value of type [R] stored under [name] and sets it as the pipeline head.
-     * Throws [IllegalArgumentException] if no value of [R] exists under [name].
+     *
+     * Follows Pattern A: when no value of [R] exists under [name], records an ERROR-severity
+     * [OperationOutcome] and returns a skipped (null-head) result. The pipeline head type changes
+     * from [T] to [R] on success, and the active [ErrorStrategy] is respected (FAIL_FAST will skip
+     * all subsequent steps, ACCUMULATE will continue).
+     *
+     * @param name the parameter-map key to look up.
+     * @param type the expected [KClass] of the stored resource.
      */
-    fun <R : Base> extractParam(name: String, type: KClass<R>): OperationResult<R> {
-        val value = parameters[name]
-            ?.filterIsInstance(type.java)
-            ?.firstOrNull()
-            ?: throw IllegalArgumentException(
-                "No value of type '${type.simpleName}' found under key '$name'"
-            )
-        return copyWith(value)
-    }
+    fun <R : Base> extractParam(name: String, type: KClass<R>): OperationResult<R> =
+        runBuilderStep(name) {
+            val value = parameters[name]?.filterIsInstance(type.java)?.firstOrNull()
+                ?: error("No value of type '${type.simpleName}' found under key '$name'")
+            copyWith(value)
+        }
 
     /** Reified overload — no [KClass] argument needed at call sites. */
     inline fun <reified R : Base> extractParam(name: String): OperationResult<R> =
@@ -1713,15 +1730,15 @@ class OperationResult<T> private constructor(
          * parameter-map entry, stored under [name] (or [value]'s [Base.fhirType] lowercase when
          * [name] is `null`).
          *
-         * @param errorStrategy controls how subsequent steps behave when an error is recorded
+         * The pipeline starts with [ErrorStrategy.FAIL_FAST]; call [useErrorStrategy] to change it.
          */
         @JvmStatic
         @JvmOverloads
-        fun <T : Base> of(value: T, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<T> {
+        fun <T : Base> of(value: T, name: String? = null): OperationResult<T> {
             val key = name ?: value.fhirType().lowercase()
             val params = mutableMapOf<String, MutableList<Base>>()
             params.getOrPut(key) { mutableListOf() }.add(value)
-            return OperationResult(params, value, mutableListOf(), errorStrategy, mutableMapOf())
+            return OperationResult(params, value, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
         }
 
         /**
@@ -1732,14 +1749,14 @@ class OperationResult<T> private constructor(
          * Accepts any [Collection] (e.g. [List], [Set], [LinkedHashSet]); the pipeline head is
          * always stored as a [List].
          *
-         * @param errorStrategy controls how subsequent steps behave when an error is recorded
+         * The pipeline starts with [ErrorStrategy.FAIL_FAST]; call [useErrorStrategy] to change it.
          */
         @JvmStatic
         @JvmOverloads
-        fun <T : Base> of(values: Collection<T>, name: String? = null, errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<List<T>> {
+        fun <T : Base> of(values: Collection<T>, name: String? = null): OperationResult<List<T>> {
             val list = values.toList()
             val params = mutableMapOf<String, MutableList<Base>>()
-            val instance = OperationResult(params, list, mutableListOf(), errorStrategy, mutableMapOf())
+            val instance = OperationResult(params, list, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
             instance.addToParameters(list, name)
             return instance
         }
@@ -1768,7 +1785,12 @@ class OperationResult<T> private constructor(
          * Like [fromParameters] but also sets the typed pipeline head to the first value stored
          * under [primaryKey] that is an instance of [type].
          *
-         * @throws IllegalArgumentException if no value of [type] exists under [primaryKey].
+         * When no value of [type] is found under [primaryKey], returns a pipeline with
+         * [hasErrors] `== true` and a null head (consistent with Pattern A mid-pipeline steps).
+         * Call [useErrorStrategy] on the returned result to change the strategy if needed.
+         *
+         * @param primaryKey the parameter-map key whose value should become the pipeline head.
+         * @param type the expected [KClass] of the primary resource.
          */
         @JvmStatic
         fun <T : Base> fromParametersTyped(
@@ -1777,13 +1799,13 @@ class OperationResult<T> private constructor(
             type: KClass<T>
         ): OperationResult<T> {
             val (params, exts) = ParameterMapSerializer.flatten(parameters)
-            val primary = params[primaryKey]
-                ?.filterIsInstance(type.java)
-                ?.firstOrNull()
-                ?: throw IllegalArgumentException(
-                    "No value of type '${type.simpleName}' found under key '$primaryKey'"
-                )
-            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
+            val primary = params[primaryKey]?.filterIsInstance(type.java)?.firstOrNull()
+            return if (primary != null) {
+                OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
+            } else {
+                val outcome = messageOutcome("No value of type '${type.simpleName}' found under key '$primaryKey'")
+                OperationResult(params, null, mutableListOf(outcome), ErrorStrategy.FAIL_FAST, mutableMapOf(), extensions = exts)
+            }
         }
 
         /** Reified overload of [fromParametersTyped] — no [KClass] argument needed at call sites. */
@@ -1796,7 +1818,8 @@ class OperationResult<T> private constructor(
          * Java-friendly overload of [fromParametersTyped] — accepts a [Class] instead of a [KClass]
          * so Java callers can write `fromParametersTyped(params, "patient", Patient.class)`.
          *
-         * @throws IllegalArgumentException if no value of [type] exists under [primaryKey].
+         * When no value of [type] is found under [primaryKey], returns a pipeline with
+         * [hasErrors] `== true` and a null head.
          */
         @JvmStatic
         fun <T : Base> fromParametersTyped(
@@ -1858,7 +1881,11 @@ class OperationResult<T> private constructor(
          * [fromBundle] overload).  All resources are loaded into the parameter map; only the
          * head is narrowed to [T].
          *
-         * @throws IllegalArgumentException if no resource of [type] exists under [primaryKey].
+         * When no resource of [type] is found under [primaryKey], returns a pipeline with
+         * [hasErrors] `== true` and a null head (consistent with Pattern A mid-pipeline steps).
+         *
+         * @param primaryKey the parameter-map key whose value should become the pipeline head.
+         * @param type the expected [KClass] of the primary resource.
          */
         @JvmStatic
         fun <T : Resource> fromBundleTyped(
@@ -1873,16 +1900,21 @@ class OperationResult<T> private constructor(
                     val key = entry.resource.fhirType().lowercase()
                     params.getOrPut(key) { mutableListOf() }.add(entry.resource)
                 }
-            val primary = params[primaryKey]
-                ?.filterIsInstance(type.java)
-                ?.firstOrNull()
-                ?: throw IllegalArgumentException(
-                    "No value of type '${type.simpleName}' found under key '$primaryKey'"
-                )
-            return OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+            val primary = params[primaryKey]?.filterIsInstance(type.java)?.firstOrNull()
+            return if (primary != null) {
+                OperationResult(params, primary, mutableListOf(), ErrorStrategy.FAIL_FAST, mutableMapOf())
+            } else {
+                val outcome = messageOutcome("No value of type '${type.simpleName}' found under key '$primaryKey'")
+                OperationResult(params, null, mutableListOf(outcome), ErrorStrategy.FAIL_FAST, mutableMapOf())
+            }
         }
 
-        /** Java-friendly overload of [fromBundleTyped] — accepts [Class] instead of [KClass]. */
+        /**
+         * Java-friendly overload of [fromBundleTyped] — accepts [Class] instead of [KClass].
+         *
+         * When no resource of [type] is found under [primaryKey], returns a pipeline with
+         * [hasErrors] `== true` and a null head.
+         */
         @JvmStatic
         fun <T : Resource> fromBundleTyped(
             bundle: Bundle,
@@ -1906,15 +1938,16 @@ class OperationResult<T> private constructor(
          *
          * [getResult] will throw [IllegalStateException] until a value is added via [add] or similar.
          * [toParameters] returns a valid empty [Parameters] resource.
+         *
+         * The pipeline starts with [ErrorStrategy.FAIL_FAST]; call [useErrorStrategy] to change it.
          */
         @JvmStatic
-        @JvmOverloads
-        fun empty(errorStrategy: ErrorStrategy = ErrorStrategy.FAIL_FAST): OperationResult<Base> =
+        fun empty(): OperationResult<Base> =
             OperationResult(
                 mutableMapOf(),
                 null,
                 mutableListOf(),
-                errorStrategy,
+                ErrorStrategy.FAIL_FAST,
                 mutableMapOf()
             )
 

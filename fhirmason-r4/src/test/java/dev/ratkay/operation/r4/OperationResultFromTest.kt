@@ -330,25 +330,23 @@ class OperationResultFromTest {
     }
 
     @Test
-    fun `fromParametersTyped - throws when primary key is absent`() {
+    fun `fromParametersTyped - returns error outcome when primary key is absent`() {
         val fhirParams = Parameters().apply {
             addParameter().apply { name = "appt"; resource = appointment() }
         }
 
-        assertThrows<IllegalArgumentException> {
-            OperationResult.fromParametersTyped<Patient>(fhirParams, "patient")
-        }
+        val result = OperationResult.fromParametersTyped<Patient>(fhirParams, "patient")
+        assertTrue(result.hasErrors())
     }
 
     @Test
-    fun `fromParametersTyped - throws when key exists but type does not match`() {
+    fun `fromParametersTyped - returns error outcome when key exists but type does not match`() {
         val fhirParams = Parameters().apply {
             addParameter().apply { name = "patient"; resource = appointment() } // wrong type
         }
 
-        assertThrows<IllegalArgumentException> {
-            OperationResult.fromParametersTyped<Patient>(fhirParams, "patient")
-        }
+        val result = OperationResult.fromParametersTyped<Patient>(fhirParams, "patient")
+        assertTrue(result.hasErrors())
     }
 
     @Test
@@ -582,27 +580,25 @@ class OperationResultFromTest {
     }
 
     @Test
-    fun `fromBundleTyped - throws when primary key is absent`() {
+    fun `fromBundleTyped - returns error outcome when primary key is absent`() {
         val bundle = Bundle().apply {
             type = Bundle.BundleType.COLLECTION
             addEntry().resource = appointment()
         }
 
-        assertThrows<IllegalArgumentException> {
-            OperationResult.fromBundleTyped<Patient>(bundle, "patient")
-        }
+        val result = OperationResult.fromBundleTyped<Patient>(bundle, "patient")
+        assertTrue(result.hasErrors())
     }
 
     @Test
-    fun `fromBundleTyped - throws when key exists but type does not match`() {
+    fun `fromBundleTyped - returns error outcome when key exists but type does not match`() {
         val bundle = Bundle().apply {
             type = Bundle.BundleType.COLLECTION
             addEntry().resource = appointment()
         }
 
-        assertThrows<IllegalArgumentException> {
-            OperationResult.fromBundleTyped<Patient>(bundle, "appointment")
-        }
+        val result = OperationResult.fromBundleTyped<Patient>(bundle, "appointment")
+        assertTrue(result.hasErrors())
     }
 
     // ── extractParam / extractParamList ──────────────────────────────────────
@@ -632,25 +628,23 @@ class OperationResultFromTest {
     }
 
     @Test
-    fun `extractParam throws when key does not exist`() {
+    fun `extractParam returns error outcome when key does not exist`() {
         val params = Parameters()
-        val or = OperationResult.fromParameters(params)
+        val result = OperationResult.fromParameters(params)
+            .extractParam<Patient>("patient")
 
-        assertThrows<IllegalArgumentException> {
-            or.extractParam<Patient>("patient")
-        }
+        assertTrue(result.hasErrors())
     }
 
     @Test
-    fun `extractParam throws when key exists but type does not match`() {
+    fun `extractParam returns error outcome when key exists but type does not match`() {
         val params = Parameters().apply {
             addParameter().apply { name = "patient"; resource = appointment() }
         }
-        val or = OperationResult.fromParameters(params)
+        val result = OperationResult.fromParameters(params)
+            .extractParam<Patient>("patient")
 
-        assertThrows<IllegalArgumentException> {
-            or.extractParam<Patient>("patient")
-        }
+        assertTrue(result.hasErrors())
     }
 
     @Test

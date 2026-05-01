@@ -167,7 +167,7 @@ class OperationResultMapHeadTest {
 
         // Use addOrSkip (Pattern B) so the head is preserved after the failure,
         // allowing mapHead to receive it in ACCUMULATE mode.
-        OperationResult.of(patient(), "patient", errorStrategy = ErrorStrategy.ACCUMULATE)
+        OperationResult.of(patient(), "patient").useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .addOrSkip("extra") { error("earlier warning") }
             .mapHead { p ->
                 transformCalled = true

@@ -112,7 +112,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithSystem respects FAIL_FAST and skips when already errored`() {
         var builderCalled = false
-        val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients", ErrorStrategy.FAIL_FAST)
+        val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
             .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
                 throw RuntimeException("first failure")
             }

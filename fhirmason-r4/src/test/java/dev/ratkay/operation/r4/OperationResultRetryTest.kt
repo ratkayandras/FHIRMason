@@ -207,7 +207,7 @@ class OperationResultRetryTest {
     @Test
     fun `addWithRetry works in ACCUMULATE mode after prior error`() {
         var attempts = 0
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add("enc") { throw RuntimeException("non-fatal") }
             .addWithRetry("enc2", maxAttempts = 3, initialDelayMs = 0) {
                 attempts++
@@ -316,7 +316,7 @@ class OperationResultRetryTest {
     fun `addWithRetryUsing does not retry when head is null in ACCUMULATE mode`() {
         var builderCalls = 0
         // First add fails → head becomes null. addWithRetryUsing should record Pattern A once, not maxAttempts times.
-        val result = OperationResult.of(patient(), errorStrategy = ErrorStrategy.ACCUMULATE)
+        val result = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.ACCUMULATE)
             .add("enc") { throw RuntimeException("step 1 fails") }
             .addWithRetryUsing("obs", maxAttempts = 5, initialDelayMs = 0) { _ ->
                 builderCalls++
