@@ -231,14 +231,22 @@ class FhirPath private constructor(private val expr: String) {
     /** Greater-than-or-equal comparison with a decimal literal: `expr >= value`. */
     fun ge(value: Double): FhirPath = FhirPath("$expr >= $value")
 
-    /** FHIRPath equivalence (`~`): matches regardless of insignificant whitespace, case, etc. */
+    /** FHIRPath equivalence (`~`): matches regardless of insignificant whitespace, case, etc. String values are auto-quoted. */
     fun equiv(value: String): FhirPath = FhirPath("$expr ~ '$value'")
+
+    /** Equivalence comparison with an integer literal: `expr ~ value`. */
     fun equiv(value: Int): FhirPath = FhirPath("$expr ~ $value")
+
+    /** Equivalence comparison with a decimal literal: `expr ~ value`. */
     fun equiv(value: Double): FhirPath = FhirPath("$expr ~ $value")
 
-    /** FHIRPath non-equivalence (`!~`). */
+    /** FHIRPath non-equivalence (`!~`). String values are auto-quoted. */
     fun notEquiv(value: String): FhirPath = FhirPath("$expr !~ '$value'")
+
+    /** Non-equivalence comparison with an integer literal: `expr !~ value`. */
     fun notEquiv(value: Int): FhirPath = FhirPath("$expr !~ $value")
+
+    /** Non-equivalence comparison with a decimal literal: `expr !~ value`. */
     fun notEquiv(value: Double): FhirPath = FhirPath("$expr !~ $value")
 
     /** FHIRPath `contains` membership: `expr contains value`. [value] is auto-quoted as a string literal. */

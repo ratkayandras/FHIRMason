@@ -1,5 +1,6 @@
 package dev.ratkay.operation.dstu3
 
+import dev.ratkay.operation.DateTimeInput
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.instanceOf
 import org.hl7.fhir.dstu3.model.DateTimeType
@@ -7,6 +8,7 @@ import org.hl7.fhir.dstu3.model.DateType
 import org.hl7.fhir.dstu3.model.InstantType
 import org.hl7.fhir.dstu3.model.TimeType
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -201,5 +203,73 @@ class FhirDateTimeConverterTest {
         val result = FhirDateTimeConverter.toFhirTime(time)
         assertThat(result, instanceOf(TimeType::class.java))
         assertEquals("00:00", result.valueAsString)
+    }
+
+    // ── toFhirDate(DateTimeInput) dispatch ────────────────────────────────────
+
+    @Test
+    fun `toFhirDate dispatch with OfLocalDateTime extracts date part`() {
+        val ldt = LocalDateTime.of(2024, 3, 15, 22, 45, 0)
+        val result = FhirDateTimeConverter.toFhirDate(DateTimeInput.of(ldt))
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
+    @Test
+    fun `toFhirDate dispatch with OfZonedDateTime extracts date part`() {
+        val zdt = ZonedDateTime.of(2024, 3, 15, 22, 45, 0, 0, ZoneOffset.ofHours(5))
+        val result = FhirDateTimeConverter.toFhirDate(DateTimeInput.of(zdt))
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
+    @Test
+    fun `toFhirDate dispatch with OfOffsetDateTime extracts date part`() {
+        val odt = OffsetDateTime.of(2024, 3, 15, 22, 45, 0, 0, ZoneOffset.ofHours(5))
+        val result = FhirDateTimeConverter.toFhirDate(DateTimeInput.of(odt))
+        assertThat(result, instanceOf(DateType::class.java))
+        assertEquals("2024-03-15", result.valueAsString)
+    }
+
+    @Test
+    fun `toFhirDate dispatch throws for unsupported type`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FhirDateTimeConverter.toFhirDate(DateTimeInput.of(Instant.now()))
+        }
+    }
+
+    // ── toFhirDateTime(DateTimeInput) dispatch ────────────────────────────────
+
+    @Test
+    fun `toFhirDateTime dispatch with OfInstant produces DateTimeType`() {
+        val instant = Instant.parse("2024-03-15T10:30:00.000Z")
+        val result = FhirDateTimeConverter.toFhirDateTime(DateTimeInput.of(instant))
+        assertThat(result, instanceOf(DateTimeType::class.java))
+        assertTrue(result.valueAsString.contains("2024-03-15"))
+    }
+
+    @Test
+    fun `toFhirDateTime dispatch throws for unsupported type`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FhirDateTimeConverter.toFhirDateTime(DateTimeInput.of(LocalDate.of(2024, 1, 1)))
+        }
+    }
+
+    // ── toFhirInstant(DateTimeInput) dispatch ─────────────────────────────────
+
+    @Test
+    fun `toFhirInstant dispatch throws for unsupported type`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FhirDateTimeConverter.toFhirInstant(DateTimeInput.of(LocalDate.of(2024, 1, 1)))
+        }
+    }
+
+    // ── toFhirTime(DateTimeInput) dispatch ────────────────────────────────────
+
+    @Test
+    fun `toFhirTime dispatch throws for unsupported type`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FhirDateTimeConverter.toFhirTime(DateTimeInput.of(LocalDate.of(2024, 1, 1)))
+        }
     }
 }

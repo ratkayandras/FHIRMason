@@ -107,6 +107,13 @@ class OperationResult<T> private constructor(
         }
     }
 
+    /**
+     * Throws an [ca.uhn.fhir.rest.server.exceptions.InternalErrorException] containing the
+     * merged [OperationOutcome] if [hasErrors] is `true`; otherwise returns this result unchanged.
+     *
+     * The exception message is taken from the first issue's `diagnostics` field, falling back to
+     * `"Pipeline completed with errors"` when no diagnostic text is present.
+     */
     override fun throwIfErrors(): OperationResult<T> {
         if (hasErrors()) {
             val outcome = toOperationOutcome()

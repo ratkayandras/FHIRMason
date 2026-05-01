@@ -282,6 +282,11 @@ class FhirPathTest {
     }
 
     @Test
+    fun `ne with Double emits literal`() {
+        assertThat(FhirPath.from("score").ne(0.0).build(), `is`("score != 0.0"))
+    }
+
+    @Test
     fun `lt with Int emits literal`() {
         assertThat(FhirPath.from("age").lt(18).build(), `is`("age < 18"))
     }
@@ -312,6 +317,11 @@ class FhirPathTest {
     }
 
     @Test
+    fun `le with String auto-quotes`() {
+        assertThat(FhirPath.from("name").le("M").build(), `is`("name <= 'M'"))
+    }
+
+    @Test
     fun `le with Int emits literal`() {
         assertThat(FhirPath.from("age").le(17).build(), `is`("age <= 17"))
     }
@@ -319,6 +329,11 @@ class FhirPathTest {
     @Test
     fun `le with Double emits literal`() {
         assertThat(FhirPath.from("score").le(1.0).build(), `is`("score <= 1.0"))
+    }
+
+    @Test
+    fun `ge with String auto-quotes`() {
+        assertThat(FhirPath.from("name").ge("M").build(), `is`("name >= 'M'"))
     }
 
     @Test
@@ -342,6 +357,11 @@ class FhirPathTest {
     }
 
     @Test
+    fun `equiv with Double emits literal`() {
+        assertThat(FhirPath.from("value").equiv(1.5).build(), `is`("value ~ 1.5"))
+    }
+
+    @Test
     fun `notEquiv produces bang-tilde expression with auto-quoted string`() {
         assertThat(FhirPath.from("name").notEquiv("Smith").build(), `is`("name !~ 'Smith'"))
     }
@@ -349,6 +369,11 @@ class FhirPathTest {
     @Test
     fun `notEquiv with Int emits literal`() {
         assertThat(FhirPath.from("value").notEquiv(0).build(), `is`("value !~ 0"))
+    }
+
+    @Test
+    fun `notEquiv with Double emits literal`() {
+        assertThat(FhirPath.from("value").notEquiv(0.0).build(), `is`("value !~ 0.0"))
     }
 
     @Test

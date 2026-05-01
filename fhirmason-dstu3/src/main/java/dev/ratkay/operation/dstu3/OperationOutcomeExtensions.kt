@@ -3,6 +3,13 @@ package dev.ratkay.operation.dstu3
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException
 import org.hl7.fhir.dstu3.model.OperationOutcome
 
+/**
+ * Creates a generic ERROR-severity [OperationOutcome] from this exception, using the
+ * exception message (or the class name when the message is `null`) as the diagnostics.
+ *
+ * Prefer [BaseServerResponseException.toOperationOutcome] when the exception is a HAPI
+ * server/client exception — it extracts any embedded rich outcome rather than discarding it.
+ */
 fun Exception.toOperationOutcome(): OperationOutcome = OperationOutcome().apply {
     addIssue().apply {
         severity = OperationOutcome.IssueSeverity.ERROR
