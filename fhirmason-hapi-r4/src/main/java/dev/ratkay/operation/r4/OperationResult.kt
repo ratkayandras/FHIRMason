@@ -129,13 +129,35 @@ class OperationResult<T> private constructor(
 
     private fun <R> skippedResult(): OperationResult<R> = copyWith(null)
 
+    /**
+     * Constructs a new [OperationResult] derived from this instance with the given overrides.
+     *
+     * Always snapshots [outcomes], [metrics], and [failedTasks] via [toMutableList]/[toMutableMap]
+     * so that forked pipelines (two chains from the same intermediate result) cannot corrupt each
+     * other's mutable state. The [params] and [extensions] parameters are passed through as-is;
+     * callers that need isolation must supply a fresh copy (e.g. via [shallowCopyParams]).
+     *
+     * [extraOutcome] and [extraMetric] allow error/success paths to append a single entry to the
+     * snapshot without mutating [outcomes] or [metrics] on the current instance, preserving
+     * immutability even when the caller adds an outcome or metric as part of an error-handling step.
+     */
     private fun <R> copyWith(
         result: R?,
         params: MutableMap<String, MutableList<Base>> = parameters,
         timingEnabled: Boolean = this.timingEnabled,
         extensions: MutableMap<String, MutableMap<Base, List<Extension>>> = this.extensions,
-        errorStrategy: ErrorStrategy = this.errorStrategy
-    ): OperationResult<R> = OperationResult(params, result, outcomes, errorStrategy, failedTasks, timingEnabled, metrics, extensions)
+        errorStrategy: ErrorStrategy = this.errorStrategy,
+        extraOutcome: OperationOutcome? = null,
+        extraOutcomes: List<OperationOutcome> = emptyList(),
+        extraMetric: StepMetrics? = null
+    ): OperationResult<R> {
+        val newOutcomes = outcomes.toMutableList().also {
+            if (extraOutcome != null) it.add(extraOutcome)
+            it.addAll(extraOutcomes)
+        }
+        val newMetrics = metrics.toMutableList().also { if (extraMetric != null) it.add(extraMetric) }
+        return OperationResult(params, result, newOutcomes, errorStrategy, failedTasks.toMutableMap(), timingEnabled, newMetrics, extensions)
+    }
 
     private fun shallowCopyParams(): MutableMap<String, MutableList<Base>> =
         parameters.mapValues { (_, values) -> values.toMutableList() }.toMutableMap()
@@ -176,9 +198,8 @@ class OperationResult<T> private constructor(
         }
     }
 
-    private fun recordMetric(key: String, resourceType: String, durationMs: Long, success: Boolean) {
-        if (timingEnabled) metrics.add(StepMetrics(key, resourceType, durationMs, success))
-    }
+    private fun buildMetric(key: String, resourceType: String, durationMs: Long, success: Boolean): StepMetrics? =
+        if (timingEnabled) StepMetrics(key, resourceType, durationMs, success) else null
 
     /**
      * Common try/catch skeleton shared by [runBuilderStep] and [runPrimitiveStep].
@@ -210,9 +231,11 @@ class OperationResult<T> private constructor(
         runStep(
             onSkip = { skippedResult() },
             onError = { e, durationMs ->
-                recordMetric(name ?: "unknown", "", durationMs, false)
-                outcomes.add(errorOutcome(e))
-                skippedResult()
+                copyWith(
+                    null,
+                    extraOutcome = errorOutcome(e),
+                    extraMetric = buildMetric(name ?: "unknown", "", durationMs, false)
+                )
             },
             block = block
         )
@@ -232,36 +255,47 @@ class OperationResult<T> private constructor(
             onSkip = { copyWith(result) },
             onError = { e, durationMs ->
                 logger.warn("FHIRMason | step='{}' | WARN: {}", name, e.message)
-                recordMetric(name, "", durationMs, false)
-                outcomes.add(warningOutcome(e))
-                copyWith(result)
+                val metric = buildMetric(name, "", durationMs, false)
+                copyWith(result, extraOutcome = warningOutcome(e), extraMetric = metric)
             },
             block = {
                 val (fhirValue, duration) = measureTimedValue { build() }
                 val durationMs = duration.inWholeMilliseconds
-                parameters.getOrPut(name) { mutableListOf() }.add(fhirValue)
-                recordMetric(name, fhirValue.fhirType(), durationMs, true)
+                val newParams = shallowCopyParams()
+                newParams.getOrPut(name) { mutableListOf() }.add(fhirValue)
                 logStep(name, fhirValue.fhirType(), durationMs)
-                copyWith(result)
+                copyWith(result, params = newParams, extraMetric = buildMetric(name, fhirValue.fhirType(), durationMs, true))
             }
         )
 
+    /**
+     * Stores [value] in a copy-on-write snapshot of [parameters] and returns a new
+     * [OperationResult] with [value] as the head. Uses [shallowCopyParams] so that the
+     * current instance's parameter map is never mutated, preserving immutability for
+     * pipeline forking.
+     */
     private fun <R : Base> storeAndCopy(name: String?, value: R, durationMs: Long): OperationResult<R> {
         val key = name ?: value.fhirType().lowercase()
-        parameters.getOrPut(key) { mutableListOf() }.add(value)
-        recordMetric(key, value.fhirType(), durationMs, true)
+        val newParams = shallowCopyParams()
+        newParams.getOrPut(key) { mutableListOf() }.add(value)
         logStep(key, value.fhirType(), durationMs)
-        return copyWith(value)
+        return copyWith(value, params = newParams, extraMetric = buildMetric(key, value.fhirType(), durationMs, true))
     }
 
+    /**
+     * Stores [values] in a copy-on-write snapshot of [parameters] and returns a new
+     * [OperationResult] with the list as the head. Uses [shallowCopyParams] so that the
+     * current instance's parameter map is never mutated, preserving immutability for
+     * pipeline forking.
+     */
     private fun <R : Base> storeListAndCopy(name: String?, values: Collection<R>, durationMs: Long): OperationResult<List<R>> {
         val list = values.toList()
-        addToParameters(list, name)
+        val newParams = shallowCopyParams()
+        addToParameters(list, name, newParams)
         val key = name ?: list.firstOrNull()?.fhirType()?.lowercase() ?: "list"
         val typeDesc = "${list.firstOrNull()?.fhirType() ?: "Empty"}[${list.size}]"
-        recordMetric(key, typeDesc, durationMs, true)
         logStep(key, typeDesc, durationMs)
-        return copyWith(list)
+        return copyWith(list, params = newParams, extraMetric = buildMetric(key, typeDesc, durationMs, true))
     }
 
 
@@ -569,18 +603,20 @@ class OperationResult<T> private constructor(
         return builderResult.fold(
             onSuccess = { value ->
                 val key = name ?: value.fhirType().lowercase()
-                parameters.getOrPut(key) { mutableListOf() }.add(value)
-                recordMetric(key, value.fhirType(), durationMs, true)
+                val newParams = shallowCopyParams()
+                newParams.getOrPut(key) { mutableListOf() }.add(value)
                 logStep(key, value.fhirType(), durationMs)
-                copyWith(result)
+                copyWith(result, params = newParams, extraMetric = buildMetric(key, value.fhirType(), durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 val key = name ?: "unknown"
                 logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
-                recordMetric(key, "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(
+                    result,
+                    extraOutcome = warningOutcome(t),
+                    extraMetric = buildMetric(key, "", durationMs, false)
+                )
             }
         )
     }
@@ -598,19 +634,23 @@ class OperationResult<T> private constructor(
         return builderResult.fold(
             onSuccess = { value ->
                 val key = name ?: value.fhirType().lowercase()
-                parameters.getOrPut(key) { mutableListOf() }.add(value)
-                recordMetric(key, value.fhirType(), durationMs, true)
+                val newParams = shallowCopyParams()
+                newParams.getOrPut(key) { mutableListOf() }.add(value)
                 logStep(key, value.fhirType(), durationMs)
-                copyWith(value)
+                copyWith(value, params = newParams, extraMetric = buildMetric(key, value.fhirType(), durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 val key = name ?: default.fhirType().lowercase()
                 logger.warn("FHIRMason | step='{}' | WARN: {}", key, t.message)
-                recordMetric(key, "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                parameters.getOrPut(key) { mutableListOf() }.add(default)
-                copyWith(default)
+                val newParams = shallowCopyParams()
+                newParams.getOrPut(key) { mutableListOf() }.add(default)
+                copyWith(
+                    default,
+                    params = newParams,
+                    extraOutcome = warningOutcome(t),
+                    extraMetric = buildMetric(key, "", durationMs, false)
+                )
             }
         )
     }
@@ -921,15 +961,15 @@ class OperationResult<T> private constructor(
 
         val (built, duration) = measureTimedValue { builder(subPipeline) }
 
+        val newParams = shallowCopyParams()
         built.getAllParameters().forEach { (childKey, values) ->
             val prefixedKey = "$name.$childKey"
-            parameters.getOrPut(prefixedKey) { mutableListOf() }.addAll(values)
+            newParams.getOrPut(prefixedKey) { mutableListOf() }.addAll(values)
         }
 
         val durationMs = duration.inWholeMilliseconds
-        recordMetric(name, "part", durationMs, true)
         logStep(name, "part", durationMs)
-        return copyWith(result)
+        return copyWith(result, params = newParams, extraMetric = buildMetric(name, "part", durationMs, true))
     }
 
     // ── Extension support ──────────────────────────────────────────────
@@ -951,16 +991,16 @@ class OperationResult<T> private constructor(
         vararg exts: Extension
     ): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
+        val newParams = shallowCopyParams()
+        newParams.getOrPut(name) { mutableListOf() }.add(value)
+        val newExtensions = shallowCopyExtensions()
         val durationMs = measureTime {
-            parameters.getOrPut(name) { mutableListOf() }.add(value)
             if (exts.isNotEmpty()) {
-                val innerMap = extensions.getOrPut(name) { IdentityHashMap() }
-                innerMap[value] = exts.toList()
+                newExtensions.getOrPut(name) { IdentityHashMap() }[value] = exts.toList()
             }
         }.inWholeMilliseconds
-        recordMetric(name, value.fhirType(), durationMs, true)
         logStep(name, value.fhirType(), durationMs)
-        return copyWith(result)
+        return copyWith(result, params = newParams, extensions = newExtensions, extraMetric = buildMetric(name, value.fhirType(), durationMs, true))
     }
 
     // Query methods
@@ -1070,9 +1110,8 @@ class OperationResult<T> private constructor(
         runBuilderStep("mapHead") {
             val (r, duration) = measureTimedValue { transform(getResult()) }
             val durationMs = duration.inWholeMilliseconds
-            recordMetric("mapHead", r.fhirType(), durationMs, true)
             logStep("mapHead", r.fhirType(), durationMs)
-            copyWith(r)
+            copyWith(r, extraMetric = buildMetric("mapHead", r.fhirType(), durationMs, true))
         }
 
     /**
@@ -1145,15 +1184,16 @@ class OperationResult<T> private constructor(
         val durationMs = duration.inWholeMilliseconds
         return outcome.fold(
             onSuccess = { newParams ->
-                recordMetric(name, "mapStored", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions(), extraMetric = buildMetric(name, "mapStored", durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 logger.warn("FHIRMason | step='mapStored' | WARN: {}", t.message)
-                recordMetric(name, "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(
+                    result,
+                    extraOutcome = warningOutcome(t),
+                    extraMetric = buildMetric(name, "", durationMs, false)
+                )
             }
         )
     }
@@ -1195,15 +1235,16 @@ class OperationResult<T> private constructor(
         val durationMs = duration.inWholeMilliseconds
         return outcome.fold(
             onSuccess = { newParams ->
-                recordMetric("mapStored", "mapStored", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions(), extraMetric = buildMetric("mapStored", "mapStored", durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 logger.warn("FHIRMason | step='mapStored' | WARN: {}", t.message)
-                recordMetric("mapStored", "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(
+                    result,
+                    extraOutcome = warningOutcome(t),
+                    extraMetric = buildMetric("mapStored", "", durationMs, false)
+                )
             }
         )
     }
@@ -1251,16 +1292,13 @@ class OperationResult<T> private constructor(
                 inner.parameters.forEach { (key, values) ->
                     newParams.getOrPut(key) { mutableListOf() }.addAll(values)
                 }
-                outcomes.addAll(inner.outcomes)
-                recordMetric("whenTrue", "", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions(),
+                    extraOutcomes = inner.outcomes, extraMetric = buildMetric("whenTrue", "", durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 logger.warn("FHIRMason | step='whenTrue' | WARN: {}", t.message)
-                recordMetric("whenTrue", "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(result, extraOutcome = warningOutcome(t), extraMetric = buildMetric("whenTrue", "", durationMs, false))
             }
         )
     }
@@ -1286,16 +1324,13 @@ class OperationResult<T> private constructor(
                 inner.parameters.forEach { (key, values) ->
                     newParams.getOrPut(key) { mutableListOf() }.addAll(values)
                 }
-                outcomes.addAll(inner.outcomes)
-                recordMetric("ifPresent", "", durationMs, true)
-                copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                copyWith(result, params = newParams, extensions = shallowCopyExtensions(),
+                    extraOutcomes = inner.outcomes, extraMetric = buildMetric("ifPresent", "", durationMs, true))
             },
             onFailure = { t ->
                 if (t !is Exception) throw t
                 logger.warn("FHIRMason | step='ifPresent' | WARN: {}", t.message)
-                recordMetric("ifPresent", "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(result, extraOutcome = warningOutcome(t), extraMetric = buildMetric("ifPresent", "", durationMs, false))
             }
         )
     }
@@ -1323,8 +1358,7 @@ class OperationResult<T> private constructor(
                 diagnostics = message
             }
         }
-        outcomes.add(outcome)
-        return copyWith(result)
+        return copyWith(result, extraOutcome = outcome)
     }
 
     // ── FHIRPath conditional chaining ────────────────────────────────────
@@ -1365,9 +1399,8 @@ class OperationResult<T> private constructor(
                     inner.parameters.forEach { (key, values) ->
                         newParams.getOrPut(key) { mutableListOf() }.addAll(values)
                     }
-                    outcomes.addAll(inner.outcomes)
-                    recordMetric("whenPath", "", durationMs, true)
-                    copyWith(result, params = newParams, extensions = shallowCopyExtensions())
+                    copyWith(result, params = newParams, extensions = shallowCopyExtensions(),
+                        extraOutcomes = inner.outcomes, extraMetric = buildMetric("whenPath", "", durationMs, true))
                 } else {
                     copyWith(result)  // expression evaluated to false
                 }
@@ -1375,9 +1408,7 @@ class OperationResult<T> private constructor(
             onFailure = { t ->
                 if (t !is Exception) throw t
                 logger.warn("FHIRMason | step='whenPath' | WARN: {}", t.message)
-                recordMetric("whenPath", "", durationMs, false)
-                outcomes.add(warningOutcome(t))
-                copyWith(result)
+                copyWith(result, extraOutcome = warningOutcome(t), extraMetric = buildMetric("whenPath", "", durationMs, false))
             }
         )
     }
@@ -1411,8 +1442,7 @@ class OperationResult<T> private constructor(
                     diagnostics = "guardPath: head value is not a FHIR resource; expression '$expression' could not be evaluated"
                 }
             }
-            outcomes.add(outcome)
-            return copyWith(result)
+            return copyWith(result, extraOutcome = outcome)
         }
         return try {
             if (FhirPathHelper.matches(head, expression)) {
@@ -1425,13 +1455,11 @@ class OperationResult<T> private constructor(
                         diagnostics = message
                     }
                 }
-                outcomes.add(outcome)
-                copyWith(result)
+                copyWith(result, extraOutcome = outcome)
             }
         } catch (e: Exception) {
             logger.warn("FHIRMason | step='guardPath' | WARN: {}", e.message)
-            outcomes.add(warningOutcome(e))
-            copyWith(result)
+            copyWith(result, extraOutcome = warningOutcome(e))
         }
     }
 
@@ -1717,10 +1745,10 @@ class OperationResult<T> private constructor(
 
     // Private helpers
 
-    private fun addToParameters(values: Collection<Base>, name: String?) {
+    private fun addToParameters(values: Collection<Base>, name: String?, target: MutableMap<String, MutableList<Base>> = parameters) {
         values.forEach { value ->
             val key = name ?: value.fhirType().lowercase()
-            parameters.getOrPut(key) { mutableListOf() }.add(value)
+            target.getOrPut(key) { mutableListOf() }.add(value)
         }
     }
 

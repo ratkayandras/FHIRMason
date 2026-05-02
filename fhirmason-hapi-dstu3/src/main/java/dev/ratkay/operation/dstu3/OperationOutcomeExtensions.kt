@@ -29,10 +29,15 @@ fun BaseServerResponseException.toOperationOutcome(): OperationOutcome =
  * Dispatches to the correct [toOperationOutcome] overload — preserving the embedded
  * [OperationOutcome] from [BaseServerResponseException] when present, or creating a
  * generic ERROR outcome otherwise.
+ *
+ * The first branch resolves to [BaseServerResponseException.toOperationOutcome] via the
+ * smart-cast. The `else` branch uses an explicit cast to [Exception] to call
+ * [Exception.toOperationOutcome] rather than relying on smart-cast resolution, ensuring
+ * the correct overload is always selected unambiguously.
  */
 internal fun errorOutcome(e: Exception): OperationOutcome = when (e) {
     is BaseServerResponseException -> e.toOperationOutcome()
-    else -> e.toOperationOutcome()
+    else -> (e as Exception).toOperationOutcome()
 }
 
 /**
