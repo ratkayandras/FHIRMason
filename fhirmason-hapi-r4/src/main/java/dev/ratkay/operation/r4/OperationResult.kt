@@ -955,8 +955,8 @@ class OperationResult<T> private constructor(
      * [toParameters] then reconstructs the nested `part` structure automatically from these
      * dot-delimited keys.
      *
-     * The sub-pipeline's outcomes/errors are NOT merged into the parent — only parameter map
-     * entries are merged. The pipeline head type [T] is preserved.
+     * The sub-pipeline's outcomes are merged into the parent so that errors inside the builder
+     * are visible to callers via [hasErrors] and [getOutcomes]. The pipeline head type [T] is preserved.
      */
     fun addPart(name: String, builder: OperationResult<T>.() -> OperationResult<*>): OperationResult<T> {
         if (shouldSkip()) return copyWith(result)
@@ -975,7 +975,7 @@ class OperationResult<T> private constructor(
 
         val durationMs = duration.inWholeMilliseconds
         logStep(name, "part", durationMs)
-        return copyWith(result, params = newParams, extraMetric = buildMetric(name, "part", durationMs, true))
+        return copyWith(result, params = newParams, extraOutcomes = built.outcomes, extraMetric = buildMetric(name, "part", durationMs, true))
     }
 
     // ── Extension support ──────────────────────────────────────────────
@@ -1088,20 +1088,23 @@ class OperationResult<T> private constructor(
 
     /**
      * Chains an inner pipeline on the current typed result [T], merges all of its parameter map
-     * entries into the outer map, and returns an [OperationResult] whose head type and current
-     * result come from the inner pipeline.
+     * entries and accumulated outcomes into the outer result, and returns an [OperationResult]
+     * whose head type and current result come from the inner pipeline.
      *
      * On key collision with the outer map the values are accumulated under the same key.
+     *
+     * On exception inside [transform]: records an ERROR-severity [OperationOutcome] and skips
+     * the head (Pattern A — identical to [add]).
      */
-    fun <R : Base> flatMap(transform: (T) -> OperationResult<R>): OperationResult<R> {
-        if (shouldSkip()) return skippedResult()
-        val inner = transform(getResult())
-        val newParams = shallowCopyParams()
-        inner.parameters.forEach { (key, values) ->
-            newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+    fun <R : Base> flatMap(transform: (T) -> OperationResult<R>): OperationResult<R> =
+        runBuilderStep(null) {
+            val inner = transform(getResult())
+            val newParams = shallowCopyParams()
+            inner.parameters.forEach { (key, values) ->
+                newParams.getOrPut(key) { mutableListOf() }.addAll(values)
+            }
+            copyWith(inner.result, params = newParams, extensions = shallowCopyExtensions(), extraOutcomes = inner.outcomes)
         }
-        return copyWith(inner.result, params = newParams, extensions = shallowCopyExtensions())
-    }
 
     /**
      * Transforms the pipeline head from [T] to [R] using [transform], without adding any entry to
