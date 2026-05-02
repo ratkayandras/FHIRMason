@@ -212,9 +212,14 @@ class AsyncOperationResult {
         type: KClass<T>,
         block: suspend (T) -> Base
     ): AsyncOperationResult = addAfter(key, dep) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addAfter] (typed) — accepts [Class] instead of [KClass]. */
+    fun <T : Base> addAfter(key: String, dep: String, type: Class<T>, block: suspend (T) -> Base): AsyncOperationResult =
+        addAfter(key, dep, type.kotlin, block)
 
     /**
      * Type-safe overload of [addListAfter] for a single dependency.
@@ -235,9 +240,14 @@ class AsyncOperationResult {
         type: KClass<T>,
         block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfter(key, dep) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addListAfter] (typed) — accepts [Class] instead of [KClass]. */
+    fun <T : Base, R : Base> addListAfter(key: String, dep: String, type: Class<T>, block: suspend (T) -> Collection<R>): AsyncOperationResult =
+        addListAfter(key, dep, type.kotlin, block)
 
     // Type-safe list-injection convenience methods
 
@@ -262,6 +272,10 @@ class AsyncOperationResult {
         block(values)
     }
 
+    /** Java-friendly overload of [addAfterAll] — accepts [Class] instead of [KClass]. */
+    fun <T : Base> addAfterAll(key: String, dep: String, type: Class<T>, block: suspend (List<T>) -> Base): AsyncOperationResult =
+        addAfterAll(key, dep, type.kotlin, block)
+
     /**
      * Like [addAfterAll] but [block] returns a `Collection<R>`.
      *
@@ -282,6 +296,10 @@ class AsyncOperationResult {
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
     }
+
+    /** Java-friendly overload of [addListAfterAll] — accepts [Class] instead of [KClass]. */
+    fun <T : Base, R : Base> addListAfterAll(key: String, dep: String, type: Class<T>, block: suspend (List<T>) -> Collection<R>): AsyncOperationResult =
+        addListAfterAll(key, dep, type.kotlin, block)
 
     // ── Retry helper ─────────────────────────────────────────────────────────
 
@@ -463,9 +481,14 @@ class AsyncOperationResult {
         timeoutMs: Long,
         block: suspend (T) -> Base
     ): AsyncOperationResult = addAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addAfterWithTimeout] (typed) — accepts [Class] instead of [KClass]. */
+    fun <T : Base> addAfterWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (T) -> Base): AsyncOperationResult =
+        addAfterWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
     /**
      * Registers a dependent list-producing DAG task with a per-task timeout where the single
@@ -485,9 +508,14 @@ class AsyncOperationResult {
         timeoutMs: Long,
         block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithTimeout(key, dep, timeoutMs = timeoutMs) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addListAfterWithTimeout] (typed) — accepts [Class] instead of [KClass]. */
+    fun <T : Base, R : Base> addListAfterWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (T) -> Collection<R>): AsyncOperationResult =
+        addListAfterWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
     /**
      * Registers a dependent DAG task with a per-task timeout where all values stored under
@@ -511,6 +539,10 @@ class AsyncOperationResult {
         block(values)
     }
 
+    /** Java-friendly overload of [addAfterAllWithTimeout] — accepts [Class] instead of [KClass]. */
+    fun <T : Base> addAfterAllWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (List<T>) -> Base): AsyncOperationResult =
+        addAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs, block)
+
     /**
      * Registers a dependent list-producing DAG task with a per-task timeout where all values
      * stored under [dep] are filtered to [type] and injected as a typed list.
@@ -532,6 +564,10 @@ class AsyncOperationResult {
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
     }
+
+    /** Java-friendly overload of [addListAfterAllWithTimeout] — accepts [Class] instead of [KClass]. */
+    fun <T : Base, R : Base> addListAfterAllWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (List<T>) -> Collection<R>): AsyncOperationResult =
+        addListAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
     // ── Dependent task with retry ─────────────────────────────────────────────
 
@@ -556,6 +592,7 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives resolved dependency results
      */
+    @JvmOverloads
     fun addAfterWithRetry(
         key: String,
         vararg deps: String,
@@ -626,6 +663,7 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives the typed dep value
      */
+    @JvmOverloads
     fun <T : Base> addAfterWithRetry(
         key: String,
         dep: String,
@@ -640,9 +678,19 @@ class AsyncOperationResult {
         initialDelayMs = initialDelayMs,
         retryOn = retryOn
     ) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addAfterWithRetry] (typed) — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <T : Base> addAfterWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3, initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (T) -> Base
+    ): AsyncOperationResult = addAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
     /**
      * Registers a dependent list-producing DAG task with retry where the single dependency
@@ -672,9 +720,19 @@ class AsyncOperationResult {
         initialDelayMs = initialDelayMs,
         retryOn = retryOn
     ) { deps ->
-        val value = deps[dep]!!.filterIsInstance(type.java).first()
+        val value = deps[dep]!!.filterIsInstance(type.java).firstOrNull()
+            ?: error("No value of type ${type.simpleName} found under dependency '$dep'")
         block(value)
     }
+
+    /** Java-friendly overload of [addListAfterWithRetry] (typed) — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3, initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (T) -> Collection<R>
+    ): AsyncOperationResult = addListAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
     /**
      * Registers a dependent DAG task with retry where all values stored under [dep] are
@@ -689,6 +747,7 @@ class AsyncOperationResult {
      * @param retryOn predicate called with each exception — return `false` to stop retrying immediately
      * @param block the suspending lambda to invoke; receives the typed dep list
      */
+    @JvmOverloads
     fun <T : Base> addAfterAllWithRetry(
         key: String,
         dep: String,
@@ -706,6 +765,15 @@ class AsyncOperationResult {
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
     }
+
+    /** Java-friendly overload of [addAfterAllWithRetry] — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <T : Base> addAfterAllWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3, initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (List<T>) -> Base
+    ): AsyncOperationResult = addAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
     /**
      * Registers a dependent list-producing DAG task with retry where all values stored under
@@ -738,6 +806,15 @@ class AsyncOperationResult {
         val values = deps[dep]!!.filterIsInstance(type.java)
         block(values)
     }
+
+    /** Java-friendly overload of [addListAfterAllWithRetry] — accepts [Class] instead of [KClass]. */
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterAllWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3, initialDelayMs: Long = 500,
+        retryOn: (Exception) -> Boolean = { true },
+        block: suspend (List<T>) -> Collection<R>
+    ): AsyncOperationResult = addListAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
     // ── Independent task with fallback value ─────────────────────────────────
 
