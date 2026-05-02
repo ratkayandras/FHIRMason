@@ -16,6 +16,11 @@
     <name>FHIRMason HAPI Spring R4</name>
     <description>Spring Boot auto-configuration and integration for the FHIRMason HAPI FHIR R4 builder API.</description>
 
+    <properties>
+        <!-- Override with -Pspring3 to compile and test against Spring Boot 3.x -->
+        <spring.boot.test.version>${spring.boot.version}</spring.boot.test.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.ratkay</groupId>
@@ -29,6 +34,7 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring.boot.test.version}</version>
             <scope>provided</scope>
         </dependency>
         <!-- HAPI FHIR structures for pipeline type safety -->
@@ -75,11 +81,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test</artifactId>
+            <version>${spring.boot.test.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-test-autoconfigure</artifactId>
+            <version>${spring.boot.test.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -94,6 +102,15 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>spring3</id>
+            <properties>
+                <spring.boot.test.version>3.4.5</spring.boot.test.version>
+            </properties>
+        </profile>
+    </profiles>
 
     <build>
         <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
