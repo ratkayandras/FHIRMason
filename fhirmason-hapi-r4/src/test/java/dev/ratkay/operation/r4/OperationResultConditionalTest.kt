@@ -64,7 +64,8 @@ class OperationResultConditionalTest {
         val result: OperationResult<Patient> = OperationResult.of(patient, "patient")
             .whenTrue(true) { error("block failed") }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(result.getOutcomes(), hasSize(1))
         assertThat(
             result.getOutcomes().first().issueFirstRep.severity,
@@ -146,7 +147,8 @@ class OperationResultConditionalTest {
         val result: OperationResult<Patient> = OperationResult.of(patient, "patient")
             .ifPresent { error("block exploded") }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(result.getOutcomes(), hasSize(1))
         assertThat(
             result.getOutcomes().first().issueFirstRep.severity,
@@ -195,7 +197,8 @@ class OperationResultConditionalTest {
         val result = OperationResult.of(patient(), "patient")
             .guardFalse(false, "patient is inactive")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(result.getOutcomes(), hasSize(1))
         assertThat(
             result.getOutcomes().first().issueFirstRep.severity,
@@ -246,7 +249,8 @@ class OperationResultConditionalTest {
             .add("appt") { appt }
 
         assertTrue(result.containsKey("appt"))
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
     }
 
     // ── addOrSkip / addOrDefault respect FAIL_FAST ────────────────────────────

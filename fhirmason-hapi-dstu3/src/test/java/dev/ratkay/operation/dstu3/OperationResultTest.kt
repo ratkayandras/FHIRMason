@@ -929,7 +929,8 @@ class OperationResultTest {
             .addOrSkip { error("optional step failed") }
 
         assertTrue(result.containsKey("patient"))
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(1, result.getOutcomes().size)
         assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
     }
@@ -1485,7 +1486,8 @@ class OperationResultTest {
         val result = OperationResult.of(original, "patient")
             .mapStored("patient", Patient::class) { throw RuntimeException("boom") }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(
             result.getOutcomes().first().issueFirstRep.severity,
             `is`(OperationOutcome.IssueSeverity.WARNING)
@@ -1577,7 +1579,8 @@ class OperationResultTest {
         val result = OperationResult.of(original, "patient")
             .mapStored(Patient::class) { throw RuntimeException("boom") }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(
             result.getOutcomes().first().issueFirstRep.severity,
             `is`(OperationOutcome.IssueSeverity.WARNING)
@@ -2146,7 +2149,8 @@ class OperationResultTest {
         val result = OperationResult.of(patient)
             .addStringUsing("label") { error("bad label") }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
         assertFalse(result.containsKey("label"))
         assertThat(result.getResult(), sameInstance(patient))
@@ -2159,7 +2163,8 @@ class OperationResultTest {
             .addStringUsing("label") { error("boom") }
             .addString("other", "ok")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertTrue(result.containsKey("other"))
         assertThat(result.getResult(), sameInstance(patient))
     }

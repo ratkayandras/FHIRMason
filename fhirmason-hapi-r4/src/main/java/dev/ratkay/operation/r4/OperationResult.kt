@@ -81,9 +81,15 @@ class OperationResult<T> private constructor(
 
     // Error state
 
-    override fun hasErrors(): Boolean = outcomes.isNotEmpty()
+    override fun hasErrors(): Boolean = outcomes.any { oo ->
+        oo.issue.any { it.severity == OperationOutcome.IssueSeverity.ERROR || it.severity == OperationOutcome.IssueSeverity.FATAL }
+    }
 
-    override fun isSuccessful(): Boolean = outcomes.isEmpty()
+    override fun isSuccessful(): Boolean = !hasErrors()
+
+    override fun hasWarnings(): Boolean = outcomes.any { oo ->
+        oo.issue.any { it.severity == OperationOutcome.IssueSeverity.WARNING || it.severity == OperationOutcome.IssueSeverity.INFORMATION }
+    }
 
     /** Returns all [OperationOutcome] instances recorded by failed pipeline steps. */
     fun getOutcomes(): List<OperationOutcome> = outcomes.toList()

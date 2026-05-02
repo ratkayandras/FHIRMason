@@ -14,6 +14,7 @@ import org.hl7.fhir.r4.model.OperationOutcome
 import org.hl7.fhir.r4.model.Patient
 import org.hl7.fhir.r4.model.StringType
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -195,7 +196,8 @@ class OperationResultFhirPathTest {
         val result = OperationResult.of(patient)
             .whenPath("(((invalid") { add("flag") { StringType("x") } }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(
             OperationOutcome.IssueSeverity.WARNING,
             result.getOutcomes().first().issueFirstRep.severity
@@ -236,7 +238,8 @@ class OperationResultFhirPathTest {
         val result = OperationResult.of(patient)
             .guardPath("active = true", "Patient must be active")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         val issue = result.getOutcomes().first().issueFirstRep
         assertEquals(OperationOutcome.IssueSeverity.WARNING, issue.severity)
         assertEquals("Patient must be active", issue.diagnostics)
@@ -247,7 +250,8 @@ class OperationResultFhirPathTest {
         val result = OperationResult.empty()
             .guardPath("active = true", "Patient must be active")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(
             OperationOutcome.IssueSeverity.WARNING,
             result.getOutcomes().first().issueFirstRep.severity
@@ -261,7 +265,8 @@ class OperationResultFhirPathTest {
         val result = OperationResult.of(patient)
             .guardPath("(((invalid", "guard message")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(
             OperationOutcome.IssueSeverity.WARNING,
             result.getOutcomes().first().issueFirstRep.severity
@@ -277,7 +282,8 @@ class OperationResultFhirPathTest {
             .add("note") { StringType("after-guard") }
 
         // WARNING is recorded but pipeline continues because ACCUMULATE does not skip steps
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertThat(result.getAll("note"), hasSize(1))
     }
 
@@ -450,7 +456,8 @@ class OperationResultFhirPathTest {
         val result = OperationResult.of(patient)
             .guardPath(expression, "Patient must be active")
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         assertEquals(OperationOutcome.IssueSeverity.WARNING, result.getOutcomes().first().issueFirstRep.severity)
     }
 
