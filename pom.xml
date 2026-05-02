@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
 
     <name>FHIRMason</name>
-    <description>Fluent, chainable API for accumulating and transforming FHIR R4 resources using HAPI FHIR.</description>
+    <description>Fluent, chainable API for accumulating and transforming FHIR resources using HAPI FHIR.</description>
     <url>https://github.com/ratkayandras/fhirmason</url>
 
     <licenses>
@@ -36,10 +36,10 @@
     </scm>
 
     <modules>
-        <module>fhirmason-api</module>
-        <module>fhirmason-r4</module>
-        <module>fhirmason-dstu3</module>
-        <module>fhirmason-spring</module>
+        <module>fhirmason-hapi-api</module>
+        <module>fhirmason-hapi-r4</module>
+        <module>fhirmason-hapi-dstu3</module>
+        <module>fhirmason-hapi-spring-r4</module>
     </modules>
 
     <properties>
@@ -150,12 +150,12 @@
             <!-- Internal modules -->
             <dependency>
                 <groupId>dev.ratkay</groupId>
-                <artifactId>fhirmason-api</artifactId>
+                <artifactId>fhirmason-hapi-api</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.ratkay</groupId>
-                <artifactId>fhirmason-r4</artifactId>
+                <artifactId>fhirmason-hapi-r4</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
