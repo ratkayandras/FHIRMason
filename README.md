@@ -16,7 +16,7 @@ Add the module for your FHIR version to your Maven project:
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-r4</artifactId>
+    <artifactId>fhirmason-hapi-r4</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
@@ -26,7 +26,7 @@ Add the module for your FHIR version to your Maven project:
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-dstu3</artifactId>
+    <artifactId>fhirmason-hapi-dstu3</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
@@ -36,7 +36,7 @@ Add the module for your FHIR version to your Maven project:
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-spring</artifactId>
+    <artifactId>fhirmason-hapi-spring-r4</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
@@ -1420,7 +1420,7 @@ val result = AsyncOperationResult()
 
 ## FhirPath Expression Builder
 
-`FhirPath` (in `fhirmason-api`, package `dev.ratkay.operation`) is a fluent, immutable builder for constructing FHIRPath expression strings. It is version-agnostic — the same class is shared by both R4 and DSTU3.
+`FhirPath` (in `fhirmason-hapi-api`, package `dev.ratkay.operation`) is a fluent, immutable builder for constructing FHIRPath expression strings. It is version-agnostic — the same class is shared by both R4 and DSTU3.
 
 HAPI FHIR provides no API for constructing FHIRPath expressions programmatically. `FhirPath` fills that gap: each step returns a new `FhirPath` instance and the final expression string is retrieved via `build()` (or `toString()`).
 
@@ -1724,7 +1724,7 @@ suspend fun buildOutput(): Parameters {
 | FHIR | HAPI FHIR 7.6.1 (R4 and DSTU3) |
 | Async | Kotlin Coroutines 1.10.2 |
 | Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
-| Spring Boot | 2.7.18 (optional — `fhirmason-spring` module) |
+| Spring Boot | 2.7.18 (optional — `fhirmason-hapi-spring-r4` module) |
 | Build | Maven (multi-module) |
 | Testing | JUnit Jupiter 5.14.3, Hamcrest 3.0, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
 
@@ -1734,10 +1734,10 @@ suspend fun buildOutput(): Parameters {
 
 | Module | Artifact ID | Description |
 |---|---|---|
-| `fhirmason-api` | `fhirmason-api` | Shared building blocks: `IOperationResult<T>`, `ErrorStrategy`, `StepMetrics`, `DateTimeInput` |
-| `fhirmason-r4` | `fhirmason-r4` | R4 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
-| `fhirmason-dstu3` | `fhirmason-dstu3` | DSTU3 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
-| `fhirmason-spring` | `fhirmason-spring` | Spring Boot auto-configuration and base provider class |
+| `fhirmason-hapi-api` | `fhirmason-hapi-api` | Shared building blocks: `IOperationResult<T>`, `ErrorStrategy`, `StepMetrics`, `DateTimeInput` |
+| `fhirmason-hapi-r4` | `fhirmason-hapi-r4` | R4 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
+| `fhirmason-hapi-dstu3` | `fhirmason-hapi-dstu3` | DSTU3 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
+| `fhirmason-hapi-spring-r4` | `fhirmason-hapi-spring-r4` | Spring Boot auto-configuration and base provider class |
 
 ---
 
@@ -1753,7 +1753,7 @@ mvn clean install       # build, test, and install to local repo
 ## Project Structure
 
 ```
-fhirmason-api/
+fhirmason-hapi-api/
 ├── src/main/java/dev/ratkay/operation/
 │   ├── IOperationResult.kt             # Version-agnostic interface (R4 + DSTU3 both implement)
 │   ├── ErrorStrategy.kt                # FAIL_FAST / ACCUMULATE / PROPAGATE enum
@@ -1763,7 +1763,7 @@ fhirmason-api/
 └── src/test/java/dev/ratkay/operation/
     └── FhirPathTest.kt
 
-fhirmason-r4/
+fhirmason-hapi-r4/
 └── src/
     ├── main/java/dev/ratkay/operation/r4/
     │   ├── OperationResult.kt              # Synchronous accumulator builder (R4)
@@ -1809,7 +1809,7 @@ fhirmason-r4/
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
-fhirmason-dstu3/
+fhirmason-hapi-dstu3/
 └── src/
     ├── main/java/dev/ratkay/operation/dstu3/
     │   ├── OperationResult.kt              # Synchronous accumulator builder (DSTU3)
@@ -1855,7 +1855,7 @@ fhirmason-dstu3/
         ├── FhirDateTimeConverterTest.kt
         └── FhirExtensionHelperTest.kt
 
-fhirmason-spring/
+fhirmason-hapi-spring-r4/
 └── src/
     ├── main/java/dev/ratkay/spring/
     │   ├── FhirMasonAutoConfiguration.kt   # Spring Boot auto-configuration
@@ -1878,14 +1878,14 @@ fhirmason-spring/
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-spring</artifactId>
+    <artifactId>fhirmason-hapi-spring-r4</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
 
 ### Auto-configuration
 
-When `fhirmason-spring` is on the classpath in a Spring Boot application, a `FhirMasonFactory` bean is registered automatically. No explicit configuration is required.
+When `fhirmason-hapi-spring-r4` is on the classpath in a Spring Boot application, a `FhirMasonFactory` bean is registered automatically. No explicit configuration is required.
 
 ### Configuration Properties
 
@@ -2050,7 +2050,7 @@ result.addWithRetry(() -> fetchPatientFromServer())
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-r4</artifactId>
+    <artifactId>fhirmason-hapi-r4</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
@@ -2060,7 +2060,7 @@ result.addWithRetry(() -> fetchPatientFromServer())
 ```xml
 <dependency>
     <groupId>dev.ratkay</groupId>
-    <artifactId>fhirmason-dstu3</artifactId>
+    <artifactId>fhirmason-hapi-dstu3</artifactId>
     <version>0.0.1</version>
 </dependency>
 ```
@@ -2069,7 +2069,7 @@ DSTU3 `OperationResult` lives in package `dev.ratkay.operation.dstu3` and mirror
 
 ### Version-agnostic code
 
-Both `OperationResult` variants implement `IOperationResult<T>` from the `fhirmason-api` module, which is a transitive dependency of both `fhirmason-r4` and `fhirmason-dstu3`. Code that only needs to inspect error state, metrics, or key/count information can accept `IOperationResult<*>` without importing a version-specific module:
+Both `OperationResult` variants implement `IOperationResult<T>` from the `fhirmason-hapi-api` module, which is a transitive dependency of both `fhirmason-hapi-r4` and `fhirmason-hapi-dstu3`. Code that only needs to inspect error state, metrics, or key/count information can accept `IOperationResult<*>` without importing a version-specific module:
 
 ```kotlin
 import dev.ratkay.operation.IOperationResult

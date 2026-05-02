@@ -10,41 +10,20 @@
         <version>0.0.1</version>
     </parent>
 
-    <artifactId>fhirmason-r4</artifactId>
+    <artifactId>fhirmason-hapi-api</artifactId>
     <packaging>jar</packaging>
 
-    <name>FHIRMason R4</name>
-    <description>FHIR R4 builder API for accumulating and transforming resources using a fluent chainable API.</description>
+    <name>FHIRMason HAPI API</name>
+    <description>Shared building blocks for the FHIRMason HAPI FHIR pipeline API.</description>
 
     <dependencies>
-        <dependency>
-            <groupId>dev.ratkay</groupId>
-            <artifactId>fhirmason-api</artifactId>
-        </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>
         </dependency>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
-            <artifactId>hapi-fhir-structures-r4</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.fhir</groupId>
-            <artifactId>ucum</artifactId>
-            <version>1.0.8</version>
-        </dependency>
-        <dependency>
-            <groupId>ca.uhn.hapi.fhir</groupId>
-            <artifactId>hapi-fhir-caching-guava</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.jetbrains.kotlinx</groupId>
-            <artifactId>kotlinx-coroutines-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
+            <artifactId>hapi-fhir-base</artifactId>
         </dependency>
         <!-- Test -->
         <dependency>
@@ -60,16 +39,6 @@
         <dependency>
             <groupId>org.hamcrest</groupId>
             <artifactId>hamcrest</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.github.karsaig</groupId>
-            <artifactId>approvalcrest-junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
