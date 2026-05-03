@@ -26,7 +26,7 @@ class AsyncOperationResultDependentRetryTest {
             .addAfterWithRetry("encounter", "patient", maxAttempts = 3, initialDelayMs = 0) { _ ->
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -43,7 +43,7 @@ class AsyncOperationResultDependentRetryTest {
                 if (attempts < 2) throw RuntimeException("transient")
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -60,7 +60,7 @@ class AsyncOperationResultDependentRetryTest {
                 if (attempts < 3) throw RuntimeException("transient")
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -78,7 +78,7 @@ class AsyncOperationResultDependentRetryTest {
                 attempts++
                 throw RuntimeException("always fails")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -95,7 +95,7 @@ class AsyncOperationResultDependentRetryTest {
                 attempts++
                 throw RuntimeException("fails")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -116,7 +116,7 @@ class AsyncOperationResultDependentRetryTest {
                 attempts++
                 throw RuntimeException("non-retryable")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -138,7 +138,7 @@ class AsyncOperationResultDependentRetryTest {
                 if (attempts == 1) throw IllegalStateException("transient — retryable")
                 throw InternalErrorException("permanent — not retryable")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -180,7 +180,7 @@ class AsyncOperationResultDependentRetryTest {
                 attempts++
                 encounter()
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -198,7 +198,7 @@ class AsyncOperationResultDependentRetryTest {
             .addListAfterWithRetry("encounters", "patient", maxAttempts = 3, initialDelayMs = 0) { _ ->
                 listOf(encounter(), encounter())
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(2, result.count("encounters"))
@@ -215,7 +215,7 @@ class AsyncOperationResultDependentRetryTest {
                 if (attempts < 2) throw RuntimeException("transient")
                 listOf(encounter())
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertFalse(result.hasErrors())
@@ -233,7 +233,7 @@ class AsyncOperationResultDependentRetryTest {
                 encounter()
             }
             .addAfter("summary", "encounter", "coverage") { _ -> Patient().apply { setId("summary") } }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertTrue(result.containsKey("coverage"))

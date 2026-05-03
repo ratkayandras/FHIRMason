@@ -41,7 +41,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 received = p
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -56,7 +56,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 delay(200)
                 encounter()
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -71,7 +71,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
             .addListAfterWithTimeout("encounters", "patient", Patient::class, timeoutMs = 500) { p ->
                 listOf(encounter(), Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" })
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(2, result.count("encounters"))
@@ -86,7 +86,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 delay(200)
                 listOf(encounter())
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounters"))
         assertTrue(result.hasErrors())
@@ -103,7 +103,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 receivedList = patients
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -121,7 +121,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 receivedSize = coverages.size
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertEquals(0, receivedSize)
@@ -136,7 +136,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
             .addListAfterAllWithTimeout("encounters", "patients", Patient::class, timeoutMs = 500) { patients ->
                 patients.map { Encounter().apply { subject.reference = "Patient/${it.idElement.idPart}" } }
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(3, result.count("encounters"))
@@ -154,7 +154,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 received = p
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -171,7 +171,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 if (attempts < 2) throw RuntimeException("transient")
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -185,7 +185,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
             .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 2, initialDelayMs = 0) { _ ->
                 throw RuntimeException("always fails")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -201,7 +201,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
             .addListAfterWithRetry("encounters", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 0) { p ->
                 listOf(encounter(), Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" })
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(2, result.count("encounters"))
@@ -218,7 +218,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 if (attempts < 3) throw RuntimeException("transient")
                 listOf(encounter())
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(3, attempts)
@@ -236,7 +236,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 receivedList = patients
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -254,7 +254,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
                 assertEquals(2, patients.size)
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertEquals(2, attempts)
@@ -269,7 +269,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
             .addListAfterAllWithRetry("encounters", "patients", Patient::class, maxAttempts = 3, initialDelayMs = 0) { patients ->
                 patients.map { Encounter().apply { subject.reference = "Patient/${it.idElement.idPart}" } }
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(2, result.count("encounters"))
@@ -285,7 +285,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addAfterWithTimeout("encounter", "patient", Patient::class, timeoutMs = 500) { _ -> encounter() }
-            .run()
+            .execute()
 
         assertThat(result.getAll("encounter").first(), instanceOf(Encounter::class.java))
     }
@@ -295,7 +295,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 1, initialDelayMs = 0) { _ -> encounter() }
-            .run()
+            .execute()
 
         assertThat(result.getAll("encounter").first(), instanceOf(Encounter::class.java))
     }

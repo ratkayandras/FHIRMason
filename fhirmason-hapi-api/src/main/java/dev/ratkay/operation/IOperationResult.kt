@@ -14,11 +14,14 @@ interface IOperationResult<T> {
 
     // ── Error state ───────────────────────────────────────────────────────
 
-    /** Returns `true` if any ERROR-severity outcome has been recorded. */
+    /** Returns `true` if any ERROR- or FATAL-severity outcome has been recorded. */
     fun hasErrors(): Boolean
 
-    /** Returns `true` if no ERROR-severity outcomes have been recorded. */
+    /** Returns `true` if no ERROR- or FATAL-severity outcomes have been recorded. */
     fun isSuccessful(): Boolean
+
+    /** Returns `true` if any WARNING- or INFORMATION-severity outcome has been recorded. */
+    fun hasWarnings(): Boolean
 
     /**
      * Throws an exception if [hasErrors] is `true`; otherwise returns this result unchanged.

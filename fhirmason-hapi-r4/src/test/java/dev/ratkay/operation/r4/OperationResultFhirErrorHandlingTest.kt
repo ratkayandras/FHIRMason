@@ -160,7 +160,8 @@ class OperationResultFhirErrorHandlingTest {
                 throw InvalidRequestException("not found").apply { operationOutcome = embeddedOutcome }
             }
 
-        assertTrue(result.hasErrors())
+        assertFalse(result.hasErrors())
+        assertTrue(result.hasWarnings())
         val merged = result.toOperationOutcome()
         assertThat(merged.issue[0].severity, equalTo(OperationOutcome.IssueSeverity.WARNING))
         assertThat(merged.issue[0].code, equalTo(OperationOutcome.IssueType.NOTFOUND))
@@ -245,7 +246,7 @@ class OperationResultFhirErrorHandlingTest {
             .add("enc") {
                 throw InvalidRequestException("timeout").apply { operationOutcome = embeddedOutcome }
             }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(result.hasErrors())
         val encOutcome = result.getFailedTasks()["enc"]
@@ -258,7 +259,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `async add - plain BaseServerResponseException without embedded outcome uses message`() {
         val result = AsyncOperationResult()
             .add("enc") { throw InvalidRequestException("bad param") }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(result.hasErrors())
         val encOutcome = result.getFailedTasks()["enc"]

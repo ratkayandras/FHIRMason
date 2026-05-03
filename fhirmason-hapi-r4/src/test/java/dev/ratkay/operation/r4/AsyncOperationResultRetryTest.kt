@@ -23,7 +23,7 @@ class AsyncOperationResultRetryTest {
     fun `addWithRetry succeeds on first attempt`() = runBlocking {
         val result = AsyncOperationResult()
             .addWithRetry("enc", maxAttempts = 3, initialDelayMs = 0) { encounter() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("enc"))
         assertFalse(result.hasErrors())
@@ -39,7 +39,7 @@ class AsyncOperationResultRetryTest {
                 if (attempts < 2) throw RuntimeException("transient")
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("enc"))
         assertFalse(result.hasErrors())
@@ -55,7 +55,7 @@ class AsyncOperationResultRetryTest {
                 if (attempts < 3) throw RuntimeException("transient")
                 encounter()
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("enc"))
         assertFalse(result.hasErrors())
@@ -70,7 +70,7 @@ class AsyncOperationResultRetryTest {
             .addWithRetry("enc", maxAttempts = 2, initialDelayMs = 0) {
                 throw RuntimeException("always fails")
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("enc"))
         assertTrue(result.hasErrors())
@@ -84,7 +84,7 @@ class AsyncOperationResultRetryTest {
                 attempts++
                 throw RuntimeException("fail")
             }
-            .run()
+            .execute()
 
         assertEquals(1, attempts)
         assertTrue(result.hasErrors())
@@ -98,7 +98,7 @@ class AsyncOperationResultRetryTest {
                 attempts++
                 throw RuntimeException("fail")
             }
-            .run()
+            .execute()
 
         assertEquals(4, attempts)
     }
@@ -113,7 +113,7 @@ class AsyncOperationResultRetryTest {
                 attempts++
                 throw RuntimeException("non-retryable")
             }
-            .run()
+            .execute()
 
         assertEquals(1, attempts)
         assertTrue(result.hasErrors())
@@ -133,7 +133,7 @@ class AsyncOperationResultRetryTest {
                 if (attempts == 1) throw IllegalStateException("retryable")
                 throw RuntimeException("non-retryable")
             }
-            .run()
+            .execute()
 
         assertEquals(2, attempts)
         assertTrue(result.hasErrors())
@@ -164,7 +164,7 @@ class AsyncOperationResultRetryTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addWithRetry("enc", maxAttempts = 3, initialDelayMs = 0) { encounter() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertTrue(result.containsKey("enc"))
@@ -177,7 +177,7 @@ class AsyncOperationResultRetryTest {
             .addWithRetry("enc", maxAttempts = 2, initialDelayMs = 0) {
                 throw RuntimeException("final failure message")
             }
-            .run()
+            .execute()
 
         assertNotNull(result.getOutcomes().firstOrNull())
         val diagnostics = result.getOutcomes().first().issueFirstRep.diagnostics

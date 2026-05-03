@@ -33,15 +33,15 @@ fun BaseServerResponseException.toOperationOutcome(): OperationOutcome =
  * [OperationOutcome] from [BaseServerResponseException] when present, or creating a
  * generic ERROR outcome otherwise.
  *
- * Both branches look visually identical but call **different** extension function overloads
- * via Kotlin's static dispatch: the smart-cast in the first branch resolves to
- * [BaseServerResponseException.toOperationOutcome], while the `else` branch resolves to
- * [Exception.toOperationOutcome]. This consolidates the dispatch in one place so callers
- * never need to repeat the `when` pattern inline.
+ * The first branch resolves to [BaseServerResponseException.toOperationOutcome] via the
+ * smart-cast. The `else` branch uses an explicit cast to [Exception] to call
+ * [Exception.toOperationOutcome] rather than relying on smart-cast resolution, ensuring
+ * the correct overload is always selected unambiguously. This consolidates the dispatch
+ * in one place so callers never need to repeat the `when` pattern inline.
  */
 internal fun errorOutcome(e: Exception): OperationOutcome = when (e) {
     is BaseServerResponseException -> e.toOperationOutcome()
-    else -> e.toOperationOutcome()
+    else -> (e as Exception).toOperationOutcome()
 }
 
 /**

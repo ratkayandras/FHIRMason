@@ -23,7 +23,7 @@ class AsyncOperationResultTimeoutTest {
     fun `addWithTimeout task completing before deadline stores result`() = runBlocking {
         val result = AsyncOperationResult()
             .addWithTimeout("patient", 500) { patient() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertFalse(result.hasErrors())
@@ -35,7 +35,7 @@ class AsyncOperationResultTimeoutTest {
     fun `addWithTimeout task exceeding deadline leaves key absent and records error`() = runBlocking {
         val result = AsyncOperationResult()
             .addWithTimeout("patient", 20) { delay(200); patient() }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patient"))
         assertTrue(result.hasErrors())
@@ -46,7 +46,7 @@ class AsyncOperationResultTimeoutTest {
     fun `addWithTimeout timeout outcome diagnostics mention timeout`() = runBlocking {
         val result = AsyncOperationResult()
             .addWithTimeout("patient", 20) { delay(200); patient() }
-            .run()
+            .execute()
 
         val diagnostics = result.getOutcomes().first().issueFirstRep.diagnostics
         assertThat(diagnostics, containsString("Timed out"))
@@ -58,7 +58,7 @@ class AsyncOperationResultTimeoutTest {
     fun `addListWithTimeout task completing before deadline stores list`() = runBlocking {
         val result = AsyncOperationResult()
             .addListWithTimeout("patients", 500) { listOf(patient(), patient()) }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patients"))
         assertEquals(2, result.count("patients"))
@@ -69,7 +69,7 @@ class AsyncOperationResultTimeoutTest {
     fun `addListWithTimeout task exceeding deadline leaves key absent and records error`() = runBlocking {
         val result = AsyncOperationResult()
             .addListWithTimeout("patients", 20) { delay(200); listOf(patient()) }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patients"))
         assertTrue(result.hasErrors())
@@ -82,7 +82,7 @@ class AsyncOperationResultTimeoutTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addAfterWithTimeout("encounter", "patient", timeoutMs = 500) { _ -> encounter() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.hasErrors())
@@ -96,7 +96,7 @@ class AsyncOperationResultTimeoutTest {
                 delay(200)
                 encounter()
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -111,7 +111,7 @@ class AsyncOperationResultTimeoutTest {
                 delay(200)
                 encounter()
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounter"))
         assertTrue(result.hasErrors())
@@ -128,7 +128,7 @@ class AsyncOperationResultTimeoutTest {
             .addListAfterWithTimeout("encounters", "patient", timeoutMs = 500) { _ ->
                 listOf(encounter(), encounter())
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounters"))
         assertEquals(2, result.count("encounters"))
@@ -143,7 +143,7 @@ class AsyncOperationResultTimeoutTest {
                 delay(200)
                 listOf(encounter())
             }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("encounters"))
         assertTrue(result.hasErrors())
@@ -156,7 +156,7 @@ class AsyncOperationResultTimeoutTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addWithTimeout("encounter", 500) { encounter() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertTrue(result.containsKey("encounter"))
@@ -168,7 +168,7 @@ class AsyncOperationResultTimeoutTest {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
             .addWithTimeout("encounter", 20) { delay(200); encounter() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertFalse(result.containsKey("encounter"))
