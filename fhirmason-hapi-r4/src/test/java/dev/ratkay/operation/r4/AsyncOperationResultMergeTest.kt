@@ -28,7 +28,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("inner") { Coverage().apply { id = "c1" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("outer"), `is`(true))
         assertThat(result.containsKey("inner"), `is`(true))
@@ -41,7 +41,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("coverage") { Coverage().apply { id = "cov1" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.count("coverage"), `is`(1))
         assertThat((result.getAll("coverage").first() as Coverage).id, `is`("cov1"))
@@ -57,7 +57,7 @@ class AsyncOperationResultMergeTest {
             .addAfter("encounter", "patient", Patient::class) { patient ->
                 Encounter().apply { id = "enc-${patient.id}" }
             }
-            .run()
+            .execute()
 
         val encounter = result.getAll("encounter").first() as Encounter
         assertThat(encounter.id, `is`("enc-p1"))
@@ -73,7 +73,7 @@ class AsyncOperationResultMergeTest {
                     .add("innerX") { Appointment().apply { id = "x" } }
                     .add("innerY") { Practitioner().apply { id = "y" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("outerA", "outerB", "innerX", "innerY"))
         assertThat(result.totalCount(), `is`(4))
@@ -91,7 +91,7 @@ class AsyncOperationResultMergeTest {
                         Coverage().apply { id = "derived-from-${p.id}" }
                     }
             }
-            .run()
+            .execute()
 
         val derived = result.getAll("derived").first() as Coverage
         assertThat(derived.id, `is`("derived-from-base"))
@@ -110,7 +110,7 @@ class AsyncOperationResultMergeTest {
                         Patient().apply { id = "${b.id}-C" }
                     }
             }
-            .run()
+            .execute()
 
         assertThat((result.getAll("c").first() as Patient).id, `is`("A-B-C"))
     }
@@ -130,7 +130,7 @@ class AsyncOperationResultMergeTest {
                 val coverage = deps["innerCoverage"]!!.first() as Coverage
                 Claim().apply { id = "${patient.id}+${coverage.id}" }
             }
-            .run()
+            .execute()
 
         val claim = result.getAll("claim").first() as Claim
         assertThat(claim.id, `is`("p1+c1"))
@@ -146,7 +146,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("failing") { error("inner boom") }
             }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("outer"), `is`(true))
         assertFalse(result.containsKey("failing"))
@@ -162,7 +162,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("failing") { error("boom") }
             }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("outer"), `is`(true))
         assertThat(result.getFailedTasks().size, `is`(1))
@@ -202,7 +202,7 @@ class AsyncOperationResultMergeTest {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
             .merge { AsyncOperationResult() }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("patient"), `is`(true))
         assertThat(result.totalCount(), `is`(1))
@@ -215,7 +215,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("only") { Patient().apply { id = "sole" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("only"), `is`(true))
         assertThat((result.getAll("only").first() as Patient).id, `is`("sole"))
@@ -227,7 +227,7 @@ class AsyncOperationResultMergeTest {
             .merge { AsyncOperationResult().add("a") { Patient() } }
             .merge { AsyncOperationResult().add("b") { Coverage() } }
             .merge { AsyncOperationResult().add("c") { Appointment() } }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("a", "b", "c"))
         assertThat(result.totalCount(), `is`(3))
@@ -246,7 +246,7 @@ class AsyncOperationResultMergeTest {
             .addAfter("claim", "coverage", Coverage::class) { c ->
                 Claim().apply { id = "claim-${c.id}" }
             }
-            .run()
+            .execute()
 
         val claim = result.getAll("claim").first() as Claim
         assertThat(claim.id, `is`("claim-cov-p1"))
@@ -262,7 +262,7 @@ class AsyncOperationResultMergeTest {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
             .merge(innerDag)
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("patient", "coverage"))
     }

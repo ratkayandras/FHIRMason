@@ -18,7 +18,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addList("patients") {
                 listOf(Patient().apply { id = "p1" }, Patient().apply { id = "p2" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("patients"), `is`(2))
         val patients = result.getAll("patients")
@@ -36,7 +36,7 @@ class AsyncOperationResultTypedListOutputTest {
                     Observation().apply { id = "obs2-$patientId" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(2))
         assertEquals("obs1-p1", (result.getAll("observations").first() as Observation).id)
@@ -49,7 +49,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListAfterAll("observations", "patients", Patient::class) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(2))
     }
@@ -60,7 +60,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListWithTimeout("appointments", 5000L) {
                 listOf(Appointment().apply { id = "a1" }, Appointment().apply { id = "a2" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("appointments"), `is`(2))
     }
@@ -73,7 +73,7 @@ class AsyncOperationResultTypedListOutputTest {
                 val pid = (deps["patient"]!!.first() as Patient).id
                 listOf(Observation().apply { id = "obs-$pid" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(1))
     }
@@ -85,7 +85,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListAfterAllWithTimeout("observations", "patients", Patient::class, 5000L) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(1))
     }
@@ -98,7 +98,7 @@ class AsyncOperationResultTypedListOutputTest {
                 val pid = (deps["patient"]!!.first() as Patient).id
                 listOf(Observation().apply { id = "obs-$pid" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(1))
     }
@@ -110,7 +110,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListAfterAllWithRetry("observations", "patients", Patient::class, maxAttempts = 1) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(2))
     }
@@ -121,7 +121,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListIf(true, "patients") {
                 listOf(Patient().apply { id = "p1" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("patients"), `is`(1))
     }
@@ -132,7 +132,7 @@ class AsyncOperationResultTypedListOutputTest {
             .addListIf(false, "patients") {
                 listOf(Patient().apply { id = "p1" })
             }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("patients"), `is`(false))
     }
@@ -144,7 +144,7 @@ class AsyncOperationResultTypedListOutputTest {
                 @Suppress("UNCHECKED_CAST")
                 listOf<Base>(Patient().apply { id = "p1" }, Observation().apply { id = "o1" })
             }
-            .run()
+            .execute()
 
         assertThat(result.count("resources"), `is`(2))
     }

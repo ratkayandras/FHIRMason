@@ -22,7 +22,7 @@ class AsyncOperationResultDagTimeoutTest {
         val result = AsyncOperationResult()
             .timeout(500)
             .add("patient") { patient() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertFalse(result.hasErrors())
@@ -35,7 +35,7 @@ class AsyncOperationResultDagTimeoutTest {
         val result = AsyncOperationResult()
             .timeout(20)
             .add("patient") { delay(200); patient() }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patient"))
         assertTrue(result.hasErrors())
@@ -47,7 +47,7 @@ class AsyncOperationResultDagTimeoutTest {
         val result = AsyncOperationResult()
             .timeout(20)
             .add("patient") { delay(200); patient() }
-            .run()
+            .execute()
 
         val diagnostics = result.getOutcomes().first().issueFirstRep.diagnostics
         assertThat(diagnostics, containsString("exceeded timeout"))
@@ -60,7 +60,7 @@ class AsyncOperationResultDagTimeoutTest {
             .timeout(20)
             .add("a") { delay(200); patient("a") }
             .add("b") { delay(200); patient("b") }
-            .run()
+            .execute()
 
         assertEquals(1, result.getOutcomes().size)
     }
@@ -94,7 +94,7 @@ class AsyncOperationResultDagTimeoutTest {
             .add("a") { patient("a") }
             .timeout(500)
             .add("b") { patient("b") }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("a"))
         assertTrue(result.containsKey("b"))
@@ -109,7 +109,7 @@ class AsyncOperationResultDagTimeoutTest {
             .timeout(20)
             .add("patient") { delay(200); patient() }
 
-        dag.run()
+        dag.execute()
 
         assertEquals(0L, dag.getTotalDuration())
     }
@@ -122,7 +122,7 @@ class AsyncOperationResultDagTimeoutTest {
         val result = AsyncOperationResult()
             .timeout(20)
             .addWithTimeout("patient", 200) { delay(150); patient() }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patient"))
         assertTrue(result.hasErrors())

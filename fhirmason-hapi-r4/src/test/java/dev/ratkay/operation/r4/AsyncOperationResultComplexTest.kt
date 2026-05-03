@@ -45,7 +45,7 @@ class AsyncOperationResultComplexTest {
             .addAfter("d", "c", Basic::class) { c ->
                 Encounter().apply { id = "D-from-${c.id}" }
             }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("a", "b", "c", "d"))
 
@@ -66,7 +66,7 @@ class AsyncOperationResultComplexTest {
             .add("a") { delay(80); Patient() }
             .add("b") { delay(80); Practitioner() }
             .addAfter("c", "a", "b") { Basic() }
-            .run()
+            .execute()
 
         val elapsed = System.currentTimeMillis() - start
         // If A and B ran sequentially we'd need ~160 ms; concurrently ~80 ms.
@@ -88,7 +88,7 @@ class AsyncOperationResultComplexTest {
                 val ids = (1..5).map { i -> (deps["t$i"]!!.first() as Patient).id }
                 Basic().apply { id = ids.joinToString(",") }
             }
-            .run()
+            .execute()
 
         assertThat(result.totalCount(), `is`(6))
         val collector = result.getAll("collector").first() as Basic
@@ -107,7 +107,7 @@ class AsyncOperationResultComplexTest {
             .add("t4") { delay(60); Patient() }
             .add("t5") { delay(60); Patient() }
             .addAfter("collector", "t1", "t2", "t3", "t4", "t5") { Basic() }
-            .run()
+            .execute()
 
         val elapsed = System.currentTimeMillis() - start
         // Sequential would be 300 ms; concurrent should be ~60 ms.
@@ -132,7 +132,7 @@ class AsyncOperationResultComplexTest {
             .addAfter("e", "d", Patient::class) { d ->
                 StringType("${d.id}-E")
             }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("a", "b", "c", "d", "e"))
 
@@ -150,7 +150,7 @@ class AsyncOperationResultComplexTest {
             .add("b") { error("tier-2 boom") }             // tier 1, independent, fails
             .addAfter("c", "b") { Basic() }                // depends on b — must be skipped
             .addAfter("d", "c") { Basic() }                // depends on c — must be skipped
-            .run()
+            .execute()
 
         // Independent task not in the failure chain succeeds
         assertTrue(result.containsKey("a"))
@@ -176,7 +176,7 @@ class AsyncOperationResultComplexTest {
             .addAfter("d", "b", Patient::class) { p ->
                 Encounter().apply { id = "D-${p.id}" }
             }                                                                      // succeeds (b ok)
-            .run()
+            .execute()
 
         // Successful branch
         assertTrue(result.containsKey("b"))
@@ -205,7 +205,7 @@ class AsyncOperationResultComplexTest {
                 val covId = (deps["coverage"]!!.first() as Coverage).id
                 Claim().apply { id = "$patId+$covId" }
             }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("patient", "coverage", "claim"))
 
@@ -229,7 +229,7 @@ class AsyncOperationResultComplexTest {
             .addAfter("encounter", "patient", Patient::class) { p ->
                 Encounter().apply { id = "enc-${p.id}" }
             }
-            .run()
+            .execute()
 
         assertEquals(3, attempts)
         assertTrue(result.containsKey("patient"))
@@ -264,7 +264,7 @@ class AsyncOperationResultComplexTest {
                     addIssue().diagnostics = "processed-${obs.id}"
                 }
             }
-            .run()
+            .execute()
 
         // Each level received the correctly typed resource
         assertEquals("P", patientReceived!!.id)
@@ -290,7 +290,7 @@ class AsyncOperationResultComplexTest {
                     Observation().apply { id = "obs2"; status = Observation.ObservationStatus.FINAL }
                 )
             }
-            .run()
+            .execute()
 
         // Post-process: link observation subjects to patient, then bundle everything
         val encounterRule = ReferenceLinkRule(

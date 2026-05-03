@@ -27,7 +27,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addWithDefault("patient", defaultPatient) { blockPatient }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertEquals("from-block", (result.getAll("patient").first() as Patient).idElement.idPart)
@@ -42,7 +42,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addWithDefault("patient", defaultPatient) { throw RuntimeException("transient") }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertEquals("default", (result.getAll("patient").first() as Patient).idElement.idPart)
@@ -55,7 +55,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addWithDefault("patient", defaultPatient) { throw InternalErrorException("server error") }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertEquals("default", (result.getAll("patient").first() as Patient).idElement.idPart)
@@ -71,7 +71,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addListWithDefault("patients", defaultList) { blockList }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patients"))
         assertEquals(2, result.count("patients"))
@@ -86,7 +86,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addListWithDefault("patients", defaultList) { throw RuntimeException("boom") }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patients"))
         assertEquals(1, result.count("patients"))
@@ -98,7 +98,7 @@ class AsyncOperationResultDefaultTest {
     fun `addListWithDefault with empty default list — key absent since nothing accumulated`() = runBlocking {
         val result = AsyncOperationResult()
             .addListWithDefault("patients", emptyList()) { throw RuntimeException("boom") }
-            .run()
+            .execute()
 
         // An empty list accumulates nothing, so the key is absent (consistent with addList behaviour)
         assertEquals(0, result.count("patients"))
@@ -114,7 +114,7 @@ class AsyncOperationResultDefaultTest {
         val result = AsyncOperationResult()
             .addWithDefault("patient", defaultPatient) { throw RuntimeException("transient") }
             .addAfter("encounter", "patient") { _ -> encounter() }
-            .run()
+            .execute()
 
         // addWithDefault key is present (default used), so downstream task runs
         assertTrue(result.containsKey("patient"))
@@ -132,7 +132,7 @@ class AsyncOperationResultDefaultTest {
             .addAfter("encounter", "patient", Patient::class) { p ->
                 Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" }
             }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         val enc = result.getAll("encounter").first() as Encounter
@@ -150,7 +150,7 @@ class AsyncOperationResultDefaultTest {
             .timed()
             .addWithDefault("patient", defaultPatient) { throw RuntimeException("transient") }
 
-        dag.run()
+        dag.execute()
 
         val metrics = dag.getMetrics()
         assertTrue(metrics.containsKey("patient"))
@@ -163,7 +163,7 @@ class AsyncOperationResultDefaultTest {
             .timed()
             .addWithDefault("patient", patient("default")) { patient("real") }
 
-        dag.run()
+        dag.execute()
 
         val metrics = dag.getMetrics()
         assertTrue(metrics.containsKey("patient"))
@@ -176,7 +176,7 @@ class AsyncOperationResultDefaultTest {
     fun `addWithDefault result has correct FHIR type`() = runBlocking {
         val result = AsyncOperationResult()
             .addWithDefault("patient", patient()) { throw RuntimeException() }
-            .run()
+            .execute()
 
         assertThat(result.getAll("patient").first(), instanceOf(Patient::class.java))
     }

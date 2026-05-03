@@ -20,7 +20,7 @@ class AsyncOperationResultConditionalTest {
     fun `addIf true registers and runs the task`() = runBlocking {
         val result = AsyncOperationResult()
             .addIf(true, "patient") { patient() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patient"))
         assertFalse(result.hasErrors())
@@ -31,7 +31,7 @@ class AsyncOperationResultConditionalTest {
     fun `addIf false does not register the task and key is absent`() = runBlocking {
         val result = AsyncOperationResult()
             .addIf(false, "patient") { patient() }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patient"))
         assertFalse(result.hasErrors())
@@ -42,7 +42,7 @@ class AsyncOperationResultConditionalTest {
         val result = AsyncOperationResult()
             .add("encounter") { encounter() }
             .addIf(false, "patient") { patient() }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("encounter"))
         assertFalse(result.containsKey("patient"))
@@ -55,7 +55,7 @@ class AsyncOperationResultConditionalTest {
     fun `addListIf true registers and runs the list task`() = runBlocking {
         val result = AsyncOperationResult()
             .addListIf(true, "patients") { listOf(patient(), patient()) }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("patients"))
         assertEquals(2, result.count("patients"))
@@ -66,7 +66,7 @@ class AsyncOperationResultConditionalTest {
     fun `addListIf false does not register the task and key is absent`() = runBlocking {
         val result = AsyncOperationResult()
             .addListIf(false, "patients") { listOf(patient(), patient()) }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patients"))
         assertFalse(result.hasErrors())
@@ -79,7 +79,7 @@ class AsyncOperationResultConditionalTest {
         val result = AsyncOperationResult()
             .addIf(false, "patient") { patient() }
             .addIf(true, "encounter") { encounter() }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("patient"))
         assertTrue(result.containsKey("encounter"))

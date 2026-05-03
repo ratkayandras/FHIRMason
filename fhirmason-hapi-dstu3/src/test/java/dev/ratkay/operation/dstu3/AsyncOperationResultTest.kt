@@ -36,7 +36,7 @@ class AsyncOperationResultTest {
     fun `add - single root task accumulates under given key`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
-            .run()
+            .execute()
 
         assertThat(result.containsKey("patient"), `is`(true))
         assertThat(result.count("patient"), `is`(1))
@@ -52,7 +52,7 @@ class AsyncOperationResultTest {
                     Appointment().apply { id = "a2" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("appointments"), `is`(2))
     }
@@ -62,7 +62,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
             .add("practitioner") { Practitioner().apply { id = "pr1" } }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("patient", "practitioner"))
         assertThat(result.totalCount(), `is`(2))
@@ -78,7 +78,7 @@ class AsyncOperationResultTest {
                 val patient = deps["patient"]!!.first() as Patient
                 Coverage().apply { id = "cov-for-${patient.id}" }
             }
-            .run()
+            .execute()
 
         val coverage = result.getAll("coverage").first() as Coverage
         assertThat(coverage.id, `is`("cov-for-p1"))
@@ -94,7 +94,7 @@ class AsyncOperationResultTest {
                 val apptId = (deps["appointment"]!!.first() as Appointment).id
                 Basic().apply { id = "$patientId+$apptId" }
             }
-            .run()
+            .execute()
 
         val summary = result.getAll("summary").first() as Basic
         assertThat(summary.id, `is`("p1+a1"))
@@ -112,7 +112,7 @@ class AsyncOperationResultTest {
                 val bId = (deps["b"]!!.first() as Patient).id
                 Patient().apply { id = "$bId-C" }
             }
-            .run()
+            .execute()
 
         assertThat((result.getAll("c").first() as Patient).id, `is`("A-B-C"))
     }
@@ -128,7 +128,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "obs2-$patientId" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(2))
         assertThat((result.getAll("observations").first() as Observation).id, `is`("obs1-p1"))
@@ -141,7 +141,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("slow") { delay(50); Patient().apply { id = "slow" } }
             .add("fast") { delay(10); Patient().apply { id = "fast" } }
-            .run()
+            .execute()
 
         assertThat(result.getKeys(), containsInAnyOrder("slow", "fast"))
         assertThat((result.getAll("slow").first() as Patient).id, `is`("slow"))
@@ -154,7 +154,7 @@ class AsyncOperationResultTest {
     fun `exception in a task is captured as OperationOutcome instead of propagating`() = runBlocking {
         val result = AsyncOperationResult()
             .add("failing") { error("task exploded") }
-            .run()
+            .execute()
 
         assertTrue(result.hasErrors())
         assertFalse(result.containsKey("failing"))
@@ -166,7 +166,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("failing") { error("boom") }
             .add("succeeding") { Patient().apply { id = "p1" } }
-            .run()
+            .execute()
 
         assertTrue(result.containsKey("succeeding"))
         assertFalse(result.containsKey("failing"))
@@ -179,7 +179,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("failing") { error("boom") }
             .addAfter("dependent", "failing") { Patient().apply { id = "d1" } }
-            .run()
+            .execute()
 
         assertFalse(result.containsKey("failing"))
         assertFalse(result.containsKey("dependent"))
@@ -194,7 +194,7 @@ class AsyncOperationResultTest {
             .add("patient") { Patient().apply { id = "p1" } }
             .add("failing") { error("boom") }
             .addAfter("dependent", "failing") { Patient() }
-            .run()
+            .execute()
 
         assertThat(result.getFailedTasks().keys, containsInAnyOrder("failing", "dependent"))
         assertThat(result.getAll("patient"), hasSize(1))
@@ -236,7 +236,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
             .add("practitioner") { Practitioner().apply { id = "pr1" } }
-            .run()
+            .execute()
 
         val patients = result.getByType(Patient::class)
         assertThat(patients, hasSize(1))
@@ -248,7 +248,7 @@ class AsyncOperationResultTest {
         val result = AsyncOperationResult()
             .add("patient") { Patient() }
             .addList("appointments") { listOf(Appointment(), Appointment()) }
-            .run()
+            .execute()
 
         assertThat(result.totalCount(), `is`(3))
     }
@@ -257,7 +257,7 @@ class AsyncOperationResultTest {
     fun `result supports toParameters`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
-            .run()
+            .execute()
 
         val params = result.toParameters()
         assertThat(params.parameter, hasSize(1))
@@ -285,7 +285,7 @@ class AsyncOperationResultTest {
             .addAfter("coverage", "patient", Patient::class) { patient ->
                 Coverage().apply { id = "cov-for-${patient.id}" }
             }
-            .run()
+            .execute()
 
         val coverage = result.getAll("coverage").first() as Coverage
         assertThat(coverage.id, `is`("cov-for-p1"))
@@ -298,7 +298,7 @@ class AsyncOperationResultTest {
             .addAfter("out", "data", Patient::class) { patient ->
                 Basic().apply { id = patient.id }
             }
-            .run()
+            .execute()
 
         assertTrue(result.getFailedTasks().containsKey("out"))
         assertFalse(result.containsKey("out"))
@@ -314,7 +314,7 @@ class AsyncOperationResultTest {
             .addAfter("claim", "coverage", Coverage::class) { coverage ->
                 Claim().apply { id = "claim-${coverage.id}" }
             }
-            .run()
+            .execute()
 
         val claim = result.getAll("claim").first() as Claim
         assertThat(claim.id, `is`("claim-cov-P"))
@@ -330,7 +330,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "obs2-${patient.id}" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(2))
         assertThat((result.getAll("observations").first() as Observation).id, `is`("obs1-p1"))
@@ -351,7 +351,7 @@ class AsyncOperationResultTest {
             .addAfterAll("summary", "observations", Observation::class) { observations ->
                 Basic().apply { id = "count-${observations.size}" }
             }
-            .run()
+            .execute()
 
         val summary = result.getAll("summary").first() as Basic
         assertThat(summary.id, `is`("count-3"))
@@ -370,7 +370,7 @@ class AsyncOperationResultTest {
             .addAfterAll("patientCount", "mixed", Patient::class) { patients ->
                 Basic().apply { id = "patients-${patients.size}" }
             }
-            .run()
+            .execute()
 
         val summary = result.getAll("patientCount").first() as Basic
         assertThat(summary.id, `is`("patients-2"))
@@ -383,7 +383,7 @@ class AsyncOperationResultTest {
             .addAfterAll("out", "data", Patient::class) { patients ->
                 Basic().apply { id = "found-${patients.size}" }
             }
-            .run()
+            .execute()
 
         val out = result.getAll("out").first() as Basic
         assertThat(out.id, `is`("found-0"))
@@ -403,7 +403,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "derived-${obs.id}" }
                 }
             }
-            .run()
+            .execute()
 
         assertThat(result.count("derived"), `is`(2))
         assertThat((result.getAll("derived").first() as Observation).id, `is`("derived-obs1"))
@@ -419,7 +419,7 @@ class AsyncOperationResultTest {
                 val patient = deps["patient"]!!.first() as Patient
                 Coverage().apply { id = "cov-${patient.id}" }
             }
-            .run()
+            .execute()
 
         val coverage = result.getAll("coverage").first() as Coverage
         assertThat(coverage.id, `is`("cov-p1"))
@@ -435,7 +435,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "obs-${patient.id}" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("observations"), `is`(1))
     }
@@ -455,7 +455,7 @@ class AsyncOperationResultTest {
                     threadName = Thread.currentThread().name
                     Patient()
                 }
-                .run()
+                .execute()
             assertThat(result.containsKey("patient"), `is`(true))
             assertThat(threadName, startsWith("fhirmason-test-thread"))
         } finally {
@@ -474,7 +474,7 @@ class AsyncOperationResultTest {
                     Appointment().apply { id = "a2" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("appointments"), `is`(2))
     }
@@ -484,7 +484,7 @@ class AsyncOperationResultTest {
         val default = setOf(Appointment().apply { id = "fallback" })
         val result = AsyncOperationResult()
             .addListWithDefault("appointments", default) { throw RuntimeException("fail") }
-            .run()
+            .execute()
 
         assertThat(result.count("appointments"), `is`(1))
         val stored = result.getAll("appointments").first() as Appointment
@@ -500,7 +500,7 @@ class AsyncOperationResultTest {
                     Appointment().apply { id = "a2" }
                 )
             }
-            .run()
+            .execute()
 
         assertThat(result.count("appointments"), `is`(2))
     }
@@ -525,7 +525,7 @@ class AsyncOperationResultTest {
                 .add("patient") { Patient() }
                 .add("observation") { Observation() }
                 .addAfter("report", "patient", "observation") { _ -> DiagnosticReport() }
-                .run()
+                .execute()
             assertThat(result.containsKey("patient"), `is`(true))
             assertThat(result.containsKey("observation"), `is`(true))
             assertThat(result.containsKey("report"), `is`(true))

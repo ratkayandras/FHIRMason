@@ -1121,7 +1121,7 @@ AsyncOperationResult()
 
 ```kotlin
 // From a suspend context
-val result: OperationResult<Base> = asyncResult.run()
+val result: OperationResult<Base> = asyncResult.execute()
 
 // From a blocking context (e.g. tests, CLI entry points)
 val result: OperationResult<Base> = asyncResult.executeBlocking()
@@ -1169,7 +1169,7 @@ val dag = AsyncOperationResult()
         fhirClient.fetchCoverage(id)
     }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 On final failure the key is absent from the result and an ERROR `OperationOutcome` is recorded. See the sync builder section for the full parameter table.
@@ -1199,7 +1199,7 @@ val dag = AsyncOperationResult()
         fhirClient.fetchObservations(p.idPart)
     }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 When a dependency fails the retry block never runs — the dependent task is skipped with a dependency-failure `OperationOutcome`, identical to `addAfter`.
@@ -1225,7 +1225,7 @@ val dag = AsyncOperationResult()
         fhirClient.fetchObservations(patient.idPart)
     }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 ### Per-task timeout
@@ -1247,7 +1247,7 @@ val dag = AsyncOperationResult()
         fhirClient.fetchEncounter(p.idPart)
     }
 
-val result = dag.run()
+val result = dag.execute()
 if (result.hasErrors()) {
     // one or more tasks timed out
 }
@@ -1274,7 +1274,7 @@ val dag = AsyncOperationResult()
         patients.flatMap { fhirClient.fetchRelatedPersons(it.idPart) }
     }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 ### Conditional task registration
@@ -1287,7 +1287,7 @@ val dag = AsyncOperationResult()
     .addIf(includeAppointments, "appointment") { fetchAppointment() }
     .addListIf(includeMedications, "medications") { fetchMedications() }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 > A key skipped by `addIf(false, …)` is never registered. Referencing it as a dependency in `addAfter` will throw `IllegalArgumentException` at registration time.
@@ -1305,21 +1305,21 @@ val dag = AsyncOperationResult()
         buildSummary(deps["coverage"]!!.first() as Coverage)
     }
 
-val result = dag.run()
+val result = dag.execute()
 ```
 
 A WARN log line is emitted when the fallback is used.
 
 ### DAG-level execution timeout
 
-`timeout(durationMs)` sets a maximum wall-clock time for the entire `run()` invocation. If the DAG has not finished within the deadline, `run()` returns immediately with a single `TIMEOUT`-coded `OperationOutcome` and no task results. `executeBlocking()` inherits this timeout.
+`timeout(durationMs)` sets a maximum wall-clock time for the entire `execute()` invocation. If the DAG has not finished within the deadline, `execute()` returns immediately with a single `TIMEOUT`-coded `OperationOutcome` and no task results. `executeBlocking()` inherits this timeout.
 
 ```kotlin
 val result = AsyncOperationResult()
     .timeout(5_000)                            // entire DAG must finish within 5 s
     .add("patient") { fetchPatient() }
     .add("coverage") { fetchCoverage() }
-    .run()
+    .execute()
 
 if (result.hasErrors()) {
     // check outcome diagnostics — "DAG execution exceeded timeout of 5000ms"
@@ -1330,7 +1330,7 @@ Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the dur
 
 ### Executor / Thread Pool
 
-By default, `run()` and `executeBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `executeBlocking()`.
+By default, `execute()` and `executeBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `executeBlocking()`.
 
 Call `withExecutor(Executor)` to replace the default with a custom thread pool. `withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller.
 
@@ -1339,14 +1339,14 @@ Call `withExecutor(Executor)` to replace the default with a custom thread pool. 
 val result = AsyncOperationResult()
     .add("patient") { fhirClient.fetchPatient(id) }   // runs on IO pool
     .add("coverage") { fhirClient.fetchCoverage(id) }  // runs in parallel on IO pool
-    .run()
+    .execute()
 
 // Custom bounded pool
 val pool = Executors.newFixedThreadPool(4)
 val result = AsyncOperationResult()
     .withExecutor(pool)
     .add("patient") { fetchPatient() }
-    .run()
+    .execute()
 ```
 
 ```java
@@ -1364,7 +1364,7 @@ OperationResult<Base> result = new AsyncOperationResult()
     .executeBlocking();
 ```
 
-`executeBlocking()` inherits the executor automatically (it calls `run()` internally).
+`executeBlocking()` inherits the executor automatically (it calls `execute()` internally).
 
 ### DAG Composition (`merge`)
 
@@ -1387,7 +1387,7 @@ val result = AsyncOperationResult()
     .addAfter("summary", "patient", "claim") { deps ->
         buildSummary(deps["patient"]!!, deps["claim"]!!)
     }
-    .run()
+    .execute()
 ```
 
 ```kotlin
@@ -1399,7 +1399,7 @@ fun billingDag(): AsyncOperationResult = AsyncOperationResult()
 val result = AsyncOperationResult()
     .add("patient") { fetchPatient() }
     .merge(billingDag())
-    .run()
+    .execute()
 ```
 
 **Constraints:**
@@ -1709,7 +1709,7 @@ suspend fun buildOutput(): Parameters {
         .addAfter("summary", "patient", Patient::class) { patient ->
             generateSummary(patient)
         }
-        .run()
+        .execute()
         .toParameters()
 }
 ```
