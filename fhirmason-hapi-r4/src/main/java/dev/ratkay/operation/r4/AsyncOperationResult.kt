@@ -32,7 +32,7 @@ import kotlin.time.measureTimedValue
  * - Dependent tasks ([addAfter], [addListAfter], etc.) declare their dependencies by key and
  *   start only after all named dependencies resolve successfully.
  *
- * Execution is started by calling [run] (suspending) or [runBlocking] (blocking). The returned
+ * Execution is started by calling [run] (suspending) or [executeBlocking] (blocking). The returned
  * [OperationResult] accumulates all successful task results; failed tasks add an ERROR-severity
  * [OperationOutcome].
  *
@@ -88,7 +88,7 @@ class AsyncOperationResult {
      * results. [getTotalDuration] will return `0` on timeout because the duration assignment
      * inside the DAG execution is interrupted before it can run.
      *
-     * [runBlocking] inherits this timeout automatically.
+     * [executeBlocking] inherits this timeout automatically.
      *
      * @param durationMs maximum allowed wall-clock time in milliseconds; must be > 0
      */
@@ -102,7 +102,7 @@ class AsyncOperationResult {
      *
      * When not called, [run] defaults to [kotlinx.coroutines.Dispatchers.IO], which keeps
      * up to 64 threads available for blocking HAPI FHIR client calls so independent tasks
-     * execute in parallel regardless of how [run] or [runBlocking] is invoked.
+     * execute in parallel regardless of how [run] or [executeBlocking] is invoked.
      *
      * Pass a custom executor to override the thread pool — for example, use
      * [java.util.concurrent.Executors.newFixedThreadPool] for a bounded pool, or pass
@@ -114,7 +114,7 @@ class AsyncOperationResult {
         this.executor = executor
     }
 
-    /** Returns a snapshot of [StepMetrics] collected per task after [run] or [runBlocking]. */
+    /** Returns a snapshot of [StepMetrics] collected per task after [run] or [executeBlocking]. */
     fun getMetrics(): Map<String, StepMetrics> = taskMetrics.toMap()
 
     /** Returns total wall-clock DAG execution time in milliseconds. Zero before [run] completes. */
@@ -1110,7 +1110,7 @@ class AsyncOperationResult {
      * Inherits the DAG-level timeout configured via [timeout], if set.
      * Prefer [run] from a coroutine context; use this method only from non-suspending call sites.
      */
-    fun runBlocking(): OperationResult<Base> = runBlocking { run() }
+    fun executeBlocking(): OperationResult<Base> = runBlocking { run() }
 
     private fun dagTimeoutOutcome(durationMs: Long): OperationOutcome = OperationOutcome().apply {
         addIssue().apply {

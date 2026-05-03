@@ -69,7 +69,7 @@ val result = AsyncOperationResult()
     .add("patient") { fetchPatient() }
     .add("coverage") { fetchCoverage() }
     .addAfter("encounter", "patient", Patient::class) { patient -> lookupEncounter(patient) }
-    .runBlocking()
+    .executeBlocking()
 ```
 
 ---
@@ -861,7 +861,7 @@ val dag = AsyncOperationResult()
     .add("patient")  { fetchPatient() }
     .add("coverage") { fetchCoverage() }
 
-dag.runBlocking()
+dag.executeBlocking()
 
 dag.getMetrics()           // Map<String, StepMetrics> keyed by task name
 dag.getTotalDuration()     // wall-clock DAG execution time in ms
@@ -1124,7 +1124,7 @@ AsyncOperationResult()
 val result: OperationResult<Base> = asyncResult.run()
 
 // From a blocking context (e.g. tests, CLI entry points)
-val result: OperationResult<Base> = asyncResult.runBlocking()
+val result: OperationResult<Base> = asyncResult.executeBlocking()
 ```
 
 The returned `OperationResult<Base>` supports all the same query, transformation, serialisation, and reference-linking methods as the synchronous builder.
@@ -1312,7 +1312,7 @@ A WARN log line is emitted when the fallback is used.
 
 ### DAG-level execution timeout
 
-`timeout(durationMs)` sets a maximum wall-clock time for the entire `run()` invocation. If the DAG has not finished within the deadline, `run()` returns immediately with a single `TIMEOUT`-coded `OperationOutcome` and no task results. `runBlocking()` inherits this timeout.
+`timeout(durationMs)` sets a maximum wall-clock time for the entire `run()` invocation. If the DAG has not finished within the deadline, `run()` returns immediately with a single `TIMEOUT`-coded `OperationOutcome` and no task results. `executeBlocking()` inherits this timeout.
 
 ```kotlin
 val result = AsyncOperationResult()
@@ -1330,7 +1330,7 @@ Note: `getTotalDuration()` returns `0` after a DAG-level timeout because the dur
 
 ### Executor / Thread Pool
 
-By default, `run()` and `runBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `runBlocking()`.
+By default, `run()` and `executeBlocking()` dispatch all tasks on `Dispatchers.IO` — a shared pool of up to 64 threads designed for blocking I/O. This ensures independent tasks always execute in parallel, even when called from a single-threaded context like Java's `executeBlocking()`.
 
 Call `withExecutor(Executor)` to replace the default with a custom thread pool. `withExecutor` accepts any `java.util.concurrent.Executor` — no coroutine imports are required from the caller.
 
@@ -1350,21 +1350,21 @@ val result = AsyncOperationResult()
 ```
 
 ```java
-// Java — default Dispatchers.IO gives true parallelism from runBlocking()
+// Java — default Dispatchers.IO gives true parallelism from executeBlocking()
 OperationResult<Base> result = new AsyncOperationResult()
     .add("patient", () -> fetchPatient())
     .add("coverage", () -> fetchCoverage())
-    .runBlocking();                         // tasks run in parallel on IO pool
+    .executeBlocking();                     // tasks run in parallel on IO pool
 
 // Java — override with a bounded pool
 ExecutorService pool = Executors.newFixedThreadPool(4);
 OperationResult<Base> result = new AsyncOperationResult()
     .withExecutor(pool)
     .add("patient", () -> fetchPatient())
-    .runBlocking();
+    .executeBlocking();
 ```
 
-`runBlocking()` inherits the executor automatically (it calls `run()` internally).
+`executeBlocking()` inherits the executor automatically (it calls `run()` internally).
 
 ### DAG Composition (`merge`)
 
@@ -1695,7 +1695,7 @@ val result = AsyncOperationResult()
         val encounter = deps["encounter"]!!.filterIsInstance<Encounter>().first()
         buildClaim(coverage, encounter)
     }
-    .runBlocking()
+    .executeBlocking()
 
 result.toParameters()
 ```
@@ -1912,7 +1912,7 @@ class PatientService(private val fhirMason: FhirMasonFactory) {
         fhirMason.asyncPipeline()
             .add("patient") { fetchPatient() }
             .add("coverage") { fetchCoverage() }
-            .runBlocking()
+            .executeBlocking()
 }
 ```
 

@@ -246,7 +246,7 @@ class OperationResultFhirErrorHandlingTest {
             .add("enc") {
                 throw InvalidRequestException("timeout").apply { operationOutcome = embeddedOutcome }
             }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(result.hasErrors())
         val encOutcome = result.getFailedTasks()["enc"]
@@ -259,7 +259,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `async add - plain BaseServerResponseException without embedded outcome uses message`() {
         val result = AsyncOperationResult()
             .add("enc") { throw InvalidRequestException("bad param") }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(result.hasErrors())
         val encOutcome = result.getFailedTasks()["enc"]

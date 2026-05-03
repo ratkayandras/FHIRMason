@@ -270,7 +270,7 @@ class AsyncOperationResultTest {
     fun `runBlocking produces same result as suspend run`() {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
-            .runBlocking()
+            .executeBlocking()
 
         assertThat(result.containsKey("patient"), `is`(true))
         assertThat((result.getAll("patient").first() as Patient).id, `is`("p1"))

@@ -51,7 +51,7 @@ class AsyncOperationResultMetricsTest {
             .add("patient") { patient() }
             .add("encounter") { encounter() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics().isEmpty())
     }
@@ -65,7 +65,7 @@ class AsyncOperationResultMetricsTest {
             .add("patient") { patient() }
             .add("encounter") { encounter() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         val metrics = dag.getMetrics()
         assertEquals(2, metrics.size)
@@ -79,7 +79,7 @@ class AsyncOperationResultMetricsTest {
             .timed()
             .add("patient") { patient() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertEquals("Patient", dag.getMetrics()["patient"]!!.resourceType)
     }
@@ -90,7 +90,7 @@ class AsyncOperationResultMetricsTest {
             .timed()
             .add("patient") { patient() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics()["patient"]!!.durationMs >= 0)
     }
@@ -101,7 +101,7 @@ class AsyncOperationResultMetricsTest {
             .timed()
             .add("patient") { patient() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics()["patient"]!!.success)
     }
@@ -112,7 +112,7 @@ class AsyncOperationResultMetricsTest {
             .timed()
             .add("bad") { throw RuntimeException("boom") }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         val m = dag.getMetrics()["bad"]!!
         assertFalse(m.success)
@@ -126,7 +126,7 @@ class AsyncOperationResultMetricsTest {
             .add("patient") { patient() }
             .add("encounter") { encounter() }  // independent — runs in parallel with patient
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertEquals(2, dag.getMetrics().size)
         assertTrue(dag.getMetrics()["patient"]!!.success)
@@ -140,7 +140,7 @@ class AsyncOperationResultMetricsTest {
             .add("patient") { patient() }
             .addAfter("encounter", "patient", Patient::class) { _ -> encounter() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics().containsKey("encounter"))
         assertEquals("encounter", dag.getMetrics()["encounter"]!!.stepName)
@@ -160,7 +160,7 @@ class AsyncOperationResultMetricsTest {
             .add("patient") { patient() }
             .add("encounter") { encounter() }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getTotalDuration() >= 0)
     }
@@ -171,7 +171,7 @@ class AsyncOperationResultMetricsTest {
     fun `each task emits STARTED and COMPLETED DEBUG log messages`() {
         AsyncOperationResult()
             .add("patient") { patient() }
-            .runBlocking()
+            .executeBlocking()
 
         val msgs = debugMessages()
         assertTrue(msgs.any { it.contains("task='patient'") && it.contains("status=STARTED") })
@@ -182,7 +182,7 @@ class AsyncOperationResultMetricsTest {
     fun `COMPLETED log includes duration`() {
         AsyncOperationResult()
             .add("patient") { patient() }
-            .runBlocking()
+            .executeBlocking()
 
         val completedMsg = debugMessages().first {
             it.contains("task='patient'") && it.contains("COMPLETED")
@@ -195,7 +195,7 @@ class AsyncOperationResultMetricsTest {
         AsyncOperationResult()
             .add("patient") { patient() }
             .add("encounter") { encounter() }
-            .runBlocking()
+            .executeBlocking()
 
         val msgs = debugMessages()
         assertTrue(msgs.any { it.contains("dag=COMPLETED") && it.contains("totalDuration=") })
@@ -206,7 +206,7 @@ class AsyncOperationResultMetricsTest {
         AsyncOperationResult()
             .add("patient") { patient() }
             .add("encounter") { encounter() }
-            .runBlocking()
+            .executeBlocking()
 
         val dagMsg = debugMessages().first { it.contains("dag=COMPLETED") }
         assertTrue(dagMsg.contains("tasks=2"))
@@ -216,7 +216,7 @@ class AsyncOperationResultMetricsTest {
     fun `failed task emits FAILED status in log`() {
         AsyncOperationResult()
             .add("broken") { throw RuntimeException("nope") }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(debugMessages().any { it.contains("task='broken'") && it.contains("status=FAILED") })
     }
@@ -225,7 +225,7 @@ class AsyncOperationResultMetricsTest {
     fun `log messages use FHIRMason dot async prefix`() {
         AsyncOperationResult()
             .add("patient") { patient() }
-            .runBlocking()
+            .executeBlocking()
 
         assertTrue(debugMessages().all { it.startsWith("FHIRMason.async") })
     }

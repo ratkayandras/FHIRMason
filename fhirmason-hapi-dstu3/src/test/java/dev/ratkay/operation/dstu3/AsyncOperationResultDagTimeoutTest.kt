@@ -65,14 +65,14 @@ class AsyncOperationResultDagTimeoutTest {
         assertEquals(1, result.getOutcomes().size)
     }
 
-    // ── runBlocking respects DAG timeout ──────────────────────────────────────
+    // ── executeBlocking respects DAG timeout ─────────────────────────────────
 
     @Test
-    fun `runBlocking respects DAG timeout`() {
+    fun `executeBlocking respects DAG timeout`() {
         val result = AsyncOperationResult()
             .timeout(20)
             .add("patient") { delay(200); patient() }
-            .runBlocking()
+            .executeBlocking()
 
         assertFalse(result.containsKey("patient"))
         assertTrue(result.hasErrors())

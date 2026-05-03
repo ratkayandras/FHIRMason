@@ -322,7 +322,7 @@ class AsyncOperationResultMergeTest {
                     .add("innerPatient") { Patient() }
             }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics().containsKey("innerPatient"))
         assertTrue(dag.getMetrics()["innerPatient"]!!.success)
@@ -337,7 +337,7 @@ class AsyncOperationResultMergeTest {
                     .add("innerTask") { Patient() }
             }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         assertTrue(dag.getMetrics().isEmpty())
     }

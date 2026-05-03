@@ -326,7 +326,7 @@ class AsyncOperationResultComplexTest {
             .add("t2") { Thread.sleep(60); Patient().apply { id = "2" } }
             .add("t3") { Thread.sleep(60); Patient().apply { id = "3" } }
 
-        dag.runBlocking()
+        dag.executeBlocking()
 
         val metrics = dag.getMetrics()
         assertEquals(3, metrics.size)
