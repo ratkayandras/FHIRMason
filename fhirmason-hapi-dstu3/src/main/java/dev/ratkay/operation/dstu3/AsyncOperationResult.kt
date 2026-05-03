@@ -13,7 +13,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Callable
 import java.util.concurrent.Executor
+import java.util.function.Function
+import java.util.function.Predicate
 import org.hl7.fhir.dstu3.model.Base
 import org.hl7.fhir.dstu3.model.OperationOutcome
 import org.slf4j.LoggerFactory
@@ -136,6 +139,10 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Independent(key) { listOf(block()) })
     }
 
+    /** Java-friendly [Callable] overload of [add]. */
+    fun add(key: String, block: Callable<out Base>): AsyncOperationResult =
+        add(key) { block.call() }
+
     /**
      * Registers an independent DAG task that produces a collection of resources stored under [key].
      * Each element is added to the list under the same key. See [add] for error semantics.
@@ -146,6 +153,10 @@ class AsyncOperationResult {
     fun <R : Base> addList(key: String, block: suspend () -> Collection<R>): AsyncOperationResult = also {
         registerNode(key, TaskNode.Independent(key) { block().toList() })
     }
+
+    /** Java-friendly [Callable] overload of [addList]. */
+    fun <R : Base> addList(key: String, block: Callable<out Collection<out R>>): AsyncOperationResult =
+        addList(key) { block.call() }
 
     /**
      * Registers a dependent DAG task that produces a single [Base] resource stored under [key].
@@ -172,6 +183,14 @@ class AsyncOperationResult {
         registerNode(key, TaskNode.Dependent(key, depList) { map -> listOf(block(map)) })
     }
 
+    /** Java-friendly [Function] overload of [addAfter]. */
+    fun addAfter(
+        key: String,
+        vararg deps: String,
+        block: Function<Map<String, List<Base>>, out Base>
+    ): AsyncOperationResult =
+        addAfter(key, *deps) { map -> block.apply(map) }
+
     /**
      * Like [addAfter] but [block] returns a `Collection<R>`. All elements are stored under [key].
      *
@@ -192,6 +211,14 @@ class AsyncOperationResult {
         requireNoCycle(key, depList)
         registerNode(key, TaskNode.Dependent(key, depList) { map -> block(map).toList() })
     }
+
+    /** Java-friendly [Function] overload of [addListAfter]. */
+    fun <R : Base> addListAfter(
+        key: String,
+        vararg deps: String,
+        block: Function<Map<String, List<Base>>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfter(key, *deps) { map -> block.apply(map) }
 
     // Type-safe single-dependency convenience methods
 
@@ -221,6 +248,13 @@ class AsyncOperationResult {
     fun <T : Base> addAfter(key: String, dep: String, type: Class<T>, block: suspend (T) -> Base): AsyncOperationResult =
         addAfter(key, dep, type.kotlin, block)
 
+    /** Java-friendly [Function] overload of [addAfter] (typed). */
+    fun <T : Base> addAfter(
+        key: String, dep: String, type: Class<T>,
+        block: Function<T, out Base>
+    ): AsyncOperationResult =
+        addAfter(key, dep, type.kotlin) { block.apply(it) }
+
     /**
      * Type-safe overload of [addListAfter] for a single dependency.
      *
@@ -249,6 +283,13 @@ class AsyncOperationResult {
     fun <T : Base, R : Base> addListAfter(key: String, dep: String, type: Class<T>, block: suspend (T) -> Collection<R>): AsyncOperationResult =
         addListAfter(key, dep, type.kotlin, block)
 
+    /** Java-friendly [Function] overload of [addListAfter] (typed). */
+    fun <T : Base, R : Base> addListAfter(
+        key: String, dep: String, type: Class<T>,
+        block: Function<T, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfter(key, dep, type.kotlin) { block.apply(it) }
+
     // Type-safe list-injection convenience methods
 
     /**
@@ -276,6 +317,13 @@ class AsyncOperationResult {
     fun <T : Base> addAfterAll(key: String, dep: String, type: Class<T>, block: suspend (List<T>) -> Base): AsyncOperationResult =
         addAfterAll(key, dep, type.kotlin, block)
 
+    /** Java-friendly [Function] overload of [addAfterAll]. */
+    fun <T : Base> addAfterAll(
+        key: String, dep: String, type: Class<T>,
+        block: Function<List<T>, out Base>
+    ): AsyncOperationResult =
+        addAfterAll(key, dep, type.kotlin) { block.apply(it) }
+
     /**
      * Like [addAfterAll] but [block] returns a `Collection<R>`.
      *
@@ -300,6 +348,13 @@ class AsyncOperationResult {
     /** Java-friendly overload of [addListAfterAll] — accepts [Class] instead of [KClass]. */
     fun <T : Base, R : Base> addListAfterAll(key: String, dep: String, type: Class<T>, block: suspend (List<T>) -> Collection<R>): AsyncOperationResult =
         addListAfterAll(key, dep, type.kotlin, block)
+
+    /** Java-friendly [Function] overload of [addListAfterAll]. */
+    fun <T : Base, R : Base> addListAfterAll(
+        key: String, dep: String, type: Class<T>,
+        block: Function<List<T>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterAll(key, dep, type.kotlin) { block.apply(it) }
 
     // ── Retry helper ─────────────────────────────────────────────────────────
 
@@ -343,6 +398,17 @@ class AsyncOperationResult {
         }
     }
 
+    /** Java-friendly [Callable]/[Predicate] overload of [addWithRetry]. */
+    @JvmOverloads
+    fun <R : Base> addWithRetry(
+        key: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Callable<out R>
+    ): AsyncOperationResult =
+        addWithRetry(key, maxAttempts, initialDelayMs, retryOn::test) { block.call() }
+
     // ── Independent task with timeout ────────────────────────────────────────
 
     fun addWithTimeout(key: String, timeoutMs: Long, block: suspend () -> Base): AsyncOperationResult = also {
@@ -352,12 +418,20 @@ class AsyncOperationResult {
         })
     }
 
+    /** Java-friendly [Callable] overload of [addWithTimeout]. */
+    fun addWithTimeout(key: String, timeoutMs: Long, block: Callable<out Base>): AsyncOperationResult =
+        addWithTimeout(key, timeoutMs) { block.call() }
+
     fun <R : Base> addListWithTimeout(key: String, timeoutMs: Long, block: suspend () -> Collection<R>): AsyncOperationResult = also {
         require(timeoutMs > 0) { "timeoutMs must be positive" }
         registerNode(key, TaskNode.Independent(key) {
             withTimeout(timeoutMs) { block() }.toList()
         })
     }
+
+    /** Java-friendly [Callable] overload of [addListWithTimeout]. */
+    fun <R : Base> addListWithTimeout(key: String, timeoutMs: Long, block: Callable<out Collection<out R>>): AsyncOperationResult =
+        addListWithTimeout(key, timeoutMs) { block.call() }
 
     // ── Dependent task with timeout ───────────────────────────────────────────
 
@@ -376,6 +450,15 @@ class AsyncOperationResult {
         })
     }
 
+    /** Java-friendly [Function] overload of [addAfterWithTimeout]. */
+    fun addAfterWithTimeout(
+        key: String,
+        vararg deps: String,
+        timeoutMs: Long,
+        block: Function<Map<String, List<Base>>, out Base>
+    ): AsyncOperationResult =
+        addAfterWithTimeout(key, *deps, timeoutMs = timeoutMs) { map -> block.apply(map) }
+
     fun <R : Base> addListAfterWithTimeout(
         key: String,
         vararg deps: String,
@@ -390,6 +473,15 @@ class AsyncOperationResult {
             withTimeout(timeoutMs) { block(depResults) }.toList()
         })
     }
+
+    /** Java-friendly [Function] overload of [addListAfterWithTimeout]. */
+    fun <R : Base> addListAfterWithTimeout(
+        key: String,
+        vararg deps: String,
+        timeoutMs: Long,
+        block: Function<Map<String, List<Base>>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterWithTimeout(key, *deps, timeoutMs = timeoutMs) { map -> block.apply(map) }
 
     // ── Type-safe single-dependency overloads for timeout ────────────────────
 
@@ -409,6 +501,13 @@ class AsyncOperationResult {
     fun <T : Base> addAfterWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (T) -> Base): AsyncOperationResult =
         addAfterWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
+    /** Java-friendly [Function] overload of [addAfterWithTimeout] (typed). */
+    fun <T : Base> addAfterWithTimeout(
+        key: String, dep: String, type: Class<T>, timeoutMs: Long,
+        block: Function<T, out Base>
+    ): AsyncOperationResult =
+        addAfterWithTimeout(key, dep, type.kotlin, timeoutMs) { block.apply(it) }
+
     fun <T : Base, R : Base> addListAfterWithTimeout(
         key: String,
         dep: String,
@@ -425,6 +524,13 @@ class AsyncOperationResult {
     fun <T : Base, R : Base> addListAfterWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (T) -> Collection<R>): AsyncOperationResult =
         addListAfterWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
+    /** Java-friendly [Function] overload of [addListAfterWithTimeout] (typed). */
+    fun <T : Base, R : Base> addListAfterWithTimeout(
+        key: String, dep: String, type: Class<T>, timeoutMs: Long,
+        block: Function<T, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterWithTimeout(key, dep, type.kotlin, timeoutMs) { block.apply(it) }
+
     fun <T : Base> addAfterAllWithTimeout(
         key: String,
         dep: String,
@@ -440,6 +546,13 @@ class AsyncOperationResult {
     fun <T : Base> addAfterAllWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (List<T>) -> Base): AsyncOperationResult =
         addAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs, block)
 
+    /** Java-friendly [Function] overload of [addAfterAllWithTimeout]. */
+    fun <T : Base> addAfterAllWithTimeout(
+        key: String, dep: String, type: Class<T>, timeoutMs: Long,
+        block: Function<List<T>, out Base>
+    ): AsyncOperationResult =
+        addAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs) { block.apply(it) }
+
     fun <T : Base, R : Base> addListAfterAllWithTimeout(
         key: String,
         dep: String,
@@ -454,6 +567,13 @@ class AsyncOperationResult {
     /** Java-friendly overload of [addListAfterAllWithTimeout] — accepts [Class] instead of [KClass]. */
     fun <T : Base, R : Base> addListAfterAllWithTimeout(key: String, dep: String, type: Class<T>, timeoutMs: Long, block: suspend (List<T>) -> Collection<R>): AsyncOperationResult =
         addListAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs, block)
+
+    /** Java-friendly [Function] overload of [addListAfterAllWithTimeout]. */
+    fun <T : Base, R : Base> addListAfterAllWithTimeout(
+        key: String, dep: String, type: Class<T>, timeoutMs: Long,
+        block: Function<List<T>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterAllWithTimeout(key, dep, type.kotlin, timeoutMs) { block.apply(it) }
 
     // ── Dependent task with retry ─────────────────────────────────────────────
 
@@ -478,6 +598,18 @@ class AsyncOperationResult {
         }
     }
 
+    /** Java-friendly [Function]/[Predicate] overload of [addAfterWithRetry]. */
+    @JvmOverloads
+    fun addAfterWithRetry(
+        key: String,
+        vararg deps: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<Map<String, List<Base>>, out Base>
+    ): AsyncOperationResult =
+        addAfterWithRetry(key, *deps, maxAttempts = maxAttempts, initialDelayMs = initialDelayMs, retryOn = retryOn::test) { map -> block.apply(map) }
+
     @JvmOverloads
     fun <R : Base> addListAfterWithRetry(
         key: String,
@@ -498,6 +630,18 @@ class AsyncOperationResult {
             })
         }
     }
+
+    /** Java-friendly [Function]/[Predicate] overload of [addListAfterWithRetry]. */
+    @JvmOverloads
+    fun <R : Base> addListAfterWithRetry(
+        key: String,
+        vararg deps: String,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<Map<String, List<Base>>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterWithRetry(key, *deps, maxAttempts = maxAttempts, initialDelayMs = initialDelayMs, retryOn = retryOn::test) { map -> block.apply(map) }
 
     // ── Type-safe single-dependency overloads for retry ──────────────────────
 
@@ -530,6 +674,17 @@ class AsyncOperationResult {
         block: suspend (T) -> Base
     ): AsyncOperationResult = addAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
+    /** Java-friendly [Function]/[Predicate] overload of [addAfterWithRetry] (typed). */
+    @JvmOverloads
+    fun <T : Base> addAfterWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<T, out Base>
+    ): AsyncOperationResult =
+        addAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn::test) { block.apply(it) }
+
     @JvmOverloads
     fun <T : Base, R : Base> addListAfterWithRetry(
         key: String,
@@ -559,6 +714,17 @@ class AsyncOperationResult {
         block: suspend (T) -> Collection<R>
     ): AsyncOperationResult = addListAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
+    /** Java-friendly [Function]/[Predicate] overload of [addListAfterWithRetry] (typed). */
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<T, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn::test) { block.apply(it) }
+
     @JvmOverloads
     fun <T : Base> addAfterAllWithRetry(
         key: String,
@@ -586,6 +752,17 @@ class AsyncOperationResult {
         retryOn: (Exception) -> Boolean = { true },
         block: suspend (List<T>) -> Base
     ): AsyncOperationResult = addAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
+
+    /** Java-friendly [Function]/[Predicate] overload of [addAfterAllWithRetry]. */
+    @JvmOverloads
+    fun <T : Base> addAfterAllWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<List<T>, out Base>
+    ): AsyncOperationResult =
+        addAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn::test) { block.apply(it) }
 
     @JvmOverloads
     fun <T : Base, R : Base> addListAfterAllWithRetry(
@@ -615,6 +792,17 @@ class AsyncOperationResult {
         block: suspend (List<T>) -> Collection<R>
     ): AsyncOperationResult = addListAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn, block)
 
+    /** Java-friendly [Function]/[Predicate] overload of [addListAfterAllWithRetry]. */
+    @JvmOverloads
+    fun <T : Base, R : Base> addListAfterAllWithRetry(
+        key: String, dep: String, type: Class<T>,
+        maxAttempts: Int = 3,
+        initialDelayMs: Long = 500,
+        retryOn: Predicate<Exception> = Predicate { true },
+        block: Function<List<T>, out Collection<out R>>
+    ): AsyncOperationResult =
+        addListAfterAllWithRetry(key, dep, type.kotlin, maxAttempts, initialDelayMs, retryOn::test) { block.apply(it) }
+
     // ── Independent task with fallback value ─────────────────────────────────
 
     fun <R : Base> addWithDefault(key: String, default: R, block: suspend () -> R): AsyncOperationResult = also {
@@ -628,6 +816,10 @@ class AsyncOperationResult {
         })
     }
 
+    /** Java-friendly [Callable] overload of [addWithDefault]. */
+    fun <R : Base> addWithDefault(key: String, default: R, block: Callable<out R>): AsyncOperationResult =
+        addWithDefault(key, default) { block.call() }
+
     fun <R : Base> addListWithDefault(key: String, default: Collection<R>, block: suspend () -> Collection<R>): AsyncOperationResult = also {
         val defaultList = default.toList()
         registerNode(key, TaskNode.Independent(key) {
@@ -640,12 +832,24 @@ class AsyncOperationResult {
         })
     }
 
+    /** Java-friendly [Callable] overload of [addListWithDefault]. */
+    fun <R : Base> addListWithDefault(key: String, default: Collection<R>, block: Callable<out Collection<out R>>): AsyncOperationResult =
+        addListWithDefault(key, default) { block.call() }
+
     // ── Conditional task registration ────────────────────────────────────────
 
     fun addIf(condition: Boolean, key: String, block: suspend () -> Base): AsyncOperationResult =
         if (condition) add(key, block) else this
 
+    /** Java-friendly [Callable] overload of [addIf]. */
+    fun addIf(condition: Boolean, key: String, block: Callable<out Base>): AsyncOperationResult =
+        if (condition) add(key, block) else this
+
     fun <R : Base> addListIf(condition: Boolean, key: String, block: suspend () -> Collection<R>): AsyncOperationResult =
+        if (condition) addList(key, block) else this
+
+    /** Java-friendly [Callable] overload of [addListIf]. */
+    fun <R : Base> addListIf(condition: Boolean, key: String, block: Callable<out Collection<out R>>): AsyncOperationResult =
         if (condition) addList(key, block) else this
 
     // ── DAG composition ──────────────────────────────────────────────────────
