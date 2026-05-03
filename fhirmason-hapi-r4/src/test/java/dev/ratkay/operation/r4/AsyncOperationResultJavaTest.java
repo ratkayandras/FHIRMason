@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasSize;
@@ -134,7 +135,7 @@ class AsyncOperationResultJavaTest {
                 .addListAfterAll("ids", "patients", Patient.class, patients ->
                         patients.stream()
                                 .map(p -> (Base) new StringType(p.getIdPart()))
-                                .toList())
+                                .collect(Collectors.toList()))
                 .executeBlocking();
 
         assertThat(result.getAll("ids"), hasSize(2));
