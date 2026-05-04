@@ -2,7 +2,6 @@ package dev.ratkay.operation.dstu3
 
 import org.hl7.fhir.dstu3.model.Base
 import org.hl7.fhir.dstu3.model.Identifier
-import kotlin.reflect.KClass
 
 internal fun identifiersOf(resource: Base): List<Identifier> =
     resource.children()
@@ -13,24 +12,24 @@ internal fun identifiersOf(resource: Base): List<Identifier> =
 
 internal fun <I : Base> filterByIdentifierSystem(
     allValues: List<Base>,
-    type: KClass<I>,
+    type: Class<I>,
     system: String
-): List<I> = allValues.filterIsInstance(type.java)
+): List<I> = allValues.filterIsInstance(type)
     .filter { resource -> identifiersOf(resource).any { it.system == system } }
 
 internal fun <I : Base> filterByIdentifierValue(
     allValues: List<Base>,
-    type: KClass<I>,
+    type: Class<I>,
     identifierValue: String
-): List<I> = allValues.filterIsInstance(type.java)
+): List<I> = allValues.filterIsInstance(type)
     .filter { resource -> identifiersOf(resource).any { it.value == identifierValue } }
 
 internal fun <I : Base> filterByIdentifier(
     allValues: List<Base>,
-    type: KClass<I>,
+    type: Class<I>,
     system: String,
     identifierValue: String
-): List<I> = allValues.filterIsInstance(type.java)
+): List<I> = allValues.filterIsInstance(type)
     .filter { resource ->
         identifiersOf(resource).any { it.system == system && it.value == identifierValue }
     }
