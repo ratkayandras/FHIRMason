@@ -78,6 +78,14 @@ object FhirFilter {
     ): (Base) -> Boolean =
         hasExtensionValueMatchingInternal(url, V::class.java, predicate)
 
+    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
+    fun <V : Type> hasExtensionValueMatching(
+        url: String,
+        valueType: KClass<V>,
+        predicate: (V) -> Boolean
+    ): (Base) -> Boolean =
+        hasExtensionValueMatchingInternal(url, valueType.java, predicate)
+
     @PublishedApi
     @JvmSynthetic
     internal fun <V : Type> hasExtensionValueMatchingInternal(
