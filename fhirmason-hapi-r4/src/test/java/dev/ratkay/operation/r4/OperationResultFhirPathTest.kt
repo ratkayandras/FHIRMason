@@ -29,7 +29,7 @@ class OperationResultFhirPathTest {
 
         val result = OperationResult.of(activePatient)
             .add { inactivePatient }
-            .addFromMatching<Patient, StringType>("result", Patient::class, "active = true") { matches ->
+            .addFromMatching<Patient, StringType>("result", Patient::class.java, "active = true") { matches ->
                 assertThat(matches, hasSize(1))
                 assertThat(matches[0].idPart, `is`("p1"))
                 StringType("found")
@@ -44,7 +44,7 @@ class OperationResultFhirPathTest {
         val patient = Patient().apply { active = false }
 
         val result = OperationResult.of(patient)
-            .addFromMatching<Patient, StringType>("result", Patient::class, "active = true") { matches ->
+            .addFromMatching<Patient, StringType>("result", Patient::class.java, "active = true") { matches ->
                 assertThat(matches, empty())
                 StringType("none")
             }
@@ -70,7 +70,7 @@ class OperationResultFhirPathTest {
         val patient = Patient().apply { active = true }
 
         val result = OperationResult.of(patient)
-            .addFromMatching("active-patients", Patient::class, "active = true") { StringType("ok") }
+            .addFromMatching("active-patients", Patient::class.java, "active = true") { StringType("ok") }
 
         assertThat(result.getAll("active-patients"), hasSize(1))
     }
@@ -87,7 +87,7 @@ class OperationResultFhirPathTest {
             .add { patientWithoutId }
             .addFromMatching<Patient, StringType>(
                 "has-id",
-                Patient::class,
+                Patient::class.java,
                 "identifier.where(system = 'http://example.org/mpi').exists()"
             ) { matches ->
                 assertThat(matches, hasSize(1))
@@ -103,7 +103,7 @@ class OperationResultFhirPathTest {
         val patient = Patient().apply { active = true }
 
         val result = OperationResult.of(patient)
-            .addFromMatching<Patient, StringType>("out", Patient::class, "(((invalid") { StringType("x") }
+            .addFromMatching<Patient, StringType>("out", Patient::class.java, "(((invalid") { StringType("x") }
 
         assertTrue(result.hasErrors())
         assertThat(result.getOutcomes(), hasSize(1))
@@ -120,7 +120,7 @@ class OperationResultFhirPathTest {
 
         val result = OperationResult.of(patient)
             .add { observation }
-            .addFromMatching<Patient, StringType>("result", Patient::class, "active = true") { matches ->
+            .addFromMatching<Patient, StringType>("result", Patient::class.java, "active = true") { matches ->
                 assertThat(matches, hasSize(1))
                 StringType("patients-only")
             }
@@ -139,7 +139,7 @@ class OperationResultFhirPathTest {
         val result = OperationResult.of(p1)
             .add { p2 }
             .add { p3 }
-            .addAllFromMatching<Patient, Patient>("active", Patient::class, "active = true") { it }
+            .addAllFromMatching<Patient, Patient>("active", Patient::class.java, "active = true") { it }
 
         assertTrue(result.isSuccessful())
         val patients = result.getResult()
@@ -151,7 +151,7 @@ class OperationResultFhirPathTest {
         val patient = Patient().apply { active = true }
 
         val result = OperationResult.of(patient)
-            .addAllFromMatching("active", Patient::class, "active = true") { it }
+            .addAllFromMatching("active", Patient::class.java, "active = true") { it }
 
         assertThat(result.getAll("active"), hasSize(1))
     }
@@ -311,7 +311,7 @@ class OperationResultFhirPathTest {
         }
 
         val result = OperationResult.of(patient)
-            .selectByPath(HumanName::class, "name.first()", "official-name")
+            .selectByPath(HumanName::class.java, "name.first()", "official-name")
 
         assertThat(result.getAll("official-name"), hasSize(1))
     }
@@ -365,7 +365,7 @@ class OperationResultFhirPathTest {
 
         val result = OperationResult.of(activePatient)
             .add { inactivePatient }
-            .addFromMatching<Patient, StringType>("result", Patient::class, expression) { matches ->
+            .addFromMatching<Patient, StringType>("result", Patient::class.java, expression) { matches ->
                 assertThat(matches, hasSize(1))
                 assertThat(matches[0].idPart, `is`("p1"))
                 StringType("found")
@@ -394,7 +394,7 @@ class OperationResultFhirPathTest {
 
         val result = OperationResult.of(p1)
             .add { p2 }
-            .addAllFromMatching("active", Patient::class, expression) { it }
+            .addAllFromMatching("active", Patient::class.java, expression) { it }
 
         assertTrue(result.isSuccessful())
         assertThat(result.getAll("active"), hasSize(2))
@@ -469,7 +469,7 @@ class OperationResultFhirPathTest {
         val expression = FhirPath.relative().navigate("name").first()
 
         val result = OperationResult.of(patient)
-            .selectByPath(HumanName::class, expression)
+            .selectByPath(HumanName::class.java, expression)
 
         assertTrue(result.isSuccessful())
         assertEquals("Smith", result.getResult().family)

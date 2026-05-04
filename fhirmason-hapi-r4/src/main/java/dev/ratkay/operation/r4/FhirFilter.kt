@@ -2,7 +2,6 @@ package dev.ratkay.operation.r4
 
 import org.hl7.fhir.r4.model.Base
 import org.hl7.fhir.r4.model.Type
-import kotlin.reflect.KClass
 
 /**
  * Predicate factories for use with [OperationResult.addFromFiltered] and
@@ -47,10 +46,6 @@ object FhirFilter {
     inline fun <reified V : Type> hasExtensionWithValueType(url: String): (Base) -> Boolean =
         hasExtensionWithValueType(url, V::class.java)
 
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <V : Type> hasExtensionWithValueType(url: String, valueType: KClass<V>): (Base) -> Boolean =
-        hasExtensionWithValueType(url, valueType.java)
-
     /**
      * Returns `true` when the resource has an extension at [url] whose value is an instance
      * of [valueType] and satisfies [predicate].
@@ -77,14 +72,6 @@ object FhirFilter {
         noinline predicate: (V) -> Boolean
     ): (Base) -> Boolean =
         hasExtensionValueMatchingInternal(url, V::class.java, predicate)
-
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <V : Type> hasExtensionValueMatching(
-        url: String,
-        valueType: KClass<V>,
-        predicate: (V) -> Boolean
-    ): (Base) -> Boolean =
-        hasExtensionValueMatchingInternal(url, valueType.java, predicate)
 
     @PublishedApi
     @JvmSynthetic

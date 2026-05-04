@@ -36,7 +36,7 @@ class AsyncOperationResultComplexTest {
                 val bId = (deps["b"]!!.first() as Practitioner).id
                 Basic().apply { id = "$aId+$bId" }
             }
-            .addAfter("d", "c", Basic::class) { c ->
+            .addAfter("d", "c", Basic::class.java) { c ->
                 Encounter().apply { id = "D-from-${c.id}" }
             }
             .execute()
@@ -111,16 +111,16 @@ class AsyncOperationResultComplexTest {
     fun `five-level linear chain passes data through correctly at every level`() = runBlocking {
         val result = AsyncOperationResult()
             .add("a") { Patient().apply { id = "A" } }
-            .addAfter("b", "a", Patient::class) { a ->
+            .addAfter("b", "a", Patient::class.java) { a ->
                 Patient().apply { id = "${a.id}-B" }
             }
-            .addAfter("c", "b", Patient::class) { b ->
+            .addAfter("c", "b", Patient::class.java) { b ->
                 Patient().apply { id = "${b.id}-C" }
             }
-            .addAfter("d", "c", Patient::class) { c ->
+            .addAfter("d", "c", Patient::class.java) { c ->
                 Patient().apply { id = "${c.id}-D" }
             }
-            .addAfter("e", "d", Patient::class) { d ->
+            .addAfter("e", "d", Patient::class.java) { d ->
                 StringType("${d.id}-E")
             }
             .execute()
@@ -160,8 +160,8 @@ class AsyncOperationResultComplexTest {
         val result = AsyncOperationResult()
             .add("a") { error("a fails") }
             .add("b") { Patient().apply { id = "B" } }
-            .addAfter("c", "a", Patient::class) { Patient().apply { id = "C" } }
-            .addAfter("d", "b", Patient::class) { p ->
+            .addAfter("c", "a", Patient::class.java) { Patient().apply { id = "C" } }
+            .addAfter("d", "b", Patient::class.java) { p ->
                 Encounter().apply { id = "D-${p.id}" }
             }
             .execute()
@@ -212,7 +212,7 @@ class AsyncOperationResultComplexTest {
                 if (attempts < 3) error("transient failure attempt $attempts")
                 Patient().apply { id = "retried-p1" }
             }
-            .addAfter("encounter", "patient", Patient::class) { p ->
+            .addAfter("encounter", "patient", Patient::class.java) { p ->
                 Encounter().apply { id = "enc-${p.id}" }
             }
             .execute()
@@ -236,15 +236,15 @@ class AsyncOperationResultComplexTest {
 
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "P" } }
-            .addAfter("encounter", "patient", Patient::class) { p ->
+            .addAfter("encounter", "patient", Patient::class.java) { p ->
                 patientReceived = p
                 Encounter().apply { id = "E-from-${p.id}" }
             }
-            .addAfter("observation", "encounter", Encounter::class) { e ->
+            .addAfter("observation", "encounter", Encounter::class.java) { e ->
                 encounterReceived = e
                 Observation().apply { id = "O-from-${e.id}" }
             }
-            .addAfter("outcome", "observation", Observation::class) { obs ->
+            .addAfter("outcome", "observation", Observation::class.java) { obs ->
                 observationReceived = obs
                 OperationOutcome().apply {
                     addIssue().diagnostics = "processed-${obs.id}"

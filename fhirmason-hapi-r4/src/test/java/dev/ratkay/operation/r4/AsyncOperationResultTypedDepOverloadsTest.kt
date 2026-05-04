@@ -37,7 +37,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var received: Patient? = null
         val result = AsyncOperationResult()
             .add("patient") { patient("typed") }
-            .addAfterWithTimeout("encounter", "patient", Patient::class, timeoutMs = 500) { p ->
+            .addAfterWithTimeout("encounter", "patient", Patient::class.java, timeoutMs = 500) { p ->
                 received = p
                 encounter()
             }
@@ -52,7 +52,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addAfterWithTimeout typed — times out and key absent`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addAfterWithTimeout("encounter", "patient", Patient::class, timeoutMs = 20) { _ ->
+            .addAfterWithTimeout("encounter", "patient", Patient::class.java, timeoutMs = 20) { _ ->
                 delay(200)
                 encounter()
             }
@@ -68,7 +68,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addListAfterWithTimeout typed — block receives typed dep value and returns list`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient("p") }
-            .addListAfterWithTimeout("encounters", "patient", Patient::class, timeoutMs = 500) { p ->
+            .addListAfterWithTimeout("encounters", "patient", Patient::class.java, timeoutMs = 500) { p ->
                 listOf(encounter(), Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" })
             }
             .execute()
@@ -82,7 +82,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addListAfterWithTimeout typed — times out and key absent`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addListAfterWithTimeout("encounters", "patient", Patient::class, timeoutMs = 20) { _ ->
+            .addListAfterWithTimeout("encounters", "patient", Patient::class.java, timeoutMs = 20) { _ ->
                 delay(200)
                 listOf(encounter())
             }
@@ -99,7 +99,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var receivedList: List<Patient>? = null
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("a"), patient("b")) }
-            .addAfterAllWithTimeout("encounter", "patients", Patient::class, timeoutMs = 500) { patients ->
+            .addAfterAllWithTimeout("encounter", "patients", Patient::class.java, timeoutMs = 500) { patients ->
                 receivedList = patients
                 encounter()
             }
@@ -117,7 +117,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var receivedSize = -1
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("a"), patient("b")) }
-            .addAfterAllWithTimeout("encounter", "patients", Coverage::class, timeoutMs = 500) { coverages ->
+            .addAfterAllWithTimeout("encounter", "patients", Coverage::class.java, timeoutMs = 500) { coverages ->
                 receivedSize = coverages.size
                 encounter()
             }
@@ -133,7 +133,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addListAfterAllWithTimeout typed — block receives typed list and returns list`() = runBlocking {
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("a"), patient("b"), patient("c")) }
-            .addListAfterAllWithTimeout("encounters", "patients", Patient::class, timeoutMs = 500) { patients ->
+            .addListAfterAllWithTimeout("encounters", "patients", Patient::class.java, timeoutMs = 500) { patients ->
                 patients.map { Encounter().apply { subject.reference = "Patient/${it.idElement.idPart}" } }
             }
             .execute()
@@ -150,7 +150,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var received: Patient? = null
         val result = AsyncOperationResult()
             .add("patient") { patient("typed") }
-            .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 0) { p ->
+            .addAfterWithRetry("encounter", "patient", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { p ->
                 received = p
                 encounter()
             }
@@ -166,7 +166,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var attempts = 0
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 0) { _ ->
+            .addAfterWithRetry("encounter", "patient", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { _ ->
                 attempts++
                 if (attempts < 2) throw RuntimeException("transient")
                 encounter()
@@ -182,7 +182,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addAfterWithRetry typed — all attempts exhausted records error`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 2, initialDelayMs = 0) { _ ->
+            .addAfterWithRetry("encounter", "patient", Patient::class.java, maxAttempts = 2, initialDelayMs = 0) { _ ->
                 throw RuntimeException("always fails")
             }
             .execute()
@@ -198,7 +198,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addListAfterWithRetry typed — block receives typed dep and returns list`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient("p") }
-            .addListAfterWithRetry("encounters", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 0) { p ->
+            .addListAfterWithRetry("encounters", "patient", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { p ->
                 listOf(encounter(), Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" })
             }
             .execute()
@@ -213,7 +213,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var attempts = 0
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addListAfterWithRetry("encounters", "patient", Patient::class, maxAttempts = 3, initialDelayMs = 0) { _ ->
+            .addListAfterWithRetry("encounters", "patient", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { _ ->
                 attempts++
                 if (attempts < 3) throw RuntimeException("transient")
                 listOf(encounter())
@@ -232,7 +232,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var receivedList: List<Patient>? = null
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("x"), patient("y")) }
-            .addAfterAllWithRetry("encounter", "patients", Patient::class, maxAttempts = 3, initialDelayMs = 0) { patients ->
+            .addAfterAllWithRetry("encounter", "patients", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { patients ->
                 receivedList = patients
                 encounter()
             }
@@ -248,7 +248,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
         var attempts = 0
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("a"), patient("b")) }
-            .addAfterAllWithRetry("encounter", "patients", Patient::class, maxAttempts = 3, initialDelayMs = 0) { patients ->
+            .addAfterAllWithRetry("encounter", "patients", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { patients ->
                 attempts++
                 if (attempts < 2) throw RuntimeException("transient")
                 assertEquals(2, patients.size)
@@ -266,7 +266,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addListAfterAllWithRetry typed — maps typed list to result list`() = runBlocking {
         val result = AsyncOperationResult()
             .addList("patients") { listOf(patient("a"), patient("b")) }
-            .addListAfterAllWithRetry("encounters", "patients", Patient::class, maxAttempts = 3, initialDelayMs = 0) { patients ->
+            .addListAfterAllWithRetry("encounters", "patients", Patient::class.java, maxAttempts = 3, initialDelayMs = 0) { patients ->
                 patients.map { Encounter().apply { subject.reference = "Patient/${it.idElement.idPart}" } }
             }
             .execute()
@@ -284,7 +284,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addAfterWithTimeout typed result has correct FHIR type`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addAfterWithTimeout("encounter", "patient", Patient::class, timeoutMs = 500) { _ -> encounter() }
+            .addAfterWithTimeout("encounter", "patient", Patient::class.java, timeoutMs = 500) { _ -> encounter() }
             .execute()
 
         assertThat(result.getAll("encounter").first(), instanceOf(Encounter::class.java))
@@ -294,7 +294,7 @@ class AsyncOperationResultTypedDepOverloadsTest {
     fun `addAfterWithRetry typed result has correct FHIR type`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { patient() }
-            .addAfterWithRetry("encounter", "patient", Patient::class, maxAttempts = 1, initialDelayMs = 0) { _ -> encounter() }
+            .addAfterWithRetry("encounter", "patient", Patient::class.java, maxAttempts = 1, initialDelayMs = 0) { _ -> encounter() }
             .execute()
 
         assertThat(result.getAll("encounter").first(), instanceOf(Encounter::class.java))

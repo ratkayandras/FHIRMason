@@ -138,7 +138,7 @@ class AsyncOperationResultMetricsTest {
         val dag = AsyncOperationResult()
             .timed()
             .add("patient") { patient() }
-            .addAfter("encounter", "patient", Patient::class) { _ -> encounter() }
+            .addAfter("encounter", "patient", Patient::class.java) { _ -> encounter() }
 
         dag.executeBlocking()
 

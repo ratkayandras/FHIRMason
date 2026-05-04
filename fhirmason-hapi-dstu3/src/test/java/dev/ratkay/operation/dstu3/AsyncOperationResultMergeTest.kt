@@ -54,7 +54,7 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("patient") { Patient().apply { id = "p1" } }
             }
-            .addAfter("encounter", "patient", Patient::class) { patient ->
+            .addAfter("encounter", "patient", Patient::class.java) { patient ->
                 Encounter().apply { id = "enc-${patient.id}" }
             }
             .execute()
@@ -87,7 +87,7 @@ class AsyncOperationResultMergeTest {
             .merge {
                 AsyncOperationResult()
                     .add("base") { Patient().apply { id = "base" } }
-                    .addAfter("derived", "base", Patient::class) { p ->
+                    .addAfter("derived", "base", Patient::class.java) { p ->
                         Coverage().apply { id = "derived-from-${p.id}" }
                     }
             }
@@ -103,10 +103,10 @@ class AsyncOperationResultMergeTest {
             .merge {
                 AsyncOperationResult()
                     .add("a") { Patient().apply { id = "A" } }
-                    .addAfter("b", "a", Patient::class) { a ->
+                    .addAfter("b", "a", Patient::class.java) { a ->
                         Patient().apply { id = "${a.id}-B" }
                     }
-                    .addAfter("c", "b", Patient::class) { b ->
+                    .addAfter("c", "b", Patient::class.java) { b ->
                         Patient().apply { id = "${b.id}-C" }
                     }
             }
@@ -240,10 +240,10 @@ class AsyncOperationResultMergeTest {
                 AsyncOperationResult()
                     .add("patient") { Patient().apply { id = "p1" } }
             }
-            .addAfter("coverage", "patient", Patient::class) { p ->
+            .addAfter("coverage", "patient", Patient::class.java) { p ->
                 Coverage().apply { id = "cov-${p.id}" }
             }
-            .addAfter("claim", "coverage", Coverage::class) { c ->
+            .addAfter("claim", "coverage", Coverage::class.java) { c ->
                 Claim().apply { id = "claim-${c.id}" }
             }
             .execute()

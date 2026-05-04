@@ -127,7 +127,7 @@ class AsyncOperationResultDefaultTest {
 
         val result = AsyncOperationResult()
             .addWithDefault("patient", defaultPatient) { blockPatient }
-            .addAfter("encounter", "patient", Patient::class) { p ->
+            .addAfter("encounter", "patient", Patient::class.java) { p ->
                 Encounter().apply { subject.reference = "Patient/${p.idElement.idPart}" }
             }
             .execute()
