@@ -34,7 +34,6 @@ import java.time.OffsetDateTime
 import java.time.ZonedDateTime
 import java.util.IdentityHashMap
 import java.util.function.Consumer
-import kotlin.reflect.KClass
 import kotlin.time.measureTime
 import kotlin.time.measureTimedValue
 
@@ -339,15 +338,6 @@ class OperationResult<T> private constructor(
         noinline builder: (List<I>) -> R
     ): OperationResult<R> = addFromFiltered(name, I::class.java, predicate, builder)
 
-    /** [KClass] overload of [addFromFiltered] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addFromFiltered(
-        name: String? = null,
-        type: KClass<I>,
-        predicate: (I) -> Boolean,
-        builder: (List<I>) -> R
-    ): OperationResult<R> = addFromFiltered(name, type.java, predicate, builder)
-
     /**
      * Like [addFromFiltered] but [builder] returns a `Collection<R>`, making the new
      * pipeline head `List<R>`.
@@ -378,15 +368,6 @@ class OperationResult<T> private constructor(
         noinline predicate: (I) -> Boolean,
         noinline builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromFiltered(name, I::class.java, predicate, builder)
-
-    /** [KClass] overload of [addAllFromFiltered] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addAllFromFiltered(
-        name: String? = null,
-        type: KClass<I>,
-        predicate: (I) -> Boolean,
-        builder: (List<I>) -> Collection<R>
-    ): OperationResult<List<R>> = addAllFromFiltered(name, type.java, predicate, builder)
 
     // Builder methods — filter all accumulated parameters by type and FHIRPath expression
 
@@ -466,42 +447,6 @@ class OperationResult<T> private constructor(
         expression: FhirPath,
         builder: (List<I>) -> Collection<R>
     ): OperationResult<List<R>> = addAllFromMatching(name, type, expression.build(), builder)
-
-    /** [KClass] overload of [addFromMatching] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addFromMatching(
-        name: String? = null,
-        type: KClass<I>,
-        expression: String,
-        builder: (List<I>) -> R
-    ): OperationResult<R> = addFromMatching(name, type.java, expression, builder)
-
-    /** [KClass] + [FhirPath] overload of [addFromMatching] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addFromMatching(
-        name: String? = null,
-        type: KClass<I>,
-        expression: FhirPath,
-        builder: (List<I>) -> R
-    ): OperationResult<R> = addFromMatching(name, type.java, expression.build(), builder)
-
-    /** [KClass] overload of [addAllFromMatching] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addAllFromMatching(
-        name: String? = null,
-        type: KClass<I>,
-        expression: String,
-        builder: (List<I>) -> Collection<R>
-    ): OperationResult<List<R>> = addAllFromMatching(name, type.java, expression, builder)
-
-    /** [KClass] + [FhirPath] overload of [addAllFromMatching] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <I : Base, R : Base> addAllFromMatching(
-        name: String? = null,
-        type: KClass<I>,
-        expression: FhirPath,
-        builder: (List<I>) -> Collection<R>
-    ): OperationResult<List<R>> = addAllFromMatching(name, type.java, expression.build(), builder)
 
     /** Reified overload of [addFromMatching] — no [Class] argument needed at call sites. */
     inline fun <reified I : Base, R : Base> addFromMatching(
@@ -617,10 +562,6 @@ class OperationResult<T> private constructor(
             storeAndCopy(name, value, duration.inWholeMilliseconds)
         }
 
-    /** [KClass] overload of [addFrom] — Kotlin callers may pass [KClass] directly. */
-    fun <I : Base, R : Base> addFrom(name: String, type: KClass<I>, builder: (List<I>) -> R): OperationResult<R> =
-        addFrom(name, type.java, builder)
-
     /**
      * Like [addFrom] but [builder] returns a `Collection<R>`. The pipeline head becomes `List<R>`.
      *
@@ -640,10 +581,6 @@ class OperationResult<T> private constructor(
             }
             storeListAndCopy(name, values, duration.inWholeMilliseconds)
         }
-
-    /** [KClass] overload of [addAllFrom] — Kotlin callers may pass [KClass] directly. */
-    fun <I : Base, R : Base> addAllFrom(name: String, type: KClass<I>, builder: (List<I>) -> Collection<R>): OperationResult<List<R>> =
-        addAllFrom(name, type.java, builder)
 
     // Builder variants with explicit error handling
 
@@ -1084,9 +1021,6 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [Class] argument needed at call sites. */
     inline fun <reified R : Base> getByType(): List<R> = getByType(R::class.java)
 
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <R : Base> getByType(type: KClass<R>): List<R> = getByType(type.java)
-
     override fun containsKey(name: String): Boolean =
         parameters.containsKey(name)
 
@@ -1261,10 +1195,6 @@ class OperationResult<T> private constructor(
     inline fun <reified I : Base, R : Base> mapStored(name: String, noinline transform: (I) -> R): OperationResult<T> =
         mapStored(name, I::class.java, transform)
 
-    /** [KClass] overload of [mapStored] — Kotlin callers may pass [KClass] directly. Targets values under [name]. */
-    fun <I : Base, R : Base> mapStored(name: String, type: KClass<I>, transform: (I) -> R): OperationResult<T> =
-        mapStored(name, type.java, transform)
-
     /**
      * Applies [transform] to every value across all stored keys that is an instance of [type],
      * replacing each matching value with the result of [transform]. Values that are not instances
@@ -1311,10 +1241,6 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [Class] argument needed at call sites. Targets all stored values of the type across all keys. */
     inline fun <reified I : Base, R : Base> mapStored(noinline transform: (I) -> R): OperationResult<T> =
         mapStored(I::class.java, transform)
-
-    /** [KClass] overload of [mapStored] — Kotlin callers may pass [KClass] directly. Targets all stored values of the type across all keys. */
-    fun <I : Base, R : Base> mapStored(type: KClass<I>, transform: (I) -> R): OperationResult<T> =
-        mapStored(type.java, transform)
 
     /**
      * Invokes [block] with a snapshot of the current parameter map for side-effects (logging,
@@ -1584,16 +1510,6 @@ class OperationResult<T> private constructor(
     inline fun <reified R : Base> selectByPath(expression: FhirPath, name: String? = null): OperationResult<R> =
         selectByPath(R::class.java, expression.build(), name)
 
-    /** [KClass] overload of [selectByPath] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <R : Base> selectByPath(type: KClass<R>, expression: String, name: String? = null): OperationResult<R> =
-        selectByPath(type.java, expression, name)
-
-    /** [KClass] + [FhirPath] overload of [selectByPath] — Kotlin callers may pass [KClass] directly. */
-    @JvmOverloads
-    fun <R : Base> selectByPath(type: KClass<R>, expression: FhirPath, name: String? = null): OperationResult<R> =
-        selectByPath(type.java, expression.build(), name)
-
     /** Returns the first value stored under [name], or `null` if the key is absent or empty. */
     fun takeFirst(name: String): Base? = parameters[name]?.firstOrNull()
 
@@ -1608,9 +1524,6 @@ class OperationResult<T> private constructor(
 
     /** Reified overload — no [Class] argument needed at call sites. */
     inline fun <reified R : Base> takeFirstTyped(name: String): R? = takeFirstTyped(name, R::class.java)
-
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <R : Base> takeFirstTyped(name: String, type: KClass<R>): R? = takeFirstTyped(name, type.java)
 
     /**
      * Extracts the first value of type [R] stored under [name] and sets it as the pipeline head.
@@ -1634,10 +1547,6 @@ class OperationResult<T> private constructor(
     inline fun <reified R : Base> extractParam(name: String): OperationResult<R> =
         extractParam(name, R::class.java)
 
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <R : Base> extractParam(name: String, type: KClass<R>): OperationResult<R> =
-        extractParam(name, type.java)
-
     /**
      * Extracts all values of type [R] stored under [name] and sets the list as the pipeline head.
      * Returns an empty list (not an error) if no values match.
@@ -1655,10 +1564,6 @@ class OperationResult<T> private constructor(
     /** Reified overload — no [Class] argument needed at call sites. */
     inline fun <reified R : Base> extractParamList(name: String): OperationResult<List<R>> =
         extractParamList(name, R::class.java)
-
-    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
-    fun <R : Base> extractParamList(name: String, type: KClass<R>): OperationResult<List<R>> =
-        extractParamList(name, type.java)
 
     // Reference linking
 
@@ -1943,14 +1848,6 @@ class OperationResult<T> private constructor(
             primaryKey: String
         ): OperationResult<T> = fromParametersTyped(parameters, primaryKey, T::class.java)
 
-        /** [KClass] overload of [fromParametersTyped] — Kotlin callers may pass [KClass] directly. */
-        @JvmStatic
-        fun <T : Base> fromParametersTyped(
-            parameters: Parameters,
-            primaryKey: String,
-            type: KClass<T>
-        ): OperationResult<T> = fromParametersTyped(parameters, primaryKey, type.java)
-
         /**
          * Builds an [OperationResult] from a FHIR [Bundle].
          *
@@ -2037,14 +1934,6 @@ class OperationResult<T> private constructor(
             bundle: Bundle,
             primaryKey: String
         ): OperationResult<T> = fromBundleTyped(bundle, primaryKey, T::class.java)
-
-        /** [KClass] overload of [fromBundleTyped] — Kotlin callers may pass [KClass] directly. */
-        @JvmStatic
-        fun <T : Resource> fromBundleTyped(
-            bundle: Bundle,
-            primaryKey: String,
-            type: KClass<T>
-        ): OperationResult<T> = fromBundleTyped(bundle, primaryKey, type.java)
 
         /**
          * Creates an empty [OperationResult] with no parameters and no pipeline head.

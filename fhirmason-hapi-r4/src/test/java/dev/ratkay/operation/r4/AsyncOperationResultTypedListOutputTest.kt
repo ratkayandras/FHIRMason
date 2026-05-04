@@ -46,7 +46,7 @@ class AsyncOperationResultTypedListOutputTest {
     fun `addListAfterAll - both T and R inferred as concrete types`() = runBlocking {
         val result = AsyncOperationResult()
             .addList("patients") { listOf(Patient().apply { id = "p1" }, Patient().apply { id = "p2" }) }
-            .addListAfterAll("observations", "patients", Patient::class) { patients ->
+            .addListAfterAll("observations", "patients", Patient::class.java) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
             .execute()
@@ -82,7 +82,7 @@ class AsyncOperationResultTypedListOutputTest {
     fun `addListAfterAllWithTimeout - both T and R inferred as concrete types`() = runBlocking {
         val result = AsyncOperationResult()
             .addList("patients") { listOf(Patient().apply { id = "p1" }) }
-            .addListAfterAllWithTimeout("observations", "patients", Patient::class, 5000L) { patients ->
+            .addListAfterAllWithTimeout("observations", "patients", Patient::class.java, 5000L) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
             .execute()
@@ -107,7 +107,7 @@ class AsyncOperationResultTypedListOutputTest {
     fun `addListAfterAllWithRetry - both T and R inferred as concrete types`() = runBlocking {
         val result = AsyncOperationResult()
             .addList("patients") { listOf(Patient().apply { id = "p1" }, Patient().apply { id = "p2" }) }
-            .addListAfterAllWithRetry("observations", "patients", Patient::class, maxAttempts = 1) { patients ->
+            .addListAfterAllWithRetry("observations", "patients", Patient::class.java, maxAttempts = 1) { patients ->
                 patients.map { p -> Observation().apply { id = "obs-${p.id}" } }
             }
             .execute()

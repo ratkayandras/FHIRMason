@@ -20,7 +20,7 @@ class OperationResultIdentifierTest {
         val withSystem = patient("http://example.org/mrn", "12345")
         val otherSystem = patient("http://other.org/id", "12345")
         val result = OperationResult.of(listOf(withSystem, otherSystem), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -34,7 +34,7 @@ class OperationResultIdentifierTest {
         val b = patient("http://example.org/mrn", "002")
         val c = patient("http://example.org/mrn", "003")
         val result = OperationResult.of(listOf(a, b, c), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -44,7 +44,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithSystem with no matches passes empty list to builder`() {
         val result = OperationResult.of(patient("http://other.org/id", "001"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -57,7 +57,7 @@ class OperationResultIdentifierTest {
         val withMrn = patient("http://example.org/mrn", "001")
         val noId = patientNoIdentifier()
         val result = OperationResult.of(listOf(withMrn, noId), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -67,7 +67,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithSystem stores result under fhirType when name is null`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -78,7 +78,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithSystem named overload stores result under explicit key`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
-            .addFromFiltered("mrn-summary", Patient::class, FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered("mrn-summary", Patient::class.java, FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -100,7 +100,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithSystem records ERROR outcome when builder throws`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -113,10 +113,10 @@ class OperationResultIdentifierTest {
     fun `addFromHavingIdentifierWithSystem respects FAIL_FAST and skips when already errored`() {
         var builderCalled = false
         val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
                 throw RuntimeException("first failure")
             }
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { _ ->
                 builderCalled = true
                 OperationOutcome()
             }
@@ -131,7 +131,7 @@ class OperationResultIdentifierTest {
         val b = patient("http://example.org/mrn", "002")
         val result = OperationResult.of(a, "group-a")
             .add("group-b") { b }
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -146,7 +146,7 @@ class OperationResultIdentifierTest {
         val b = patient("http://example.org/mrn", "002")
         val other = patient("http://other.org/id", "003")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { it }
+            .addAllFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -154,7 +154,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addAllFromHavingIdentifierWithSystem named overload stores under explicit key`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "001"), "patients")
-            .addAllFromFiltered("mrn-patients", Patient::class, FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { it }
+            .addAllFromFiltered("mrn-patients", Patient::class.java, FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")) { it }
 
         assertTrue(result.containsKey("mrn-patients"))
     }
@@ -175,7 +175,7 @@ class OperationResultIdentifierTest {
         val target = patient("http://example.org/mrn", "12345")
         val other = patient("http://example.org/mrn", "99999")
         val result = OperationResult.of(listOf(target, other), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -185,7 +185,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithValue with no matches passes empty list to builder`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "99999"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -197,7 +197,7 @@ class OperationResultIdentifierTest {
     fun `addFromHavingIdentifierWithValue excludes resources without identifier property`() {
         val withValue = patient("http://example.org/mrn", "12345")
         val result = OperationResult.of(listOf(withValue, patientNoIdentifier()), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -207,7 +207,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithValue stores result under fhirType when name is null`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithValue("12345")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithValue("12345")) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -218,7 +218,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifierWithValue named overload stores under explicit key`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addFromFiltered("value-result", Patient::class, FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
+            .addFromFiltered("value-result", Patient::class.java, FhirFilter.hasIdentifierWithValue("12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -242,7 +242,7 @@ class OperationResultIdentifierTest {
         val b = patient("http://other.org/id", "12345")
         val other = patient("http://example.org/mrn", "99999")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifierWithValue("12345")) { it }
+            .addAllFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifierWithValue("12345")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -255,7 +255,7 @@ class OperationResultIdentifierTest {
         val wrongValue = patient("http://example.org/mrn", "99999")
         val wrongSystem = patient("http://other.org/id", "12345")
         val result = OperationResult.of(listOf(exact, wrongValue, wrongSystem), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -265,7 +265,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier does not match when system matches but value does not`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "99999"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -275,7 +275,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier does not match when value matches but system does not`() {
         val result = OperationResult.of(patient("http://other.org/id", "12345"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -289,7 +289,7 @@ class OperationResultIdentifierTest {
             addIdentifier().apply { system = "http://example.org/mrn"; value = "12345" }
         }
         val result = OperationResult.of(multiId, "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -299,7 +299,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier with no matches passes empty list to builder`() {
         val result = OperationResult.of(patientNoIdentifier(), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -311,7 +311,7 @@ class OperationResultIdentifierTest {
     fun `addFromHavingIdentifier excludes resources without identifier property`() {
         val exact = patient("http://example.org/mrn", "12345")
         val result = OperationResult.of(listOf(exact, patientNoIdentifier()), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -321,7 +321,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier stores result under fhirType when name is null`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { _ ->
                 OperationOutcome().apply { addIssue().diagnostics = "found" }
             }
 
@@ -332,7 +332,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier named overload stores under explicit key`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addFromFiltered("matched-patient", Patient::class, FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered("matched-patient", Patient::class.java, FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
 
@@ -354,7 +354,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addFromHavingIdentifier records ERROR outcome when builder throws`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { _ ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { _ ->
                 throw RuntimeException("builder failed")
             }
 
@@ -371,7 +371,7 @@ class OperationResultIdentifierTest {
         val b = patient("http://example.org/mrn", "12345")
         val other = patient("http://example.org/mrn", "99999")
         val result = OperationResult.of(listOf(a, b, other), "patients")
-            .addAllFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { it }
+            .addAllFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { it }
 
         assertThat(result.getResult(), hasSize(2))
     }
@@ -379,7 +379,7 @@ class OperationResultIdentifierTest {
     @Test
     fun `addAllFromHavingIdentifier named overload stores under explicit key`() {
         val result = OperationResult.of(patient("http://example.org/mrn", "12345"), "patients")
-            .addAllFromFiltered("exact-matches", Patient::class, FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { it }
+            .addAllFromFiltered("exact-matches", Patient::class.java, FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { it }
 
         assertTrue(result.containsKey("exact-matches"))
     }
@@ -399,7 +399,7 @@ class OperationResultIdentifierTest {
     fun `identifier filter methods compose with subsequent pipeline steps`() {
         val withMrn = patient("http://example.org/mrn", "12345")
         val result = OperationResult.of(listOf(withMrn, patientNoIdentifier()), "patients")
-            .addFromFiltered(type = Patient::class, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
+            .addFromFiltered(type = Patient::class.java, predicate = FhirFilter.hasIdentifier("http://example.org/mrn", "12345")) { filtered ->
                 OperationOutcome().apply { addIssue().diagnostics = "count=${filtered.size}" }
             }
             .add("flag") { org.hl7.fhir.dstu3.model.StringType("done") }

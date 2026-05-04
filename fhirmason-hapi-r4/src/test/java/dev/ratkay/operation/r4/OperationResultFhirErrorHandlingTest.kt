@@ -346,7 +346,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `addFrom with PROPAGATE strategy - exception propagates raw`() {
         val pipeline = OperationResult.of(patient()).useErrorStrategy(ErrorStrategy.PROPAGATE)
         assertThrows<RuntimeException> {
-            pipeline.addFrom<Patient, Patient>("test", Patient::class) { throw RuntimeException("addFrom boom") }
+            pipeline.addFrom<Patient, Patient>("test", Patient::class.java) { throw RuntimeException("addFrom boom") }
         }
     }
 
@@ -407,13 +407,13 @@ class OperationResultFhirErrorHandlingTest {
 
     @Test
     fun `fromParametersTyped - missing key returns hasErrors true and null head`() {
-        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class)
+        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class.java)
         assertTrue(result.hasErrors())
     }
 
     @Test
     fun `fromParametersTyped - missing key outcome has NOTFOUND code`() {
-        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class)
+        val result = OperationResult.fromParametersTyped(Parameters(), "patient", Patient::class.java)
         assertThat(result.getOutcomes(), hasSize(1))
         assertThat(result.getOutcomes()[0].issueFirstRep.severity, equalTo(OperationOutcome.IssueSeverity.ERROR))
         assertThat(result.getOutcomes()[0].issueFirstRep.code, equalTo(OperationOutcome.IssueType.NOTFOUND))
@@ -423,7 +423,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `fromParametersTyped - found key returns isSuccessful true with correct typed head`() {
         val p = Patient().apply { setId("p1") }
         val params = Parameters().apply { addParameter().setName("patient").setResource(p) }
-        val result = OperationResult.fromParametersTyped(params, "patient", Patient::class)
+        val result = OperationResult.fromParametersTyped(params, "patient", Patient::class.java)
         assertTrue(result.isSuccessful())
         assertThat(result.getResult().idElement.idPart, equalTo("p1"))
     }
@@ -432,7 +432,7 @@ class OperationResultFhirErrorHandlingTest {
 
     @Test
     fun `fromBundleTyped - missing key returns hasErrors true and null head`() {
-        val result = OperationResult.fromBundleTyped(Bundle(), "patient", Patient::class)
+        val result = OperationResult.fromBundleTyped(Bundle(), "patient", Patient::class.java)
         assertTrue(result.hasErrors())
     }
 
@@ -440,7 +440,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `fromBundleTyped - found resource returns isSuccessful true`() {
         val p = Patient().apply { setId("p1") }
         val bundle = Bundle().apply { addEntry().resource = p }
-        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class)
+        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class.java)
         assertTrue(result.isSuccessful())
         assertThat(result.getResult().idElement.idPart, equalTo("p1"))
     }
@@ -450,7 +450,7 @@ class OperationResultFhirErrorHandlingTest {
     @Test
     fun `extractParam - missing key adds ERROR outcome and skips (Pattern A)`() {
         val result = OperationResult.of(patient())
-            .extractParam("missing", Coverage::class)
+            .extractParam("missing", Coverage::class.java)
         assertTrue(result.hasErrors())
         assertThat(result.getOutcomes(), hasSize(1))
         assertThat(result.getOutcomes()[0].issueFirstRep.severity, equalTo(OperationOutcome.IssueSeverity.ERROR))
@@ -460,7 +460,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `extractParam - found key changes head and leaves no error`() {
         val p = patient()
         val result = OperationResult.of(p)
-            .extractParam("patient", Patient::class)
+            .extractParam("patient", Patient::class.java)
         assertTrue(result.isSuccessful())
         assertSame(p, result.getResult())
     }
@@ -469,7 +469,7 @@ class OperationResultFhirErrorHandlingTest {
     fun `extractParam - missing key with FAIL_FAST skips subsequent steps`() {
         var step2Ran = false
         val result = OperationResult.of(patient())
-            .extractParam("missing", Coverage::class)
+            .extractParam("missing", Coverage::class.java)
             .add("enc") { step2Ran = true; Encounter() }
         assertTrue(result.hasErrors())
         assertFalse(step2Ran)

@@ -39,7 +39,7 @@ class OperationResultComplexTest {
 
         val result = OperationResult.of(listOf(p1, p2, p3), "patients")
             .addAllFromFiltered(
-                type = Patient::class,
+                type = Patient::class.java,
                 predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://example.org/enrolled") { it.booleanValue() }
             ) { enrolled ->
                 enrolled.map { p ->
@@ -376,7 +376,7 @@ class OperationResultComplexTest {
         // First filter: enrolled patients only → produces List<Patient> as head
         val afterExtFilter = OperationResult.of(listOf(activeEnrolled, inactiveEnrolled, activeNotEnrolled), "patients")
             .addAllFromFiltered(
-                type = Patient::class,
+                type = Patient::class.java,
                 predicate = FhirFilter.hasExtensionValueMatching<BooleanType>("http://example.org/enrolled") { it.booleanValue() }
             ) { enrolled ->
                 // Store enrolled patients back so FHIRPath filter can find them
@@ -391,7 +391,7 @@ class OperationResultComplexTest {
         // only sees the 2 enrolled patients, not all 3 originals.
         val finalResult = afterExtFilter
             .filterByName("patient")
-            .addAllFromMatching<Patient, Patient>("active-enrolled", Patient::class, "active = true") { it }
+            .addAllFromMatching<Patient, Patient>("active-enrolled", Patient::class.java, "active = true") { it }
 
         assertEquals(1, finalResult.count("active-enrolled"))
         assertFalse(finalResult.hasErrors())

@@ -295,7 +295,7 @@ class OperationResultFromTest {
         }
 
         val result: OperationResult<Patient> =
-            OperationResult.fromParametersTyped(fhirParams, "patient", Patient::class)
+            OperationResult.fromParametersTyped(fhirParams, "patient", Patient::class.java)
 
         // Typed assignment proves compiler sees OperationResult<Patient>
         val retrieved: Patient = result.getResult()
@@ -530,7 +530,7 @@ class OperationResultFromTest {
             addEntry().resource = p
         }
 
-        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class)
+        val result = OperationResult.fromBundleTyped(bundle, "patient", Patient::class.java)
 
         assertInstanceOf(Patient::class.java, result.getResult())
         assertEquals("p1", result.getResult().idPart)
@@ -609,7 +609,7 @@ class OperationResultFromTest {
             addParameter().apply { name = "patient"; resource = patient() }
         }
         val result = OperationResult.fromParameters(params)
-            .extractParam("patient", Patient::class)
+            .extractParam("patient", Patient::class.java)
 
         assertNotNull(result.getResult())
         assertInstanceOf(Patient::class.java, result.getResult())

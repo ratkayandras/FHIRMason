@@ -49,7 +49,7 @@ class FhirFilterTest {
     @Test
     fun `hasExtensionWithValueType KClass returns true when value type matches`() {
         val patient = patient().apply { addExtension("http://example.org/flag", StringType("yes")) }
-        assertTrue(FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class)(patient))
+        assertTrue(FhirFilter.hasExtensionWithValueType("http://example.org/flag", StringType::class.java)(patient))
     }
 
     @Test

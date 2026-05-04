@@ -238,7 +238,7 @@ class AsyncOperationResultTest {
             .add("practitioner") { Practitioner().apply { id = "pr1" } }
             .execute()
 
-        val patients = result.getByType(Patient::class)
+        val patients = result.getByType(Patient::class.java)
         assertThat(patients, hasSize(1))
         assertThat(patients.first().id, `is`("p1"))
     }
@@ -282,7 +282,7 @@ class AsyncOperationResultTest {
     fun `addAfter with type - dependent task receives typed upstream result`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
-            .addAfter("coverage", "patient", Patient::class) { patient ->
+            .addAfter("coverage", "patient", Patient::class.java) { patient ->
                 Coverage().apply { id = "cov-for-${patient.id}" }
             }
             .execute()
@@ -295,7 +295,7 @@ class AsyncOperationResultTest {
     fun `addAfter with type - captures NoSuchElementException as failed task when upstream has no matching type`() = runBlocking {
         val result = AsyncOperationResult()
             .add("data") { StringType("hello") }
-            .addAfter("out", "data", Patient::class) { patient ->
+            .addAfter("out", "data", Patient::class.java) { patient ->
                 Basic().apply { id = patient.id }
             }
             .execute()
@@ -308,10 +308,10 @@ class AsyncOperationResultTest {
     fun `addAfter with type - works in multi-level chain`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "P" } }
-            .addAfter("coverage", "patient", Patient::class) { patient ->
+            .addAfter("coverage", "patient", Patient::class.java) { patient ->
                 Coverage().apply { id = "cov-${patient.id}" }
             }
-            .addAfter("claim", "coverage", Coverage::class) { coverage ->
+            .addAfter("claim", "coverage", Coverage::class.java) { coverage ->
                 Claim().apply { id = "claim-${coverage.id}" }
             }
             .execute()
@@ -324,7 +324,7 @@ class AsyncOperationResultTest {
     fun `addListAfter with type - returns list from typed single dependency`() = runBlocking {
         val result = AsyncOperationResult()
             .add("patient") { Patient().apply { id = "p1" } }
-            .addListAfter("observations", "patient", Patient::class) { patient ->
+            .addListAfter("observations", "patient", Patient::class.java) { patient ->
                 listOf(
                     Observation().apply { id = "obs1-${patient.id}" },
                     Observation().apply { id = "obs2-${patient.id}" }
@@ -348,7 +348,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "obs3" }
                 )
             }
-            .addAfterAll("summary", "observations", Observation::class) { observations ->
+            .addAfterAll("summary", "observations", Observation::class.java) { observations ->
                 Basic().apply { id = "count-${observations.size}" }
             }
             .execute()
@@ -367,7 +367,7 @@ class AsyncOperationResultTest {
                     Patient().apply { id = "p2" }
                 )
             }
-            .addAfterAll("patientCount", "mixed", Patient::class) { patients ->
+            .addAfterAll("patientCount", "mixed", Patient::class.java) { patients ->
                 Basic().apply { id = "patients-${patients.size}" }
             }
             .execute()
@@ -380,7 +380,7 @@ class AsyncOperationResultTest {
     fun `addAfterAll - receives empty list when no values match type`() = runBlocking {
         val result = AsyncOperationResult()
             .add("data") { StringType("hello") }
-            .addAfterAll("out", "data", Patient::class) { patients ->
+            .addAfterAll("out", "data", Patient::class.java) { patients ->
                 Basic().apply { id = "found-${patients.size}" }
             }
             .execute()
@@ -398,7 +398,7 @@ class AsyncOperationResultTest {
                     Observation().apply { id = "obs2" }
                 )
             }
-            .addListAfterAll("derived", "observations", Observation::class) { observations ->
+            .addListAfterAll("derived", "observations", Observation::class.java) { observations ->
                 observations.map { obs ->
                     Observation().apply { id = "derived-${obs.id}" }
                 }

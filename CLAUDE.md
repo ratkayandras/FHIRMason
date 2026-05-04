@@ -33,7 +33,7 @@ src/test/java/dev/ratkay/operation/
 
 - `OperationResult` is **immutable** — all builder methods return new instances
 - Factory entry points live in `companion object` as `of()` methods
-- Use reified generics (`KClass<R>`) for type-safe resource filtering
+- Use `Class<T>` + `inline fun <reified T>` for type-safe resource filtering (see Java Interop rule below)
 - Receiver-lambda overloads are named `addUsing` / `addAllUsing` (not `add` / `addAll`)
 - If no explicit key name is given, the storage key is always the **output** value's `fhirType().lowercase()` — never the input type's name. For example, a builder that receives `Patient` resources and returns an `OperationOutcome` stores under `"operationoutcome"`, not `"patient"`. This applies to every method with an optional `name` parameter: `add`, `addAll`, `addFrom`, `addAllFrom`, `addFromHavingAllExtensions`, `addFromHavingAnyExtension`, `addAllFrom*`, `addFromHavingExtensionWithValueType`, `addFromHavingExtensionValueMatching`, `addAllFromHavingExtensionValueMatching`, `addFromMatching`, `addAllFromMatching`, and `selectByPath`. Pass `null` (or omit the name) to `storeAndCopy`/`storeListAndCopy` and let them derive the key from the result; never pass a derived input-type name.
 - Test method names use Kotlin backtick syntax: `` `descriptive test name` ``
@@ -69,18 +69,30 @@ Exceptions — do **not** add these annotations to:
 
 ## Java Interop: No Kotlin-specific types in the public API
 
-Java callers must never be required to reference Kotlin-specific types such as `KClass`, `KFunction`, or anything from `kotlin.reflect.*`. If a public method accepts a `KClass<T>` parameter, a `Class<T>` overload **must** exist alongside it. The `Class<T>` overload delegates to the `KClass<T>` variant via `.kotlin`:
+Java callers must never be required to reference Kotlin-specific types such as `KClass`, `KFunction`, or anything from `kotlin.reflect.*`. Public API methods that accept a type parameter must have **exactly two forms**:
+
+1. **`Class<T>` primary** — the Java-friendly form; this is the real implementation. Annotate with `@JvmOverloads` when defaults are present.
+2. **`inline fun <reified T>`** — the Kotlin-convenience form; callers write `addFrom<Patient>(...)` instead of `addFrom(Patient::class.java, ...)`. This overload delegates to the `Class<T>` primary via `T::class.java`.
+
+**`KClass<T>` overloads are not permitted in the public API.** There is no middle tier.
 
 ```kotlin
-@JvmStatic
-fun <V : Type> hasExtensionValueMatching(
-    url: String,
-    valueType: Class<V>,
-    predicate: (V) -> Boolean
-): (Base) -> Boolean = hasExtensionValueMatchingInternal(url, valueType.kotlin, predicate)
+// Primary — Class<T>; @JvmOverloads when defaults are present
+@JvmOverloads
+fun <I : Resource> addFrom(
+    name: String? = null,
+    type: Class<I>
+): OperationResult<I> { /* implementation */ }
+
+// Kotlin convenience — reified, no explicit type arg at call sites
+inline fun <reified I : Resource> addFrom(
+    name: String? = null
+): OperationResult<I> = addFrom(name, I::class.java)
 ```
 
-The same rule applies to any helper or factory object (e.g. `FhirFilter`) whose methods are part of the public API. When adding a new method that takes `KClass`, always add the `Class` sibling in the same commit.
+The only deliberate exception is `ReferenceLinkRule`, whose **primary constructor** keeps `KClass<T>` as a Kotlin-idiomatic API; its companion `.of()` factory accepts `Class<T>` for Java callers. Do not apply this exception elsewhere.
+
+The same rule applies to any helper or factory object (e.g. `FhirFilter`) whose methods are part of the public API.
 
 ## Java Interop: Kotlin function types in the public API
 
@@ -160,7 +172,7 @@ This is a hard requirement for all public API surfaces — no exceptions.
 Rules:
 - **Class-level KDoc is required** on every public class and object.
 - **Method-level KDoc is required** on every `fun` that is `public` (explicitly or by default) — including companion object methods, top-level functions that are part of the public API, and `override` methods that add behaviour beyond what the interface documents.
-- **Single-line `/** … */` is acceptable** for self-evident overloads (e.g. a reified wrapper that only removes the explicit `KClass` argument). Use `/** [FhirPath] overload of [xxx] — builds the expression and delegates. */` or `/** Reified overload — no [KClass] argument needed at call sites. */` as appropriate.
+- **Single-line `/** … */` is acceptable** for self-evident overloads (e.g. a reified wrapper that only removes the explicit `Class` argument). Use `/** [FhirPath] overload of [xxx] — builds the expression and delegates. */` or `/** Reified overload — delegates to [xxx] via [T::class.java]. */` as appropriate.
 - **Multi-line KDoc** is required when a method has non-trivial behaviour, error semantics, or parameters that need explanation (see existing methods for examples).
 - **`@param` tags** are required for every parameter of a public method whose purpose is not fully captured by its name alone.
 - `internal` and `private` members do not require KDoc, but a single-line comment is welcome for non-obvious logic.

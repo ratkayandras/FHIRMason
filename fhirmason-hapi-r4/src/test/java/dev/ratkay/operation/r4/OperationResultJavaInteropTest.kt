@@ -25,7 +25,7 @@ class OperationResultJavaInteropTest {
             .add("appt") { appointment() }
 
         val byClass = result.getByType(Patient::class.java)
-        val byKClass = result.getByType(Patient::class)
+        val byKClass = result.getByType(Patient::class.java)
 
         assertThat(byClass, hasSize(1))
         assertSame(byClass[0], byKClass[0])
