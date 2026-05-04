@@ -7,7 +7,6 @@ import org.hl7.fhir.instance.model.api.IBaseHasExtensions
 import java.util.Collections
 import java.util.IdentityHashMap
 import java.util.Optional
-import kotlin.reflect.KClass
 
 /**
  * Utility object for retrieving FHIR extensions from any object that can carry them.
@@ -109,11 +108,11 @@ object FhirExtensionHelper {
 
 internal fun <I : Base> filterByExtension(
     allValues: List<Base>,
-    type: KClass<I>,
+    type: Class<I>,
     extUrls: Array<out String>,
     matchAll: Boolean
 ): List<I> {
-    val allOfType = allValues.filterIsInstance(type.java)
+    val allOfType = allValues.filterIsInstance(type)
     return if (extUrls.isEmpty()) allOfType
     else allOfType.filter { resource ->
         resource is IBaseHasExtensions && if (matchAll) {
@@ -126,14 +125,14 @@ internal fun <I : Base> filterByExtension(
 
 internal fun <I : Base, V : Type> filterByExtensionAndValueType(
     allValues: List<Base>,
-    type: KClass<I>,
+    type: Class<I>,
     url: String,
-    valueType: KClass<V>,
+    valueType: Class<V>,
     predicate: (V) -> Boolean
 ): List<I> =
     allValues
-        .filterIsInstance(type.java)
+        .filterIsInstance(type)
         .filter { resource ->
             resource is IBaseHasExtensions &&
-                FhirExtensionHelper.getAllValuesAs(resource, url, valueType.java).any(predicate)
+                FhirExtensionHelper.getAllValuesAs(resource, url, valueType).any(predicate)
         }

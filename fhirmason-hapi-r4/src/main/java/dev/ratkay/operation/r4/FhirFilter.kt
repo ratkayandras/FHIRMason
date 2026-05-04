@@ -25,50 +25,47 @@ object FhirFilter {
     /** Returns `true` when the resource has **all** of the given extension URLs. */
     @JvmStatic
     fun hasAllExtensions(vararg urls: String): (Base) -> Boolean =
-        { filterByExtension(listOf(it), Base::class, urls, matchAll = true).isNotEmpty() }
+        { filterByExtension(listOf(it), Base::class.java, urls, matchAll = true).isNotEmpty() }
 
     /** Returns `true` when the resource has **at least one** of the given extension URLs. */
     @JvmStatic
     fun hasAnyExtension(vararg urls: String): (Base) -> Boolean =
-        { filterByExtension(listOf(it), Base::class, urls, matchAll = false).isNotEmpty() }
+        { filterByExtension(listOf(it), Base::class.java, urls, matchAll = false).isNotEmpty() }
 
     /**
      * Returns `true` when the resource has an extension at [url] whose value is an
      * instance of [valueType].
+     *
+     * @param url the extension URL to match
+     * @param valueType the expected Java class of the extension value
      */
     @JvmStatic
-    @Suppress("UNCHECKED_CAST")
-    fun hasExtensionWithValueType(url: String, valueType: KClass<out Type>): (Base) -> Boolean {
-        val typed = valueType as KClass<Type>
-        return { filterByExtensionAndValueType(listOf(it), Base::class, url, typed) { true }.isNotEmpty() }
-    }
-
-    /** Reified overload of [hasExtensionWithValueType]. */
-    inline fun <reified V : Type> hasExtensionWithValueType(url: String): (Base) -> Boolean =
-        hasExtensionWithValueType(url, V::class)
-
-    /** Java-friendly overload of [hasExtensionWithValueType] — accepts [Class] instead of [KClass]. */
-    @JvmStatic
     fun <V : Type> hasExtensionWithValueType(url: String, valueType: Class<V>): (Base) -> Boolean =
-        hasExtensionWithValueType(url, valueType.kotlin)
+        { filterByExtensionAndValueType(listOf(it), Base::class.java, url, valueType) { true }.isNotEmpty() }
+
+    /** Reified overload — no [Class] argument needed at call sites. */
+    inline fun <reified V : Type> hasExtensionWithValueType(url: String): (Base) -> Boolean =
+        hasExtensionWithValueType(url, V::class.java)
+
+    /** [KClass] overload — Kotlin callers may pass [KClass] directly. */
+    fun <V : Type> hasExtensionWithValueType(url: String, valueType: KClass<V>): (Base) -> Boolean =
+        hasExtensionWithValueType(url, valueType.java)
 
     /**
      * Returns `true` when the resource has an extension at [url] whose value is an instance
      * of [valueType] and satisfies [predicate].
      *
-     * Java callers: the [predicate] receives the value cast to [valueType]; use the
-     * reified overload from Kotlin for full type safety.
+     * @param url the extension URL to match
+     * @param valueType the expected Java class of the extension value
+     * @param predicate additional condition the value must satisfy
      */
     @JvmStatic
-    @Suppress("UNCHECKED_CAST")
-    fun hasExtensionValueMatching(
+    fun <V : Type> hasExtensionValueMatching(
         url: String,
-        valueType: KClass<out Type>,
-        predicate: (Type) -> Boolean
-    ): (Base) -> Boolean {
-        val typed = valueType as KClass<Type>
-        return { filterByExtensionAndValueType(listOf(it), Base::class, url, typed, predicate).isNotEmpty() }
-    }
+        valueType: Class<V>,
+        predicate: (V) -> Boolean
+    ): (Base) -> Boolean =
+        hasExtensionValueMatchingInternal(url, valueType, predicate)
 
     /**
      * Reified, fully type-safe overload of [hasExtensionValueMatching].
@@ -79,76 +76,67 @@ object FhirFilter {
         url: String,
         noinline predicate: (V) -> Boolean
     ): (Base) -> Boolean =
-        hasExtensionValueMatchingInternal(url, V::class, predicate)
-
-    /** Java-friendly overload of [hasExtensionValueMatching] — accepts [Class] instead of [KClass]. */
-    @JvmStatic
-    fun <V : Type> hasExtensionValueMatching(
-        url: String,
-        valueType: Class<V>,
-        predicate: (V) -> Boolean
-    ): (Base) -> Boolean =
-        hasExtensionValueMatchingInternal(url, valueType.kotlin, predicate)
+        hasExtensionValueMatchingInternal(url, V::class.java, predicate)
 
     @PublishedApi
     @JvmSynthetic
     internal fun <V : Type> hasExtensionValueMatchingInternal(
         url: String,
-        valueType: KClass<V>,
+        valueType: Class<V>,
         predicate: (V) -> Boolean
     ): (Base) -> Boolean =
-        { filterByExtensionAndValueType(listOf(it), Base::class, url, valueType, predicate).isNotEmpty() }
+        { filterByExtensionAndValueType(listOf(it), Base::class.java, url, valueType, predicate).isNotEmpty() }
 
     // ── Identifier predicates ─────────────────────────────────────────────────
 
     /** Returns `true` when the resource has an identifier with [system]. */
     @JvmStatic
     fun hasIdentifierWithSystem(system: String): (Base) -> Boolean =
-        { filterByIdentifierSystem(listOf(it), Base::class, system).isNotEmpty() }
+        { filterByIdentifierSystem(listOf(it), Base::class.java, system).isNotEmpty() }
 
     /** Returns `true` when the resource has an identifier with [identifierValue]. */
     @JvmStatic
     fun hasIdentifierWithValue(identifierValue: String): (Base) -> Boolean =
-        { filterByIdentifierValue(listOf(it), Base::class, identifierValue).isNotEmpty() }
+        { filterByIdentifierValue(listOf(it), Base::class.java, identifierValue).isNotEmpty() }
 
     /** Returns `true` when the resource has an identifier matching both [system] and [identifierValue]. */
     @JvmStatic
     fun hasIdentifier(system: String, identifierValue: String): (Base) -> Boolean =
-        { filterByIdentifier(listOf(it), Base::class, system, identifierValue).isNotEmpty() }
+        { filterByIdentifier(listOf(it), Base::class.java, system, identifierValue).isNotEmpty() }
 
     // ── Meta tag predicates ───────────────────────────────────────────────────
 
     /** Returns `true` when the resource has a meta.tag with [system]. */
     @JvmStatic
     fun hasMetaTagWithSystem(system: String): (Base) -> Boolean =
-        { filterByMetaTagSystem(listOf(it), Base::class, system).isNotEmpty() }
+        { filterByMetaTagSystem(listOf(it), Base::class.java, system).isNotEmpty() }
 
     /** Returns `true` when the resource has a meta.tag with [code]. */
     @JvmStatic
     fun hasMetaTagWithCode(code: String): (Base) -> Boolean =
-        { filterByMetaTagCode(listOf(it), Base::class, code).isNotEmpty() }
+        { filterByMetaTagCode(listOf(it), Base::class.java, code).isNotEmpty() }
 
     /** Returns `true` when the resource has a meta.tag matching both [system] and [code]. */
     @JvmStatic
     fun hasMetaTag(system: String, code: String): (Base) -> Boolean =
-        { filterByMetaTag(listOf(it), Base::class, system, code).isNotEmpty() }
+        { filterByMetaTag(listOf(it), Base::class.java, system, code).isNotEmpty() }
 
     // ── Meta security predicates ──────────────────────────────────────────────
 
     /** Returns `true` when the resource has a meta.security with [system]. */
     @JvmStatic
     fun hasMetaSecurityWithSystem(system: String): (Base) -> Boolean =
-        { filterByMetaSecuritySystem(listOf(it), Base::class, system).isNotEmpty() }
+        { filterByMetaSecuritySystem(listOf(it), Base::class.java, system).isNotEmpty() }
 
     /** Returns `true` when the resource has a meta.security with [code]. */
     @JvmStatic
     fun hasMetaSecurityWithCode(code: String): (Base) -> Boolean =
-        { filterByMetaSecurityCode(listOf(it), Base::class, code).isNotEmpty() }
+        { filterByMetaSecurityCode(listOf(it), Base::class.java, code).isNotEmpty() }
 
     /** Returns `true` when the resource has a meta.security matching both [system] and [code]. */
     @JvmStatic
     fun hasMetaSecurity(system: String, code: String): (Base) -> Boolean =
-        { filterByMetaSecurity(listOf(it), Base::class, system, code).isNotEmpty() }
+        { filterByMetaSecurity(listOf(it), Base::class.java, system, code).isNotEmpty() }
 
     // ── Combinators ───────────────────────────────────────────────────────────
 
@@ -172,5 +160,5 @@ object FhirFilter {
     /** Returns `true` when the resource has the given [url] in meta.profile. */
     @JvmStatic
     fun hasMetaProfile(url: String): (Base) -> Boolean =
-        { filterByMetaProfile(listOf(it), Base::class, url).isNotEmpty() }
+        { filterByMetaProfile(listOf(it), Base::class.java, url).isNotEmpty() }
 }
