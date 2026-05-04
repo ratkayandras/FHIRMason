@@ -164,12 +164,10 @@ val result = OperationResult.of(listOf(patient, appointment), "inputs")
 
 | Method | `type` param | Returns |
 |---|---|---|
-| `addFromFiltered(name?, type, predicate) { list -> R }` | `KClass<I>` | `OperationResult<R>` |
-| `addFromFiltered(name?, type, predicate) { list -> R }` | `Class<I>` *(Java)* | `OperationResult<R>` |
-| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `KClass<I>` | `OperationResult<List<R>>` |
-| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `Class<I>` *(Java)* | `OperationResult<List<R>>` |
+| `addFromFiltered(name?, type, predicate) { list -> R }` | `Class<I>` / `KClass<I>` | `OperationResult<R>` |
+| `addAllFromFiltered(name?, type, predicate) { list -> List<R> }` | `Class<I>` / `KClass<I>` | `OperationResult<List<R>>` |
 
-Both methods have reified Kotlin overloads (omit `type` entirely). `name` defaults to the output value's `fhirType()` when omitted. Error handling follows Pattern A.
+Both methods have reified Kotlin overloads (omit `type` entirely), a `Class<I>` overload for Java callers, and a `KClass<I>` convenience overload for Kotlin. `name` defaults to the output value's `fhirType()` when omitted. Error handling follows Pattern A.
 
 **`FhirFilter` predicate factories**
 
@@ -179,10 +177,12 @@ Both methods have reified Kotlin overloads (omit `type` entirely). `name` defaul
 |---|---|
 | `FhirFilter.hasAllExtensions("url1", "url2")` | Resource carries **every** given extension URL |
 | `FhirFilter.hasAnyExtension("url1", "url2")` | Resource carries **at least one** given URL |
-| `FhirFilter.hasExtensionWithValueType("url", StringType::class)` | Extension value is an instance of the given type |
-| `FhirFilter.hasExtensionWithValueType<StringType>("url")` | Reified form |
-| `FhirFilter.hasExtensionValueMatching("url", BooleanType::class) { it.booleanValue() }` | Extension value satisfies a predicate |
-| `FhirFilter.hasExtensionValueMatching<BooleanType>("url") { it.booleanValue() }` | Reified form |
+| `FhirFilter.hasExtensionWithValueType("url", StringType::class.java)` | Extension value is an instance of the given type (`Class<T>` — Java-friendly primary) |
+| `FhirFilter.hasExtensionWithValueType("url", StringType::class)` | `KClass<T>` overload — Kotlin callers may pass `KClass` directly |
+| `FhirFilter.hasExtensionWithValueType<StringType>("url")` | Reified overload |
+| `FhirFilter.hasExtensionValueMatching("url", BooleanType::class.java) { it.booleanValue() }` | Extension value satisfies a predicate (`Class<T>` — Java-friendly primary) |
+| `FhirFilter.hasExtensionValueMatching("url", BooleanType::class) { it.booleanValue() }` | `KClass<T>` overload — Kotlin callers may pass `KClass` directly |
+| `FhirFilter.hasExtensionValueMatching<BooleanType>("url") { it.booleanValue() }` | Reified overload |
 | `FhirFilter.hasIdentifierWithSystem("http://example.org/mrn")` | Any identifier has the given system |
 | `FhirFilter.hasIdentifierWithValue("MRN-001")` | Any identifier has the given value |
 | `FhirFilter.hasIdentifier("http://example.org/mrn", "MRN-001")` | Exact system + value match |
@@ -286,7 +286,7 @@ val result2 = OperationResult.of(patients, "patients")
         expression = "extension('http://ext/risk').value = 'high' and birthDate < @1960-01-01"
     ) { it }
 
-// Named output key — KClass form (required when you also want an explicit name in Kotlin)
+// Named output key — explicit type form (KClass or Class<T> both work)
 val result3 = OperationResult.of(patients, "patients")
     .addFromMatching("enrolled", Patient::class, "identifier.where(system='http://example.org/mpi').exists()") { filtered ->
         buildEnrolledSummary(filtered)
