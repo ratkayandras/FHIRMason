@@ -23,5 +23,49 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Run tests
-        run: mvn --no-transfer-progress --batch-mode test
+      - name: Run tests and coverage check
+        run: mvn --no-transfer-progress --batch-mode verify
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Module | Instructions | Branches |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          for xml in $(find . -path "*/target/site/jacoco/jacoco.xml" | sort); do
+            module=$(echo "$xml" | sed 's|\./||' | sed 's|/target.*||')
+            instr=$(python3 -c "
+          import xml.etree.ElementTree as ET, sys
+          root = ET.parse('$xml').getroot()
+          for c in root.findall('counter'):
+              if c.get('type') == 'INSTRUCTION':
+                  missed, covered = int(c.get('missed')), int(c.get('covered'))
+                  total = missed + covered
+                  pct = round(100 * covered / total, 1) if total else 0
+                  print(f'{covered}/{total} ({pct}%)')
+                  sys.exit()
+          print('n/a')
+          ")
+            branch=$(python3 -c "
+          import xml.etree.ElementTree as ET, sys
+          root = ET.parse('$xml').getroot()
+          for c in root.findall('counter'):
+              if c.get('type') == 'BRANCH':
+                  missed, covered = int(c.get('missed')), int(c.get('covered'))
+                  total = missed + covered
+                  pct = round(100 * covered / total, 1) if total else 0
+                  print(f'{covered}/{total} ({pct}%)')
+                  sys.exit()
+          print('n/a')
+          ")
+            echo "| \`$module\` | $instr | $branch |" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-reports
+          path: '**/target/site/jacoco/'
+          retention-days: 14
