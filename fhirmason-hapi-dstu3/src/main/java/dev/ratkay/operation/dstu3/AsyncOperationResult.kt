@@ -79,16 +79,23 @@ class AsyncOperationResult {
 
     private val nodes: LinkedHashMap<String, TaskNode> = LinkedHashMap()
 
+    /** Holds the per-task [Deferred] registry so [execute] can harvest partial results when a
+     *  DAG-level timeout fires before all tasks complete. */
+    private inner class ExecutionState {
+        val resolved: ConcurrentHashMap<String, Deferred<List<Base>?>> = ConcurrentHashMap()
+    }
+
     /** Enables per-task metrics collection. [getMetrics] returns empty when not called. */
     fun timed(): AsyncOperationResult = also { timingEnabled = true }
 
     /**
      * Sets a maximum wall-clock time for the entire DAG execution.
      *
-     * If [execute] does not complete within [durationMs] milliseconds, it returns an
-     * [OperationResult] containing a single `TIMEOUT`-coded [OperationOutcome] and no task
-     * results. [getTotalDuration] will return `0` on timeout because the duration assignment
-     * inside the DAG execution is interrupted before it can run.
+     * If [execute] does not complete within [durationMs] milliseconds, execution is cancelled and
+     * an [OperationResult] is returned that contains any tasks which completed before the deadline
+     * plus a `TIMEOUT`-coded [OperationOutcome]. Tasks still in-flight at cancellation time are
+     * silently dropped. [getTotalDuration] will return `0` on timeout because the duration
+     * assignment inside the DAG execution is interrupted before it can run.
      *
      * [executeBlocking] inherits this timeout automatically.
      *
@@ -834,25 +841,41 @@ class AsyncOperationResult {
         return sb.toString().trimEnd()
     }
 
+    /**
+     * Executes all registered tasks as a coroutine DAG and returns the accumulated
+     * [OperationResult]. Independent tasks run in parallel; dependent tasks wait for their
+     * dependencies via [kotlinx.coroutines.Deferred.await].
+     *
+     * If a DAG-level timeout was configured via [timeout], the execution is wrapped in
+     * [kotlinx.coroutines.withTimeout]. On timeout, any tasks that completed before the deadline
+     * are included in the returned [OperationResult] alongside a `TIMEOUT`-coded [OperationOutcome].
+     * Tasks that were still in-flight are silently dropped.
+     */
     suspend fun execute(): OperationResult<Base> {
         val ctx = executor?.asCoroutineDispatcher() ?: Dispatchers.IO
-        val execute: suspend () -> OperationResult<Base> = {
+        return withContext(ctx) {
             val t = dagTimeoutMs
             if (t != null) {
+                val state = ExecutionState()
                 try {
-                    withTimeout(t) { runInternal() }
+                    withTimeout(t) { runInternal(state) }
                 } catch (e: TimeoutCancellationException) {
-                    OperationResult.fromMap(emptyMap(), listOf(dagTimeoutOutcome(t)), emptyMap())
+                    val partialAccumulator = mutableMapOf<String, List<Base>>()
+                    state.resolved.forEach { (key, deferred) ->
+                        if (deferred.isCompleted && !deferred.isCancelled) {
+                            deferred.getCompleted()?.let { partialAccumulator[key] = it }
+                        }
+                    }
+                    OperationResult.fromMap(partialAccumulator, listOf(dagTimeoutOutcome(t)), emptyMap())
                 }
             } else {
-                runInternal()
+                runInternal(ExecutionState())
             }
         }
-        return withContext(ctx) { execute() }
     }
 
-    private suspend fun runInternal(): OperationResult<Base> = coroutineScope {
-        val resolved = mutableMapOf<String, Deferred<List<Base>?>>()
+    private suspend fun runInternal(state: ExecutionState): OperationResult<Base> = coroutineScope {
+        val resolved = state.resolved
         val failedTasks = ConcurrentHashMap<String, OperationOutcome>()
 
         fun launchNode(node: TaskNode): Deferred<List<Base>?> =

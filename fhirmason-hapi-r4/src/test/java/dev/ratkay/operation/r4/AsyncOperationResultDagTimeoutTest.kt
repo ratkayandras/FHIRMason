@@ -31,7 +31,7 @@ class AsyncOperationResultDagTimeoutTest {
     // ── Exceeds deadline ──────────────────────────────────────────────────────
 
     @Test
-    fun `DAG exceeding timeout returns error and no task results`() = runBlocking {
+    fun `DAG exceeding timeout when no tasks complete returns TIMEOUT error and empty result`() = runBlocking {
         val result = AsyncOperationResult()
             .timeout(20)
             .add("patient") { delay(200); patient() }
@@ -40,6 +40,21 @@ class AsyncOperationResultDagTimeoutTest {
         assertFalse(result.containsKey("patient"))
         assertTrue(result.hasErrors())
         assertTrue(result.getKeys().isEmpty())
+    }
+
+    @Test
+    fun `DAG exceeding timeout returns partial results for tasks that completed before deadline`() = runBlocking {
+        val result = AsyncOperationResult()
+            .timeout(300)
+            .add("fast") { patient("fast") }
+            .add("slow") { delay(500); patient("slow") }
+            .execute()
+
+        assertTrue(result.containsKey("fast"))
+        assertFalse(result.containsKey("slow"))
+        assertTrue(result.hasErrors())
+        assertEquals(1, result.getOutcomes().size)
+        assertThat(result.getOutcomes().first().issueFirstRep.diagnostics, containsString("exceeded timeout"))
     }
 
     @Test
