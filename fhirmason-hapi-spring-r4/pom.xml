@@ -17,7 +17,7 @@
     <description>Spring Boot auto-configuration and integration for the FHIRMason HAPI FHIR R4 builder API.</description>
 
     <properties>
-        <!-- Override with -Pspring3 to compile and test against Spring Boot 3.x -->
+        <!-- Override with -Pspring2 to compile and test against Spring Boot 2.7.x (legacy) -->
         <spring.boot.test.version>${spring.boot.version}</spring.boot.test.version>
     </properties>
 
@@ -105,9 +105,9 @@
 
     <profiles>
         <profile>
-            <id>spring3</id>
+            <id>spring2</id>
             <properties>
-                <spring.boot.test.version>3.4.5</spring.boot.test.version>
+                <spring.boot.test.version>2.7.18</spring.boot.test.version>
             </properties>
         </profile>
     </profiles>

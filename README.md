@@ -1720,11 +1720,11 @@ suspend fun buildOutput(): Parameters {
 
 | | |
 |---|---|
-| Language | Kotlin 2.1.21 (JVM 11) |
+| Language | Kotlin 2.1.21 (JVM 21) |
 | FHIR | HAPI FHIR 7.6.1 (R4 and DSTU3) |
 | Async | Kotlin Coroutines 1.10.2 |
-| Logging | SLF4J 1.7.36 API (no binding — consumer-supplied) |
-| Spring Boot | 2.7.18 (optional — `fhirmason-hapi-spring-r4` module) |
+| Logging | SLF4J 2.0.x API (no binding — consumer-supplied) |
+| Spring Boot | 3.4.5+ (optional — `fhirmason-hapi-spring-r4` module) |
 | Build | Maven (multi-module) |
 | Testing | JUnit Jupiter 5.14.3, Hamcrest 3.0, ApprovalCrest, Logback 1.2.12, AssertJ 3.23.1 |
 
@@ -1788,12 +1788,15 @@ fhirmason-hapi-r4/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── OperationResultImmutabilityTest.kt
+        ├── OperationResultJavaInteropTest.kt
         ├── FhirPathEvaluationTest.kt
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
         ├── FhirFilterTest.kt
         ├── AsyncOperationResultTest.kt
+        ├── AsyncOperationResultJavaTest.java
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
         ├── AsyncOperationResultRetryTest.kt
@@ -1834,12 +1837,15 @@ fhirmason-hapi-dstu3/
         ├── OperationResultFhirErrorHandlingTest.kt
         ├── OperationResultRetryTest.kt
         ├── OperationResultFhirPathTest.kt
+        ├── OperationResultImmutabilityTest.kt
+        ├── OperationResultJavaInteropTest.kt
         ├── FhirPathEvaluationTest.kt
         ├── OperationResultIdentifierTest.kt
         ├── OperationResultMetaTest.kt
         ├── OperationResultComplexTest.kt
         ├── FhirFilterTest.kt
         ├── AsyncOperationResultTest.kt
+        ├── AsyncOperationResultJavaTest.java
         ├── AsyncOperationResultMetricsTest.kt
         ├── AsyncOperationResultDescribeTest.kt
         ├── AsyncOperationResultRetryTest.kt
@@ -1866,12 +1872,15 @@ fhirmason-hapi-spring-r4/
     │   ├── spring.factories                # Boot 2.x auto-config registration
     │   └── spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
     └── test/java/dev/ratkay/spring/
-        └── FhirMasonAutoConfigurationTest.kt
+        ├── FhirMasonAutoConfigurationTest.kt
+        └── FhirMasonOperationProviderTest.kt
 ```
 
 ---
 
 ## Spring Boot Integration
+
+**Minimum supported version: Spring Boot 3.x.** Spring Boot 2.7.x can be tested against using the `-Pspring2` Maven profile, but is not officially supported.
 
 ### Dependency
 
@@ -1956,6 +1965,17 @@ class FhirMasonConfig {
         FhirMasonFactory(properties)  // or a custom subclass
 }
 ```
+
+---
+
+## Memory & Scale
+
+Both builders accumulate resources in-memory for the lifetime of the pipeline:
+
+- **`OperationResult`** holds all accumulated resources plus any `OperationOutcome` objects until the reference is released. It is designed for per-request pipelines that process tens to hundreds of resources. For volumes in the thousands, batch or paginate at the call site before feeding resources into a pipeline.
+- **`AsyncOperationResult`** retains the results of every completed task in memory until `execute()` or `executeBlocking()` returns. Release the result promptly so the GC can reclaim it.
+
+Neither builder streams or pages results. If you are processing large data sets (e.g., bulk export files), split the data into chunks externally and run a pipeline per chunk.
 
 ---
 
