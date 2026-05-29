@@ -40,6 +40,7 @@
         <module>fhirmason-hapi-r4</module>
         <module>fhirmason-hapi-dstu3</module>
         <module>fhirmason-hapi-spring-r4</module>
+        <module>fhirmason-hapi-pdf-r4</module>
     </modules>
 
     <properties>
@@ -56,6 +57,8 @@
         <logback.version>1.5.18</logback.version>
         <spring.boot.version>3.4.5</spring.boot.version>
         <dokka.version>1.9.20</dokka.version>
+        <openpdf.version>2.0.3</openpdf.version>
+        <pdfbox.version>2.0.31</pdfbox.version>
     </properties>
 
     <dependencyManagement>
@@ -146,6 +149,18 @@
                 <groupId>ca.uhn.hapi.fhir</groupId>
                 <artifactId>hapi-fhir-caching-guava</artifactId>
                 <version>${hapi.fhir.version}</version>
+            </dependency>
+            <!-- PDF rendering (OpenPDF — LGPL/MPL) -->
+            <dependency>
+                <groupId>com.github.librepdf</groupId>
+                <artifactId>openpdf</artifactId>
+                <version>${openpdf.version}</version>
+            </dependency>
+            <!-- PDF text extraction for tests -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
             </dependency>
             <!-- Internal modules -->
             <dependency>

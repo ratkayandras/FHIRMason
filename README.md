@@ -1738,6 +1738,7 @@ suspend fun buildOutput(): Parameters {
 | `fhirmason-hapi-r4` | `fhirmason-hapi-r4` | R4 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
 | `fhirmason-hapi-dstu3` | `fhirmason-hapi-dstu3` | DSTU3 pipeline builders (`OperationResult`, `AsyncOperationResult`) |
 | `fhirmason-hapi-spring-r4` | `fhirmason-hapi-spring-r4` | Spring Boot auto-configuration and base provider class |
+| `fhirmason-hapi-pdf-r4` | `fhirmason-hapi-pdf-r4` | Renders R4 `QuestionnaireResponse` resources to PDF (`QuestionnaireResponseRenderer`) |
 
 ---
 
@@ -1874,6 +1875,18 @@ fhirmason-hapi-spring-r4/
     └── test/java/dev/ratkay/spring/
         ├── FhirMasonAutoConfigurationTest.kt
         └── FhirMasonOperationProviderTest.kt
+
+fhirmason-hapi-pdf-r4/
+└── src/
+    ├── main/java/dev/ratkay/questionnaire/pdf/
+    │   ├── QuestionnaireResponseRenderer.kt   # Public entry point — QuestionnaireResponse → PDF
+    │   ├── PdfRenderOptions.kt                # Title, metadata, logo, unanswered handling, font sizes
+    │   ├── RenderModel.kt                     # PDF-agnostic intermediate model (internal)
+    │   ├── RenderModelBuilder.kt              # Questionnaire + Response → RenderModel (internal)
+    │   └── OpenPdfWriter.kt                   # RenderModel → PDF via OpenPDF (internal)
+    └── test/java/dev/ratkay/questionnaire/pdf/
+        ├── RenderModelBuilderTest.kt
+        └── QuestionnaireResponseRendererTest.kt
 ```
 
 ---
@@ -1965,6 +1978,56 @@ class FhirMasonConfig {
         FhirMasonFactory(properties)  // or a custom subclass
 }
 ```
+
+---
+
+## QuestionnaireResponse → PDF
+
+The optional `fhirmason-hapi-pdf-r4` module renders a completed R4 `QuestionnaireResponse` into a
+human-readable PDF — useful for printable, archivable or patient-facing copies of a filled form. It
+is a standalone utility (it does not participate in an `OperationResult` pipeline) backed by
+[OpenPDF](https://github.com/LibrePDF/OpenPDF) (LGPL/MPL).
+
+```xml
+<dependency>
+    <groupId>dev.ratkay</groupId>
+    <artifactId>fhirmason-hapi-pdf-r4</artifactId>
+</dependency>
+```
+
+Rendering requires **both** the `Questionnaire` (for item ordering, labels, grouping and
+answer-option display text) and the `QuestionnaireResponse` (the captured answers). Items are
+matched by `linkId`: groups become headings, questions become label/answer rows, and nested groups
+are indented.
+
+```kotlin
+val pdf: ByteArray = QuestionnaireResponseRenderer.render(questionnaire, response)
+Files.write(Path.of("response.pdf"), pdf)
+
+// Or stream directly to an HTTP response / file:
+QuestionnaireResponseRenderer.render(questionnaire, response, outputStream)
+```
+
+Customise output with `PdfRenderOptions`:
+
+```kotlin
+val options = PdfRenderOptions(
+    title = "Patient Intake Form",   // overrides Questionnaire.title
+    showUnanswered = true,           // render unanswered questions with a placeholder
+    includeMetadata = true,          // show a status / authored-date line under the title
+    logoPng = logoBytes,             // optional PNG/JPEG header logo
+    unansweredPlaceholder = "—"
+)
+val pdf = QuestionnaireResponseRenderer.render(questionnaire, response, options)
+```
+
+Supported answer value types: `boolean` (rendered as *Yes*/*No*), `decimal`, `integer`, `date`,
+`dateTime`, `time`, `string`, `uri`, `Coding` (display → answer-option display → code), `Quantity`
+(value + unit), `Attachment` (title/content-type) and `Reference` (display → reference). Repeating
+questions and repeating groups render every captured answer/instance.
+
+> **FHIR version:** this module currently targets R4 only. A DSTU3 counterpart
+> (`fhirmason-hapi-pdf-dstu3`) is planned as a follow-up.
 
 ---
 
